@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.utils;
+﻿package com.openpositioning.PositionMe.utils;
 
 import android.content.Context;
 import android.graphics.Canvas;
@@ -13,19 +13,15 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import java.util.ArrayList;
 import java.util.Collections;
 
-/**
- * This View class displays the path taken in the UI.
- * A path of straight lines is drawn based on PDR coordinates. The coordinates are passed to
- * PathView by calling method {@link PathView#drawTrajectory(float[])} in {@link SensorFusion}.
- * The coordinates are scaled and centered in {@link PathView#scaleTrajectory()} to fill the
- * device's screen.
- *
- * Updates:
- * - Removed dependency on CorrectionFragment to fix compilation error.
- *
- * @author Michal Dvorak
- * @author Virginia Cangelosi
- */
+// This View class displays the path taken in the UI.
+// A path of straight lines is drawn based on PDR coordinates. The coordinates are passed to
+// PathView by calling method {@link PathView#drawTrajectory(float[])} in {@link SensorFusion}.
+// The coordinates are scaled and centered in {@link PathView#scaleTrajectory()} to fill the
+// device's screen.
+// Updates:
+// Removed dependency on CorrectionFragment to fix compilation error.
+// @author Michal Dvorak
+// @author Virginia Cangelosi
 public class PathView extends View {
     // Set up drawing colour
     private final int paintColor = Color.BLUE;
@@ -44,19 +40,16 @@ public class PathView extends View {
 
     // Boolean flag to avoid rescaling trajectory when view is redrawn
     private static boolean firstTimeOnDraw = true;
-    //Variable to only draw when the variable is true
+    // Variable to only draw when the variable is true
     private static boolean draw = true;
-    //Variable to only draw when the variable is true
+    // Variable to only draw when the variable is true
     private static boolean reDraw = false;
 
-    /**
-     * Public default constructor for PathView. The constructor initialises the view with a context
-     * and attribute set, sets the view as focusable and focusable in touch mode and calls
-     * {@link PathView#setupPaint()} to initialise the paint object with colour and style.
-     *
-     * @param context   Application Context to be used for permissions and device accesses.
-     * @param attrs     The attribute set of the view.
-     */
+    // Public default constructor for PathView. The constructor initialises the view with a context
+    // and attribute set, sets the view as focusable and focusable in touch mode and calls
+    // {@link PathView#setupPaint()} to initialise the paint object with colour and style.
+    // @param context Application Context to be used for permissions and device accesses.
+    // @param attrs The attribute set of the view.
     public PathView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setFocusable(true);
@@ -64,9 +57,7 @@ public class PathView extends View {
         setupPaint();
     }
 
-    /**
-     * Method used for setting up paint object for drawing the path with colour and stroke styles.
-     */
+    // Method used for setting up paint object for drawing the path with colour and stroke styles.
     private void setupPaint() {
         drawPaint = new Paint();
         // Set the color of the paint object to paintColor
@@ -83,23 +74,19 @@ public class PathView extends View {
         drawPaint.setStrokeCap(Paint.Cap.ROUND);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * Method drawing the created path with our paint.
-     *
-     * @param canvas The canvas on which the path will be drawn
-     */
+    // {@inheritDoc}
+    // Method drawing the created path with our paint.
+    // @param canvas The canvas on which the path will be drawn
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        //If drawing for first time scale trajectory to fit screen
+        // If drawing for first time scale trajectory to fit screen
         if(this.draw){
             // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            //Scale trajectory to fit screen
+            // Scale trajectory to fit screen
             scaleTrajectory();
 
             // Start a new path at the center of the view
@@ -110,20 +97,20 @@ public class PathView extends View {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
-            //Draw path
+            // Draw path
             canvas.drawPath(path, drawPaint);
 
-            //Ensure path not redrawn
+            // Ensure path not redrawn
             draw = false;
 
         }
-        //If redrawing due to scaling of the average step length
+        // If redrawing due to scaling of the average step length
         else if(reDraw){
             // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            //Clear old path
+            // Clear old path
             path.reset();
 
             // Iterate over all coordinates, shifting to the center and scaling then returning to original location
@@ -144,7 +131,7 @@ public class PathView extends View {
 
             canvas.drawPath(path, drawPaint);
 
-            //Ensure path not redrawn when screen is resized
+            // Ensure path not redrawn when screen is resized
             reDraw = false;
         }
         else{
@@ -165,12 +152,9 @@ public class PathView extends View {
         }
     }
 
-    /**
-     * Method called from {@link SensorFusion} used for adding PDR coordinates to the path to be
-     * drawn.
-     *
-     * @param newCords An array containing the newly calculated coordinates to be added.
-     */
+    // Method called from {@link SensorFusion} used for adding PDR coordinates to the path to be
+    // drawn.
+    // @param newCords An array containing the newly calculated coordinates to be added.
     public void drawTrajectory(float[] newCords) {
         // Add x coordinates
         xCoords.add(newCords[0]);
@@ -179,11 +163,9 @@ public class PathView extends View {
         yCoords.add(-newCords[1]);
     }
 
-    /**
-     * Method used for scaling PDR coordinates to fill the screen.
-     * Center of the view is used as the origin, scaling ratio is calculated for the path to fit
-     * the screen with margins included.
-     */
+    // Method used for scaling PDR coordinates to fill the screen.
+    // Center of the view is used as the origin, scaling ratio is calculated for the path to fit
+    // the screen with margins included.
     private void scaleTrajectory() {
         // Get the center coordinates of the view
         int centerX = getWidth() / 2;
@@ -219,31 +201,27 @@ public class PathView extends View {
         }
     }
 
-    /**
-     * Method called when PathView is detached from its window. {@link PathView#xCoords} and
-     * {@link PathView#yCoords} are cleared so that path can start from 0 for next recording.
-     */
+    // Method called when PathView is detached from its window. {@link PathView#xCoords} and
+    // {@link PathView#yCoords} are cleared so that path can start from 0 for next recording.
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         // Reset trajectory
         xCoords.clear();
         yCoords.clear();
-        //New recording so must scale trajectory
+        // New recording so must scale trajectory
         draw = true;
     }
 
-    /**
-     * Redraw trajectory to rescale the path.
-     * Called by {@link CorrectionFragment} through {@link SensorFusion} to reset the scaling ratio
-     * which will resize the path. It enables the redraw flag so new path is drawn.
-     *
-     * @param newScale
-     */
+    // Redraw trajectory to rescale the path.
+    // Called by {@link CorrectionFragment} through {@link SensorFusion} to reset the scaling ratio
+    // which will resize the path. It enables the redraw flag so new path is drawn.
+    // @param newScale
     public void redraw(float newScale){
-        //Set scaling ratio based on user input
+        // Set scaling ratio based on user input
         scalingRatio = newScale;
-        //Enable redrawing of path
+        // Enable redrawing of path
         reDraw = true;
     }
 }
+

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.utils;
+﻿package com.openpositioning.PositionMe.utils;
 
 
 import com.google.android.gms.maps.model.LatLng;
@@ -6,12 +6,10 @@ import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Class used to check for a pre-defined set of coordinates if it is in a Building (Nucleus, Library)
- * (Can be used to add more buildings by adding the coordinates of the buildings and adding methods)
- * @see IndoorMapManager Used by the the IndoorFloorManager class
- * @author Arun Gopalakrishnan
- */
+// Class used to check for a pre-defined set of coordinates if it is in a Building (Nucleus, Library)
+// (Can be used to add more buildings by adding the coordinates of the buildings and adding methods)
+// @see IndoorMapManager Used by the the IndoorFloorManager class
+// @author Arun Gopalakrishnan
 public class BuildingPolygon {
     // Defining the coordinates of the building boundaries (rectangular boundaries based on floor map shape)
     // North-East and South-West Coordinates for the Nucleus Building
@@ -28,40 +26,34 @@ public class BuildingPolygon {
         add(BuildingPolygon.NUCLEUS_SW);
         add(new LatLng(BuildingPolygon.NUCLEUS_NE.latitude, BuildingPolygon.NUCLEUS_SW.longitude)); // North-West
     }};
-    //Boundary coordinates of the Library building (clockwise)
+    // Boundary coordinates of the Library building (clockwise)
     public static final List<LatLng> LIBRARY_POLYGON = new ArrayList<LatLng>() {{
         add(BuildingPolygon.LIBRARY_NE);
-        add(new LatLng(BuildingPolygon.LIBRARY_SW.latitude,BuildingPolygon.LIBRARY_NE.longitude));//(South-East)
+        add(new LatLng(BuildingPolygon.LIBRARY_SW.latitude,BuildingPolygon.LIBRARY_NE.longitude));// (South-East)
         add(BuildingPolygon.LIBRARY_SW);
-        add(new LatLng(BuildingPolygon.LIBRARY_NE.latitude,BuildingPolygon.LIBRARY_SW.longitude));//(North-West)
+        add(new LatLng(BuildingPolygon.LIBRARY_NE.latitude,BuildingPolygon.LIBRARY_SW.longitude));// (North-West)
     }};
 
-    /**
-     * Function to check if a point is in the Nucleus Building
-     * @param point the point to be checked if inside the building
-     * @return True if point is in Nucleus building else False
-     */
+    // Function to check if a point is in the Nucleus Building
+    // @param point the point to be checked if inside the building
+    // @return True if point is in Nucleus building else False
     public static boolean inNucleus(LatLng point){
         return (pointInPolygon(point,NUCLEUS_POLYGON));
 
     }
-    /**
-     * Function to check if a point is in the Library Building
-     * @param point the point which is checked if inside the building
-     * @return True if point is in Library building else False
-     */
+    // Function to check if a point is in the Library Building
+    // @param point the point which is checked if inside the building
+    // @return True if point is in Library building else False
     public static boolean inLibrary(LatLng point){
         return (pointInPolygon(point,LIBRARY_POLYGON));
     }
 
-    /**
-     * Function to check if point in polygon (approximates earth to be flat)
-     * Ray casting algorithm https://en.wikipedia.org/wiki/Point_in_polygon
-     * @param point point to be checked if in polygon
-     * @param polygon Boundaries of the building
-     * @return True if point in polygon
-     * False otherwise
-     */
+    // Function to check if point in polygon (approximates earth to be flat)
+    // Ray casting algorithm https://en.wikipedia.org/wiki/Point_in_polygon
+    // @param point point to be checked if in polygon
+    // @param polygon Boundaries of the building
+    // @return True if point in polygon
+    // False otherwise
     private static boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
         int numCrossings = 0;
         List<LatLng> path=polygon;
@@ -79,20 +71,18 @@ public class BuildingPolygon {
             }
         }
 
-        //if odd number of numCrossings return true (point is in polygon)
+        // if odd number of numCrossings return true (point is in polygon)
         return (numCrossings % 2 == 1);
     }
 
-    /**
-     * Ray Casting algorithm for a segment joining ab
-     * @param point the point we check
-     * @param a the line segment's starting point
-     * @param b the line segment's ending point
-     * @return True if the point is
-     *      1) To the left of the segment ab
-     *      2) Not above nor below the segment ab
-     *      Otherwise False
-     */
+    // Ray Casting algorithm for a segment joining ab
+    // @param point the point we check
+    // @param a the line segment's starting point
+    // @param b the line segment's ending point
+    // @return True if the point is
+    // To the left of the segment ab
+    // Not above nor below the segment ab
+    // Otherwise False
     private static boolean crossingSegment(LatLng point, LatLng a,LatLng b) {
         double pointLng = point.longitude,
                 pointLat = point.latitude,
@@ -111,7 +101,7 @@ public class BuildingPolygon {
         // If point has same latitude as a or b, increase slightly pointLat
         if (pointLat == aLat || pointLat == bLat) pointLat += 0.00000001;
 
-        //If the point is above, below or to the right of the segment,return false
+        // If the point is above, below or to the right of the segment,return false
         if ((pointLat > bLat || pointLat < aLat) || (pointLng > Math.max(aLng, bLng))){
             return false;
         }
@@ -128,3 +118,5 @@ public class BuildingPolygon {
         }
     }
 }
+
+

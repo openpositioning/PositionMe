@@ -1,17 +1,13 @@
-package com.openpositioning.PositionMe.utils;
+﻿package com.openpositioning.PositionMe.utils;
 
 import com.google.android.gms.maps.model.LatLng;
 import java.util.List;
 
-/**
- * GeometryUtils - Utility class for geometric calculations
- * Used for indoor navigation constraint checking (wall collision, boundary detection, etc.)
- */
+// GeometryUtils - Utility class for geometric calculations
+// Used for indoor navigation constraint checking (wall collision, boundary detection, etc.)
 public class GeometryUtils {
 
-    /**
-     * Check if a point is inside a polygon using ray casting algorithm
-     */
+    // Check if a point is inside a polygon using ray casting algorithm
     public static boolean isPointInPolygon(LatLng point, List<LatLng> polygon) {
         if (polygon == null || polygon.size() < 3) return false;
         
@@ -32,9 +28,7 @@ public class GeometryUtils {
         return inside;
     }
 
-    /**
-     * Calculate distance between two LatLng points in meters (Haversine formula)
-     */
+    // Calculate distance between two LatLng points in meters (Haversine formula)
     public static double distanceBetween(LatLng p1, LatLng p2) {
         final double R = 6371000; // Earth radius in meters
         double lat1 = Math.toRadians(p1.latitude);
@@ -50,10 +44,8 @@ public class GeometryUtils {
         return R * c;
     }
 
-    /**
-     * Check if a line segment (from -> to) crosses any wall line segment
-     * Returns true if movement would cross a wall
-     */
+    // Check if a line segment (from -> to) crosses any wall line segment
+    // Returns true if movement would cross a wall
     public static boolean crossesWall(LatLng from, LatLng to, List<List<LatLng>> walls) {
         if (walls == null || walls.isEmpty()) return false;
         
@@ -70,9 +62,7 @@ public class GeometryUtils {
         return false;
     }
 
-    /**
-     * Check if two line segments intersect
-     */
+    // Check if two line segments intersect
     private static boolean lineSegmentsIntersect(LatLng p1, LatLng p2, LatLng p3, LatLng p4) {
         double d1 = direction(p3, p4, p1);
         double d2 = direction(p3, p4, p2);
@@ -93,17 +83,13 @@ public class GeometryUtils {
         return false;
     }
 
-    /**
-     * Calculate direction (cross product)
-     */
+    // Calculate direction (cross product)
     private static double direction(LatLng p1, LatLng p2, LatLng p3) {
         return (p3.latitude - p1.latitude) * (p2.longitude - p1.longitude) -
                (p2.latitude - p1.latitude) * (p3.longitude - p1.longitude);
     }
 
-    /**
-     * Check if point q lies on segment pr
-     */
+    // Check if point q lies on segment pr
     private static boolean onSegment(LatLng p, LatLng q, LatLng r) {
         return q.latitude <= Math.max(p.latitude, r.latitude) &&
                q.latitude >= Math.min(p.latitude, r.latitude) &&
@@ -111,10 +97,8 @@ public class GeometryUtils {
                q.longitude >= Math.min(p.longitude, r.longitude);
     }
 
-    /**
-     * Find the closest valid point inside a polygon boundary
-     * Used when detected position is outside building
-     */
+    // Find the closest valid point inside a polygon boundary
+    // Used when detected position is outside building
     public static LatLng constrainToPolygon(LatLng point, List<LatLng> polygon) {
         if (isPointInPolygon(point, polygon)) {
             return point; // Already inside
@@ -147,9 +131,7 @@ public class GeometryUtils {
         return point; // Fallback
     }
 
-    /**
-     * Find closest point on a line segment to a given point
-     */
+    // Find closest point on a line segment to a given point
     private static LatLng closestPointOnSegment(LatLng point, LatLng segStart, LatLng segEnd) {
         double dx = segEnd.latitude - segStart.latitude;
         double dy = segEnd.longitude - segStart.longitude;
@@ -167,9 +149,7 @@ public class GeometryUtils {
         );
     }
 
-    /**
-     * Calculate polygon center (centroid)
-     */
+    // Calculate polygon center (centroid)
     private static LatLng getPolygonCenter(List<LatLng> polygon) {
         double sumLat = 0, sumLon = 0;
         for (LatLng p : polygon) {
@@ -179,10 +159,8 @@ public class GeometryUtils {
         return new LatLng(sumLat / polygon.size(), sumLon / polygon.size());
     }
 
-    /**
-     * Smooth trajectory using exponential moving average
-     * alpha = smoothing factor (0-1), higher = less smoothing
-     */
+    // Smooth trajectory using exponential moving average
+    // alpha = smoothing factor (0-1), higher = less smoothing
     public static LatLng smoothPosition(LatLng newPos, LatLng prevPos, double alpha) {
         if (prevPos == null) return newPos;
         
@@ -192,10 +170,8 @@ public class GeometryUtils {
         return new LatLng(smoothLat, smoothLon);
     }
 
-    /**
-     * Detect if position jump is unrealistic (teleportation)
-     * maxSpeed in meters/second
-     */
+    // Detect if position jump is unrealistic (teleportation)
+    // maxSpeed in meters/second
     public static boolean isUnrealisticJump(LatLng from, LatLng to, long deltaTimeMs, double maxSpeed) {
         if (from == null || to == null || deltaTimeMs <= 0) return false;
         
@@ -204,4 +180,30 @@ public class GeometryUtils {
         
         return speed > maxSpeed; // Typically 2-3 m/s for walking
     }
+
+    // Check whether a point lies inside or close to a feature polyline/polygon.
+    public static boolean isPointNearFeature(LatLng point, List<LatLng> feature, double radiusMeters) {
+        if (point == null || feature == null || feature.isEmpty()) {
+            return false;
+        }
+
+        if (feature.size() >= 3 && isPointInPolygon(point, feature)) {
+            return true;
+        }
+
+        if (feature.size() == 1) {
+            return distanceBetween(point, feature.get(0)) <= radiusMeters;
+        }
+
+        for (int i = 0; i < feature.size() - 1; i++) {
+            LatLng closestPoint = closestPointOnSegment(point, feature.get(i), feature.get(i + 1));
+            if (distanceBetween(point, closestPoint) <= radiusMeters) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
+
+

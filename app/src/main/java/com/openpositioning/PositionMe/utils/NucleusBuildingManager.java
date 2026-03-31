@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.utils;
+﻿package com.openpositioning.PositionMe.utils;
 
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.LatLng;
@@ -43,12 +43,9 @@ public class NucleusBuildingManager {
         return indoorMapFragment;
     }
 
-    /**
-     * Determines if a given point is inside the building polygon.
-     *
-     * @param point the point to check
-     * @return true if the point is inside the polygon, false otherwise
-     */
+    // Determines if a given point is inside the building polygon.
+    // @param point the point to check
+    // @return true if the point is inside the polygon, false otherwise
     public boolean isPointInBuilding(LatLng point) {
         int intersectCount = 0;
         // Loop through each edge of the polygon
@@ -64,14 +61,11 @@ public class NucleusBuildingManager {
         return ((intersectCount % 2) == 1); // odd = inside, even = outside;
     }
 
-    /**
-     * Determines if a ray from a point intersects with a given edge of the polygon.
-     *
-     * @param point the point from which the ray is cast
-     * @param vertA the first vertex of the edge
-     * @param vertB the second vertex of the edge
-     * @return true if the ray intersects with the edge, false otherwise
-     */
+    // Determines if a ray from a point intersects with a given edge of the polygon.
+    // @param point the point from which the ray is cast
+    // @param vertA the first vertex of the edge
+    // @param vertB the second vertex of the edge
+    // @return true if the ray intersects with the edge, false otherwise
     private boolean rayCastIntersect(LatLng point, LatLng vertA, LatLng vertB) {
         double aY = vertA.latitude;
         double bY = vertB.latitude;
@@ -96,3 +90,5 @@ public class NucleusBuildingManager {
         return x > pX;
     }
 }
+
+

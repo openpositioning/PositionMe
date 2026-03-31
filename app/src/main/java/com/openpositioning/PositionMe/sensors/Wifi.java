@@ -1,52 +1,45 @@
-package com.openpositioning.PositionMe.sensors;
+﻿package com.openpositioning.PositionMe.sensors;
 
 import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
 
-/**
- * The Wifi object holds the Wifi parameters listed below.
- *
- * It contains the ssid (the identifier of the wifi), bssid (the mac address of the wifi), level
- * (the strength of the wifi in dB) and frequency (the frequency of the wifi network (2.4GHz or
- * 5GHz). For most objects only the bssid and the level are set.
- *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
- */
+// The Wifi object holds the Wifi parameters listed below.
+// It contains the ssid (the identifier of the wifi), bssid (the mac address of the wifi), level
+// (the strength of the wifi in dB) and frequency (the frequency of the wifi network (2.4GHz or
+// 5GHz). For most objects only the bssid and the level are set.
+// @author Virginia Cangelosi
+// @author Mate Stodulka
 public class Wifi {
     private String ssid;
     private long bssid;
     private int level;
     private long frequency;
+    private Float rttAltitudeMeters;
 
-    /**
-     * Empty public default constructor of the Wifi object.
-     */
+    // Empty public default constructor of the Wifi object.
     public Wifi(){}
 
-    /**
-     * Getters for each property
-     */
+    // Getters for each property
     public String getSsid() { return ssid; }
     public long getBssid() { return bssid; }
     public int getLevel() { return level; }
     public long getFrequency() { return frequency; }
+    public Float getRttAltitudeMeters() { return rttAltitudeMeters; }
+    public boolean hasRttAltitude() { return rttAltitudeMeters != null; }
 
-    /**
-     * Setters for each property
-     */
+    // Setters for each property
     public void setSsid(String ssid) { this.ssid = ssid; }
     public void setBssid(long bssid) { this.bssid = bssid; }
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
+    public void setRttAltitudeMeters(Float rttAltitudeMeters) { this.rttAltitudeMeters = rttAltitudeMeters; }
 
-    /**
-     * Generates a string containing mac address and rssi of Wifi.
-     *
-     * Concatenates mac address and rssi to display in the
-     * {@link MeasurementsFragment} fragment
-     */
+    // Generates a string containing mac address and rssi of Wifi.
+    // Concatenates mac address and rssi to display in the
+    // {@link MeasurementsFragment} fragment
     @Override
     public String toString() {
         return  "bssid: " + bssid +", level: " + level;
     }
 }
+
+

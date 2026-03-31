@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.utils;
+﻿package com.openpositioning.PositionMe.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -36,17 +36,33 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-/**
- * IndoorMapManager - API-based indoor map handler.
- * Supports GeoJSON data parsing and floor plan management.
- */
+// IndoorMapManager - API-based indoor map handler.
+// Supports GeoJSON data parsing and floor plan management.
 public class IndoorMapManager {
 
     private static final String TAG = "IndoorMapManager";
+    private static final float[] NUCLEUS_FLOOR_ALTITUDE_ANCHORS = new float[]{127.0f, 130.0f, 135.5f, 139.5f, 145.9f};
+    private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
+    private static final int FEATURE_KIND_DEFAULT = 0;
+    private static final int FEATURE_KIND_WALL = 1;
+    private static final int FEATURE_KIND_STAIRS = 2;
+    private static final int FEATURE_KIND_LIFT = 3;
+
+    private static final int COLOR_FEATURE_DEFAULT_STROKE = Color.argb(210, 125, 135, 150);
+    private static final int COLOR_FEATURE_DEFAULT_FILL = Color.argb(40, 125, 135, 150);
+    private static final int COLOR_FEATURE_WALL_STROKE = Color.argb(235, 32, 37, 43);
+    private static final int COLOR_FEATURE_WALL_FILL = Color.TRANSPARENT;
+    private static final int COLOR_FEATURE_STAIRS_STROKE = Color.argb(235, 255, 149, 0);
+    private static final int COLOR_FEATURE_STAIRS_FILL = Color.argb(72, 255, 149, 0);
+    private static final int COLOR_FEATURE_LIFT_STROKE = Color.argb(235, 0, 122, 255);
+    private static final int COLOR_FEATURE_LIFT_FILL = Color.argb(72, 0, 122, 255);
     private GoogleMap gMap;
     private Context context;
     private GroundOverlay groundOverlay;
@@ -71,15 +87,18 @@ public class IndoorMapManager {
     
     // Wall collision detection data
     private Map<String, List<List<LatLng>>> floorWallsMap = new HashMap<>();  // floor name -> wall polylines
+    private Map<String, List<List<LatLng>>> floorStairsMap = new HashMap<>(); // floor name -> stairs geometries
+    private Map<String, List<List<LatLng>>> floorLiftsMap = new HashMap<>();  // floor name -> lift geometries
     private List<LatLng> buildingBoundary = null;  // Current building boundary polygon
 
     private Map<Polygon, IndoorBuilding> polygonMap = new HashMap<>();
+    private final List<IndoorBuilding> fallbackBuildings = new ArrayList<>();
 
     // Request tracking to handle race conditions
     private int currentRequestId = 0;
     private String pendingBuildingName = null;  // Building name for current pending request
 
-    private static final String BASE_URL = "https://openpositioning.org/api/live/floorplan/request/";
+    private static final String BASE_URL = "https:// openpositioning.org/api/live/floorplan/request/";
     private static final String RAW_API_KEY = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String RAW_MASTER_KEY = BuildConfig.OPENPOSITIONING_MASTER_KEY;
 
@@ -263,8 +282,10 @@ public class IndoorMapManager {
                         int priority2 = getFloorPriority(f2);
                         return Integer.compare(priority1, priority2);
                     });
+                    currentFloor = findDefaultFloorIndex();
                     
                     Log.d(TAG, "    - Floor order after sorting: " + floorNamesList);
+                    Log.d(TAG, "    - Default floor index: " + currentFloor + " (" + getCurrentFloorName() + ")");
                 } catch (
                         JSONException e) {
                     Log.e(TAG, ">>> Failed to parse map_shapes dictionary: " + e.getMessage());
@@ -340,13 +361,11 @@ public class IndoorMapManager {
         renderGeoJsonWithWallData(jsonString, color, width, null);
     }
     
-    /**
-     * Render GeoJSON and optionally store wall data for collision detection
-     * @param jsonString GeoJSON string to render
-     * @param color Line color
-     * @param width Line width
-     * @param floorName Floor name (if not null, stores wall data for this floor)
-     */
+    // Render GeoJSON and optionally store wall data for collision detection
+    // @param jsonString GeoJSON string to render
+    // @param color Line color
+    // @param width Line width
+    // @param floorName Floor name (if not null, stores wall data for this floor)
     private void renderGeoJsonWithWallData(String jsonString, int color, float width, String floorName) {
         try {
             JSONObject geoJson;
@@ -363,9 +382,15 @@ public class IndoorMapManager {
             
             // Store wall data if floorName is provided
             List<List<LatLng>> wallsForThisFloor = new ArrayList<>();
+            List<List<LatLng>> stairsForThisFloor = new ArrayList<>();
+            List<List<LatLng>> liftsForThisFloor = new ArrayList<>();
 
             for (int i = 0; i < features.length(); i++) {
                 JSONObject feature = features.getJSONObject(i);
+                int featureKind = classifyFeatureKind(feature);
+                int strokeColor = getFeatureStrokeColor(featureKind, color);
+                int fillColor = getFeatureFillColor(featureKind);
+                float featureWidth = getFeatureStrokeWidth(featureKind, width);
                 JSONObject geometry = feature.getJSONObject("geometry");
                 String type = geometry.getString("type");
                 JSONArray coordinates = geometry.getJSONArray("coordinates");
@@ -379,14 +404,20 @@ public class IndoorMapManager {
                         // Draw polygon
                         Polygon p = gMap.addPolygon(new PolygonOptions()
                                 .addAll(points)
-                                .strokeColor(color)
-                                .strokeWidth(width)
-                                .fillColor(Color.TRANSPARENT));
+                                .strokeColor(strokeColor)
+                                .strokeWidth(featureWidth)
+                                .fillColor(fillColor));
                         drawnShapes.add(p);
                         
-                        // Store as wall data (polygon perimeter is a wall)
-                        if (floorName != null) {
+                        // Only wall-like features should constrain movement.
+                        if (floorName != null && shouldStoreAsWall(featureKind, type)) {
                             wallsForThisFloor.add(points);
+                        }
+                        if (floorName != null && featureKind == FEATURE_KIND_STAIRS) {
+                            stairsForThisFloor.add(points);
+                        }
+                        if (floorName != null && featureKind == FEATURE_KIND_LIFT) {
+                            liftsForThisFloor.add(points);
                         }
                     }
                 } else if (type.equals("MultiLineString")) {
@@ -397,13 +428,18 @@ public class IndoorMapManager {
                         // Draw polyline
                         com.google.android.gms.maps.model.Polyline p = gMap.addPolyline(new PolylineOptions()
                                 .addAll(points)
-                                .color(color)
-                                .width(width));
+                                .color(strokeColor)
+                                .width(featureWidth));
                         drawnShapes.add(p);
                         
-                        // Store as wall data
-                        if (floorName != null) {
+                        if (floorName != null && shouldStoreAsWall(featureKind, type)) {
                             wallsForThisFloor.add(points);
+                        }
+                        if (floorName != null && featureKind == FEATURE_KIND_STAIRS) {
+                            stairsForThisFloor.add(points);
+                        }
+                        if (floorName != null && featureKind == FEATURE_KIND_LIFT) {
+                            liftsForThisFloor.add(points);
                         }
                     }
                 } else if (type.equals("Polygon")) {
@@ -413,14 +449,19 @@ public class IndoorMapManager {
                     // Draw polygon
                     Polygon p = gMap.addPolygon(new PolygonOptions()
                             .addAll(points)
-                            .strokeColor(color)
-                            .strokeWidth(width)
-                            .fillColor(Color.TRANSPARENT));
+                            .strokeColor(strokeColor)
+                            .strokeWidth(featureWidth)
+                            .fillColor(fillColor));
                     drawnShapes.add(p);
                     
-                    // Store as wall data
-                    if (floorName != null) {
+                    if (floorName != null && shouldStoreAsWall(featureKind, type)) {
                         wallsForThisFloor.add(points);
+                    }
+                    if (floorName != null && featureKind == FEATURE_KIND_STAIRS) {
+                        stairsForThisFloor.add(points);
+                    }
+                    if (floorName != null && featureKind == FEATURE_KIND_LIFT) {
+                        liftsForThisFloor.add(points);
                     }
                 } else if (type.equals("LineString")) {
                     List<LatLng> points = parseCoordinates(coordinates);
@@ -428,13 +469,18 @@ public class IndoorMapManager {
                     // Draw polyline
                     com.google.android.gms.maps.model.Polyline p = gMap.addPolyline(new PolylineOptions()
                             .addAll(points)
-                            .color(color)
-                            .width(width));
+                            .color(strokeColor)
+                            .width(featureWidth));
                     drawnShapes.add(p);
                     
-                    // Store as wall data
-                    if (floorName != null) {
+                    if (floorName != null && shouldStoreAsWall(featureKind, type)) {
                         wallsForThisFloor.add(points);
+                    }
+                    if (floorName != null && featureKind == FEATURE_KIND_STAIRS) {
+                        stairsForThisFloor.add(points);
+                    }
+                    if (floorName != null && featureKind == FEATURE_KIND_LIFT) {
+                        liftsForThisFloor.add(points);
                     }
                 }
             }
@@ -443,6 +489,16 @@ public class IndoorMapManager {
             if (floorName != null && !wallsForThisFloor.isEmpty()) {
                 floorWallsMap.put(floorName, wallsForThisFloor);
                 Log.d(TAG, ">>> Stored " + wallsForThisFloor.size() + " walls for floor: " + floorName);
+            }
+            if (floorName != null) {
+                if (!stairsForThisFloor.isEmpty()) {
+                    floorStairsMap.put(floorName, stairsForThisFloor);
+                    Log.d(TAG, ">>> Stored " + stairsForThisFloor.size() + " stairs zones for floor: " + floorName);
+                }
+                if (!liftsForThisFloor.isEmpty()) {
+                    floorLiftsMap.put(floorName, liftsForThisFloor);
+                    Log.d(TAG, ">>> Stored " + liftsForThisFloor.size() + " lift zones for floor: " + floorName);
+                }
             }
             
             isIndoorMapSet = true;
@@ -464,10 +520,113 @@ public class IndoorMapManager {
         }
         return list;
     }
+
+    private int classifyFeatureKind(JSONObject feature) {
+        String metadata = buildFeatureMetadata(feature);
+        if (metadata.isEmpty()) {
+            return FEATURE_KIND_DEFAULT;
+        }
+
+        if (metadata.contains("stair") || metadata.contains("stairs")
+                || metadata.contains("staircase") || metadata.contains("step")) {
+            return FEATURE_KIND_STAIRS;
+        }
+
+        if (metadata.contains("lift") || metadata.contains("elevator")) {
+            return FEATURE_KIND_LIFT;
+        }
+
+        if (metadata.contains("wall") || metadata.contains("partition")
+                || metadata.contains("boundary") || metadata.contains("outline")
+                || metadata.contains("obstacle")) {
+            return FEATURE_KIND_WALL;
+        }
+
+        return FEATURE_KIND_DEFAULT;
+    }
+
+    private String buildFeatureMetadata(JSONObject feature) {
+        StringBuilder metadata = new StringBuilder();
+        JSONObject properties = feature.optJSONObject("properties");
+        if (properties != null) {
+            appendJsonValues(properties, metadata);
+        }
+
+        JSONObject geometry = feature.optJSONObject("geometry");
+        if (geometry != null) {
+            String geometryType = geometry.optString("type", "");
+            if (!geometryType.isEmpty()) {
+                metadata.append(' ').append(geometryType);
+            }
+        }
+
+        return metadata.toString().toLowerCase(Locale.US);
+    }
+
+    private void appendJsonValues(JSONObject object, StringBuilder metadata) {
+        @SuppressWarnings("unchecked")
+        java.util.Iterator<String> keys = object.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            metadata.append(' ').append(key);
+            Object value = object.opt(key);
+            if (value instanceof JSONObject) {
+                appendJsonValues((JSONObject) value, metadata);
+            } else if (value != null) {
+                metadata.append(' ').append(String.valueOf(value));
+            }
+        }
+    }
+
+    private boolean shouldStoreAsWall(int featureKind, String geometryType) {
+        if (featureKind == FEATURE_KIND_WALL) {
+            return true;
+        }
+
+        if (featureKind == FEATURE_KIND_STAIRS || featureKind == FEATURE_KIND_LIFT) {
+            return false;
+        }
+
+        return "LineString".equals(geometryType) || "MultiLineString".equals(geometryType);
+    }
+
+    private int getFeatureStrokeColor(int featureKind, int fallbackColor) {
+        switch (featureKind) {
+            case FEATURE_KIND_WALL:
+                return COLOR_FEATURE_WALL_STROKE;
+            case FEATURE_KIND_STAIRS:
+                return COLOR_FEATURE_STAIRS_STROKE;
+            case FEATURE_KIND_LIFT:
+                return COLOR_FEATURE_LIFT_STROKE;
+            default:
+                return fallbackColor == Color.BLACK ? COLOR_FEATURE_DEFAULT_STROKE : fallbackColor;
+        }
+    }
+
+    private int getFeatureFillColor(int featureKind) {
+        switch (featureKind) {
+            case FEATURE_KIND_STAIRS:
+                return COLOR_FEATURE_STAIRS_FILL;
+            case FEATURE_KIND_LIFT:
+                return COLOR_FEATURE_LIFT_FILL;
+            case FEATURE_KIND_WALL:
+                return COLOR_FEATURE_WALL_FILL;
+            default:
+                return COLOR_FEATURE_DEFAULT_FILL;
+        }
+    }
+
+    private float getFeatureStrokeWidth(int featureKind, float fallbackWidth) {
+        if (featureKind == FEATURE_KIND_WALL) {
+            return Math.max(fallbackWidth, 3.5f);
+        }
+        if (featureKind == FEATURE_KIND_STAIRS || featureKind == FEATURE_KIND_LIFT) {
+            return Math.max(2.4f, fallbackWidth - 0.2f);
+        }
+        return Math.max(2.0f, fallbackWidth);
+    }
     
-    /**
-     * Parse building boundary from outline GeoJSON for collision detection
-     */
+    // Parse building boundary from outline GeoJSON for collision detection
     private void parseBuildingBoundary(String outlineGeoJson) throws Exception {
         buildingBoundary = null;  // Clear previous boundary
         
@@ -522,7 +681,7 @@ public class IndoorMapManager {
     }
 
     // ============================================================
-    // 2. Helper Methods
+    // Helper Methods
     // ============================================================
 
     // Track selected polygon for visual feedback
@@ -539,7 +698,7 @@ public class IndoorMapManager {
         nucleusPoints.add(new LatLng(55.92282, -3.17388));  // SE corner
         nucleusPoints.add(new LatLng(55.92282, -3.17460));  // SW corner
         nucleusPoints.add(new LatLng(55.92332, -3.17460));  // NW corner
-        fallbackList.add(new IndoorBuilding("venue_nucleus", "The Nucleus Building", nucleusPoints, calculateBounds(nucleusPoints), new HashMap<>(), 4.2f));
+        fallbackList.add(new IndoorBuilding("venue_nucleus", "The Nucleus Building", nucleusPoints, calculateBounds(nucleusPoints), new HashMap<>(), 4.2f, NUCLEUS_FLOOR_ALTITUDE_ANCHORS));
 
         // ========== Murray Library ==========
         // Moved west to eliminate overlap with Nucleus (east edge at -3.17477)
@@ -571,6 +730,9 @@ public class IndoorMapManager {
             LatLng center = b.bounds.getCenter();
             Log.d(TAG, "    - " + b.name + " at (" + String.format("%.6f", center.latitude) + ", " + String.format("%.6f", center.longitude) + ")");
         }
+
+        fallbackBuildings.clear();
+        fallbackBuildings.addAll(fallbackList);
 
         mainHandler.post(() -> drawBuildingOutlines(fallbackList));
     }
@@ -618,6 +780,8 @@ public class IndoorMapManager {
             floorShapesMap.clear();
             floorNamesList.clear();
             floorWallsMap.clear();
+            floorStairsMap.clear();
+            floorLiftsMap.clear();
             buildingBoundary = null;
             currentVenueName = null;
             currentOutlineGeoJson = null;
@@ -647,6 +811,95 @@ public class IndoorMapManager {
             Log.w(TAG, ">>> Polygon clicked but not found in polygonMap!");
         }
         return false;
+    }
+
+    public boolean selectBuildingForLocation(LatLng location, boolean fetchData) {
+        if (location == null || fallbackBuildings.isEmpty()) {
+            return false;
+        }
+
+        IndoorBuilding bestMatch = null;
+        double bestDistanceMeters = Double.MAX_VALUE;
+
+        for (IndoorBuilding building : fallbackBuildings) {
+            boolean insideBuilding = GeometryUtils.isPointInPolygon(location, building.polygonPoints);
+            double distanceMeters = distanceMeters(location, building.bounds.getCenter());
+
+            if (insideBuilding) {
+                bestMatch = building;
+                bestDistanceMeters = 0.0;
+                break;
+            }
+
+            if (distanceMeters < bestDistanceMeters) {
+                bestDistanceMeters = distanceMeters;
+                bestMatch = building;
+            }
+        }
+
+        if (bestMatch == null || bestDistanceMeters > 80.0) {
+            return false;
+        }
+
+        applyBuildingSelection(bestMatch, fetchData);
+        return true;
+    }
+
+    private void applyBuildingSelection(IndoorBuilding building, boolean fetchData) {
+        selectedBuilding = building;
+        currentFloor = 0;
+
+        floorShapesMap.clear();
+        floorNamesList.clear();
+        floorWallsMap.clear();
+        floorStairsMap.clear();
+        floorLiftsMap.clear();
+        buildingBoundary = null;
+        currentVenueName = null;
+        currentOutlineGeoJson = null;
+        hideMap();
+
+        highlightSelectedBuilding(building);
+
+        String apiCampaignId = convertNameToApiId(building.name);
+        settings.edit().putString("current_campaign", apiCampaignId).apply();
+
+        if (fetchData) {
+            fetchFloorPlan(building.bounds.getCenter(), new ArrayList<>());
+        }
+    }
+
+    private void highlightSelectedBuilding(IndoorBuilding building) {
+        if (selectedPolygon != null) {
+            selectedPolygon.setStrokeColor(selectedPolygonOriginalStroke);
+            selectedPolygon.setStrokeWidth(4f);
+            selectedPolygon = null;
+        }
+
+        for (Map.Entry<Polygon, IndoorBuilding> entry : polygonMap.entrySet()) {
+            IndoorBuilding candidate = entry.getValue();
+            if (candidate != null && building != null && candidate.name.equals(building.name)) {
+                Polygon polygon = entry.getKey();
+                selectedPolygonOriginalStroke = polygon.getStrokeColor();
+                selectedPolygon = polygon;
+                polygon.setStrokeColor(Color.rgb(0, 230, 118));
+                polygon.setStrokeWidth(6f);
+                break;
+            }
+        }
+    }
+
+    private double distanceMeters(LatLng a, LatLng b) {
+        double lat1 = Math.toRadians(a.latitude);
+        double lon1 = Math.toRadians(a.longitude);
+        double lat2 = Math.toRadians(b.latitude);
+        double lon2 = Math.toRadians(b.longitude);
+
+        double dLat = lat2 - lat1;
+        double dLon = lon2 - lon1;
+        double haversine = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 6371000.0 * 2.0 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1.0 - haversine));
     }
 
     public void hideMap() {
@@ -686,43 +939,166 @@ public class IndoorMapManager {
         this.floorDataLoadedListener = listener;
     }
     
-    /**
-     * Set selected building before API call (for validation)
-     * This is critical for building name verification in API responses
-     */
+    // Set selected building before API call (for validation)
+    // This is critical for building name verification in API responses
     public void setSelectedBuilding(String name, LatLng center) {
-        // Create a temporary building object for validation purposes
-        List<LatLng> tempPolygon = new ArrayList<>();
-        tempPolygon.add(center);
+        IndoorBuilding fallbackMatch = findFallbackBuildingByName(name);
+        List<LatLng> polygonPoints = new ArrayList<>();
+        LatLngBounds bounds = new LatLngBounds(center, center);
+        float floorHeight = 4.0f;
+        float[] floorAltitudeAnchorsMeters = null;
+
+        if (fallbackMatch != null) {
+            polygonPoints.addAll(fallbackMatch.polygonPoints);
+            bounds = fallbackMatch.bounds;
+            floorHeight = fallbackMatch.floorHeight;
+            if (fallbackMatch.floorAltitudeAnchorsMeters != null) {
+                floorAltitudeAnchorsMeters = fallbackMatch.floorAltitudeAnchorsMeters.clone();
+            }
+        } else {
+            polygonPoints.add(center);
+        }
         
         // Clear old floor data when switching buildings
         floorShapesMap.clear();
         floorNamesList.clear();
         floorWallsMap.clear();
+        floorStairsMap.clear();
+        floorLiftsMap.clear();
         buildingBoundary = null;
         currentVenueName = null;
         currentOutlineGeoJson = null;
+        currentFloor = 0;
         hideMap();
         
         selectedBuilding = new IndoorBuilding(
             "venue_" + name.toLowerCase().replace(" ", "_"),
             name,
-            tempPolygon,
-            new LatLngBounds(center, center),
+            polygonPoints,
+            bounds,
             new HashMap<>(),
-            4.0f
+            floorHeight,
+            floorAltitudeAnchorsMeters
         );
         
         Log.d(TAG, "====================================");
         Log.d(TAG, ">>> Selected building set: " + name);
         Log.d(TAG, ">>> Building ID: " + selectedBuilding.id);
         Log.d(TAG, ">>> Center: (" + String.format("%.6f", center.latitude) + ", " + String.format("%.6f", center.longitude) + ")");
+        Log.d(TAG, ">>> Floor height: " + floorHeight + "m, anchors: " + (floorAltitudeAnchorsMeters != null ? floorAltitudeAnchorsMeters.length : 0));
         Log.d(TAG, ">>> This will be used to validate API response");
     }
+
+    private int findDefaultFloorIndex() {
+        if (floorNamesList.isEmpty()) {
+            return 0;
+        }
+
+        for (int i = 0; i < floorNamesList.size(); i++) {
+            if ("GF".equals(normalizeFloorName(floorNamesList.get(i)))) {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    private Float resolveAltitudeAnchorForFloorName(String floorName, float[] rawAnchors) {
+        if (rawAnchors == null || rawAnchors.length == 0) {
+            return null;
+        }
+
+        if (isNucleusBuildingSelected() && rawAnchors.length >= 5) {
+            switch (normalizeFloorName(floorName)) {
+                case "B1":
+                    return rawAnchors[0];
+                case "GF":
+                    return rawAnchors[1];
+                case "F1":
+                    return rawAnchors[2];
+                case "F2":
+                    return rawAnchors[3];
+                case "F3":
+                    return rawAnchors[4];
+                default:
+                    return null;
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isNucleusBuildingSelected() {
+        String buildingName = getSelectedBuildingName();
+        return buildingName != null && buildingName.toLowerCase(Locale.US).contains("nucleus");
+    }
+
+    private IndoorBuilding findFallbackBuildingByName(String name) {
+        if (name == null) {
+            return null;
+        }
+
+        String lowerName = name.toLowerCase(Locale.US);
+        for (IndoorBuilding building : fallbackBuildings) {
+            String lowerBuilding = building.name.toLowerCase(Locale.US);
+            if ((lowerName.contains("nucleus") && lowerBuilding.contains("nucleus"))
+                    || (lowerName.contains("library") && lowerBuilding.contains("library"))
+                    || (lowerName.contains("murchison") && lowerBuilding.contains("murchison"))
+                    || ((lowerName.contains("fjb") || lowerName.contains("fleeming") || lowerName.contains("jenkin"))
+                    && (lowerBuilding.contains("fjb") || lowerBuilding.contains("fleeming") || lowerBuilding.contains("jenkin")))) {
+                return building;
+            }
+        }
+
+        return null;
+    }
+
+    private String normalizeFloorName(String floorName) {
+        if (floorName == null) {
+            return "";
+        }
+
+        String lower = floorName.trim().toLowerCase(Locale.US);
+        String compact = lower.replace(" ", "").replace("_", "").replace("-", "");
+        if (compact.equals("g") || compact.equals("gf") || compact.equals("ground")
+                || compact.equals("groundfloor") || compact.equals("0")
+                || compact.equals("level0") || compact.equals("l0") || compact.equals("floor0")) {
+            return "GF";
+        }
+
+        Integer extracted = extractFloorNumber(lower);
+        if (lower.contains("basement") || compact.startsWith("b")) {
+            int basementLevel = extracted != null ? Math.max(1, Math.abs(extracted)) : 1;
+            return "B" + basementLevel;
+        }
+
+        if (extracted != null) {
+            if (extracted == 0) {
+                return "GF";
+            }
+            if (extracted < 0) {
+                return "B" + Math.abs(extracted);
+            }
+            return "F" + extracted;
+        }
+
+        return compact.toUpperCase(Locale.US);
+    }
+
+    private Integer extractFloorNumber(String value) {
+        Matcher matcher = FLOOR_NUMBER_PATTERN.matcher(value);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        try {
+            return Integer.parseInt(matcher.group());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
     
-    /**
-     * Toggle indoor map visibility (toggle floor plan display)
-     */
+    // Toggle indoor map visibility (toggle floor plan display)
     public void setIndoorMapVisible(boolean visible) {
         this.isIndoorMapVisible = visible;
         if (!visible) {
@@ -754,12 +1130,83 @@ public class IndoorMapManager {
     public String getSelectedBuildingId() { return selectedBuilding != null ? selectedBuilding.id : null; }
     public String getSelectedBuildingName() { return currentVenueName != null ? currentVenueName : (selectedBuilding != null ? selectedBuilding.name : null); }
     public float getFloorHeight() { return selectedBuilding != null ? selectedBuilding.floorHeight : 4.0f; }
+    public List<List<LatLng>> getCurrentFloorStairsZones() {
+        String currentFloorName = getCurrentFloorName();
+        if (currentFloorName == null || !floorStairsMap.containsKey(currentFloorName)) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(floorStairsMap.get(currentFloorName));
+    }
+    public List<List<LatLng>> getCurrentFloorLiftZones() {
+        String currentFloorName = getCurrentFloorName();
+        if (currentFloorName == null || !floorLiftsMap.containsKey(currentFloorName)) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(floorLiftsMap.get(currentFloorName));
+    }
+    public boolean isNearCurrentFloorStairs(LatLng location) {
+        return isNearFeatureCollection(location, getCurrentFloorStairsZones());
+    }
+    public boolean isNearCurrentFloorLift(LatLng location) {
+        return isNearFeatureCollection(location, getCurrentFloorLiftZones());
+    }
+    public boolean isNearCurrentFloorVerticalTransition(LatLng location) {
+        return isNearCurrentFloorStairs(location) || isNearCurrentFloorLift(location);
+    }
+    public float[] getFloorAltitudeAnchors() {
+        if (selectedBuilding == null || selectedBuilding.floorAltitudeAnchorsMeters == null) {
+            return null;
+        }
+
+        float[] rawAnchors = selectedBuilding.floorAltitudeAnchorsMeters;
+        if (floorNamesList.isEmpty()) {
+            return rawAnchors.clone();
+        }
+
+        float[] alignedAnchors = new float[floorNamesList.size()];
+        boolean allResolved = true;
+        for (int i = 0; i < floorNamesList.size(); i++) {
+            Float anchor = resolveAltitudeAnchorForFloorName(floorNamesList.get(i), rawAnchors);
+            if (anchor == null) {
+                allResolved = false;
+                break;
+            }
+            alignedAnchors[i] = anchor;
+        }
+
+        return allResolved ? alignedAnchors : rawAnchors.clone();
+    }
     public int getCurrentFloor() { return currentFloor; }
     public int getAvailableFloorsCount() { return floorNamesList.size(); }
+
+    // Map SensorFusion barometer band floor index to current building floor index.
+    // SensorFusion uses: 0=B1, 1=GF, 2=F1, 3=F2, 4=F3+.
+    public int mapBarometerBandFloorToFloorIndex(int barometerBandFloor) {
+        if (floorNamesList.isEmpty()) {
+            return barometerBandFloor;
+        }
+
+        int targetPriority = barometerBandFloor - 1; // B1=-1, GF=0, F1=1, ...
+        int bestIndex = 0;
+        int bestDistance = Integer.MAX_VALUE;
+
+        for (int i = 0; i < floorNamesList.size(); i++) {
+            int priority = getFloorPriority(floorNamesList.get(i));
+            if (priority == 999) {
+                continue;
+            }
+
+            int distance = Math.abs(priority - targetPriority);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
     
-    /**
-     * Get the current floor name as it appears in the map data
-     */
+    // Get the current floor name as it appears in the map data
     public String getCurrentFloorName() {
         if (floorNamesList.isEmpty()) return null;
         
@@ -771,6 +1218,9 @@ public class IndoorMapManager {
         return null;
     }
     public void setCurrentFloor(int floor, boolean auto) {
+        if (!floorNamesList.isEmpty()) {
+            floor = Math.max(0, Math.min(floor, floorNamesList.size() - 1));
+        }
         this.currentFloor = floor;
         if (selectedBuilding != null && !floorShapesMap.isEmpty()) {
             // Don't re-fetch from API, just re-render from cached data
@@ -801,35 +1251,34 @@ public class IndoorMapManager {
         }
     }
     
-    /**
-     * Helper method to determine floor priority for sorting
-     */
+    // Helper method to determine floor priority for sorting
     private int getFloorPriority(String floorName) {
-        String lower = floorName.toLowerCase();
-        // Ground floor variants get priority 0
-        if (lower.contains("ground") || lower.equals("0")) {
+        String normalized = normalizeFloorName(floorName);
+        if ("GF".equals(normalized)) {
             return 0;
         }
-        // Try to extract floor number
-        if (lower.startsWith("floor_")) {
+
+        if (normalized.startsWith("B")) {
             try {
-                return Integer.parseInt(lower.substring(6)) + 1;
+                return -Integer.parseInt(normalized.substring(1));
             } catch (NumberFormatException e) {
                 return 999;
             }
         }
-        // Try to parse as number
-        try {
-            return Integer.parseInt(lower) + 1;
-        } catch (NumberFormatException e) {
-            return 999;
+
+        if (normalized.startsWith("F")) {
+            try {
+                return Integer.parseInt(normalized.substring(1));
+            } catch (NumberFormatException e) {
+                return 999;
+            }
         }
+
+        return 999;
     }
     
-    /**
-     * Render the current floor's shapes from cached data.
-     * Uses the ordered floor list to access floors by index.
-     */
+    // Render the current floor's shapes from cached data.
+    // Uses the ordered floor list to access floors by index.
     private void renderCurrentFloor() {
         if (floorNamesList.isEmpty() || floorShapesMap.isEmpty()) {
             Log.d(TAG, ">>> No floor data available to render");
@@ -846,6 +1295,8 @@ public class IndoorMapManager {
                 
                 // Clear existing wall data for this floor before re-rendering
                 floorWallsMap.remove(floorName);
+                floorStairsMap.remove(floorName);
+                floorLiftsMap.remove(floorName);
                 
                 // Render and store wall data for collision detection
                 renderGeoJsonWithWallData(floorGeoJson, Color.BLACK, 3, floorName);
@@ -889,9 +1340,7 @@ public class IndoorMapManager {
         return b.build();
     }
     
-    /**
-     * Check if indoor constraints (walls, boundaries) are available for current floor
-     */
+    // Check if indoor constraints (walls, boundaries) are available for current floor
     public boolean hasIndoorConstraints() {
         // Check if we have wall data for the current floor and indoor map is visible
         if (!isIndoorMapVisible) {
@@ -908,17 +1357,29 @@ public class IndoorMapManager {
         return buildingBoundary != null && !buildingBoundary.isEmpty();
     }
 
-    /**
-     * Validate a position against indoor constraints (wall collision, boundary check)
-     * Prevents the position marker from going through walls or outside building
-     * Enhanced with wall sliding - allows movement parallel to walls
-     */
+    private boolean isNearFeatureCollection(LatLng location, List<List<LatLng>> features) {
+        if (location == null || features == null || features.isEmpty()) {
+            return false;
+        }
+
+        for (List<LatLng> feature : features) {
+            if (GeometryUtils.isPointNearFeature(location, feature, 8.0)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Validate a position against indoor constraints (wall collision, boundary check)
+    // Prevents the position marker from going through walls or outside building
+    // Enhanced with wall sliding - allows movement parallel to walls
     public LatLng validatePosition(LatLng newLoc, LatLng oldLoc) {
         if (newLoc == null) return oldLoc;
         if (oldLoc == null) return newLoc;  // First position, no validation needed
         if (!isIndoorMapVisible) return newLoc;  // No constraints when indoor map is off
         
-        // 1. Check building boundary
+        // Check building boundary
         if (buildingBoundary != null && !buildingBoundary.isEmpty()) {
             if (!GeometryUtils.isPointInPolygon(newLoc, buildingBoundary)) {
                 // New position is outside building - constrain to boundary
@@ -927,7 +1388,7 @@ public class IndoorMapManager {
             }
         }
         
-        // 2. Check wall collision for current floor
+        // Check wall collision for current floor
         String currentFloorName = getCurrentFloorName();
         if (currentFloorName != null && floorWallsMap.containsKey(currentFloorName)) {
             List<List<LatLng>> walls = floorWallsMap.get(currentFloorName);
@@ -954,39 +1415,74 @@ public class IndoorMapManager {
         return newLoc;
     }
     
-    /**
-     * Try to slide along a wall when direct movement is blocked
-     * Attempts horizontal and vertical components separately
-     */
+    // Try to slide along a wall when direct movement is blocked
+    // Attempts horizontal and vertical components separately
     private LatLng tryWallSlide(LatLng from, LatLng to, List<List<LatLng>> walls) {
-        // Try horizontal movement only (keep latitude)
-        LatLng horizontalMove = new LatLng(from.latitude, to.longitude);
-        if (!GeometryUtils.crossesWall(from, horizontalMove, walls)) {
-            return horizontalMove;
+        if (from == null || to == null) {
+            return null;
         }
-        
-        // Try vertical movement only (keep longitude)
-        LatLng verticalMove = new LatLng(to.latitude, from.longitude);
-        if (!GeometryUtils.crossesWall(from, verticalMove, walls)) {
-            return verticalMove;
+
+        final double dLat = to.latitude - from.latitude;
+        final double dLon = to.longitude - from.longitude;
+
+        List<LatLng> candidates = new ArrayList<>();
+
+        // Axis-aligned slides (works well for corridor walls).
+        candidates.add(new LatLng(from.latitude, to.longitude));
+        candidates.add(new LatLng(to.latitude, from.longitude));
+
+        // Partial progress on direct vector.
+        double[] directRatios = new double[]{0.90, 0.75, 0.60, 0.45, 0.30, 0.15};
+        for (double r : directRatios) {
+            candidates.add(new LatLng(from.latitude + dLat * r, from.longitude + dLon * r));
         }
-        
-        // Try partial movement (50% distance)
-        double midLat = (from.latitude + to.latitude) / 2.0;
-        double midLon = (from.longitude + to.longitude) / 2.0;
-        LatLng halfMove = new LatLng(midLat, midLon);
-        if (!GeometryUtils.crossesWall(from, halfMove, walls)) {
-            return halfMove;
+
+        // Corner-friendly mixed moves: progress one axis more than the other.
+        double[] mixedRatios = new double[]{0.85, 0.65, 0.45, 0.25};
+        for (double r : mixedRatios) {
+            candidates.add(new LatLng(from.latitude + dLat * r, from.longitude + dLon * 0.5));
+            candidates.add(new LatLng(from.latitude + dLat * 0.5, from.longitude + dLon * r));
         }
-        
-        return null;  // No valid slide found
+
+        LatLng best = null;
+        double bestDistanceToTarget = Double.MAX_VALUE;
+
+        for (LatLng candidate : candidates) {
+            if (!isSlideCandidateValid(from, candidate, walls)) {
+                continue;
+            }
+
+            double progress = GeometryUtils.distanceBetween(from, candidate);
+            if (progress < 0.08) {
+                // Ignore near-zero movement to avoid sticking in place.
+                continue;
+            }
+
+            double distanceToTarget = GeometryUtils.distanceBetween(candidate, to);
+            if (distanceToTarget < bestDistanceToTarget) {
+                bestDistanceToTarget = distanceToTarget;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private boolean isSlideCandidateValid(LatLng from, LatLng candidate, List<List<LatLng>> walls) {
+        if (candidate == null || from == null) {
+            return false;
+        }
+        if (GeometryUtils.crossesWall(from, candidate, walls)) {
+            return false;
+        }
+        if (buildingBoundary != null && !buildingBoundary.isEmpty()
+                && !GeometryUtils.isPointInPolygon(candidate, buildingBoundary)) {
+            return false;
+        }
+        return true;
     }
     
-    /**
-     * ✅ Convert display name to API campaign ID
-     * Maps UI-friendly building names to API-compatible IDs for trajectory uploads
-     * Only uses verified campaign IDs that exist on the server
-     */
+
     private String convertNameToApiId(String displayName) {
     if (displayName == null) return ""; // Default: empty (no campaign)
 
@@ -1000,17 +1496,13 @@ public class IndoorMapManager {
             return "nucleus_building";
         }
         
-        // ⚠️ Library, FJB and other buildings: use empty campaign
-        // These campaigns may not exist on the server, so return empty string
-        // Once confirmed these campaigns exist, update this mapping
+
         return "";
     }
     
-    /**
-     * Check if a location is inside the currently selected building's boundary
-     * @param location The location to check
-     * @return true if location is inside the selected building, false otherwise
-     */
+    // Check if a location is inside the currently selected building's boundary
+    // @param location The location to check
+    // @return true if location is inside the selected building, false otherwise
     public boolean isLocationInsideSelectedBuilding(LatLng location) {
         if (location == null) return false;
         
@@ -1026,4 +1518,16 @@ public class IndoorMapManager {
         
         return false;
     }
+
+    // Get the walls for a specific floor (or current top by default).
+    // @return List of Polylines (Lists of LatLng) representing the walls on the current floor.
+    public List<List<LatLng>> getCurrentFloorWalls() {
+        String currentFloorName = getCurrentFloorName();
+        if (currentFloorName != null && floorWallsMap != null && floorWallsMap.containsKey(currentFloorName)) {
+            return floorWallsMap.get(currentFloorName);
+        }
+        return new ArrayList<>();
+    }
 }
+
+

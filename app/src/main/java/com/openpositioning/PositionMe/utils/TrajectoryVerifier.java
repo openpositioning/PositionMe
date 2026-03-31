@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.utils;
+﻿package com.openpositioning.PositionMe.utils;
 
 import android.util.Log;
 
@@ -6,18 +6,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import com.openpositioning.PositionMe.Traj;
-/**
- * Utility class to verify trajectory file contents
- * Use this to debug trajectory recording/playback issues
- */
+// Utility class to verify trajectory file contents
+// Use this to debug trajectory recording/playback issues
 public class TrajectoryVerifier {
     private static final String TAG = "TrajectoryVerifier";
 
-    /**
-     * Verify a trajectory file and log its contents
-     * @param filePath Path to the trajectory .txt file
-     * @return true if file contains valid data, false otherwise
-     */
+    // Verify a trajectory file and log its contents
+    // @param filePath Path to the trajectory .txt file
+    // @return true if file contains valid data, false otherwise
     public static boolean verifyTrajectoryFile(String filePath) {
         File file = new File(filePath);
         
@@ -70,7 +66,7 @@ public class TrajectoryVerifier {
             
             Log.d(TAG, "---------- GNSS Data Details ----------");
             if (hasGnss) {
-                Log.d(TAG, "✓ GNSS data present - " + traj.getGnssDataCount() + " points");
+                Log.d(TAG, "鉁?GNSS data present - " + traj.getGnssDataCount() + " points");
                 
                 // Show first and last GNSS points
                 Traj.GNSSReading first = traj.getGnssData(0);
@@ -81,7 +77,7 @@ public class TrajectoryVerifier {
                 Log.d(TAG, "  Lon: " + first.getPosition().getLongitude());
                 Log.d(TAG, "  Accuracy: " + first.getAccuracy() + "m");
                 Log.d(TAG, "  Speed: " + first.getSpeed() + " m/s");
-                Log.d(TAG, "  Bearing: " + first.getBearing() + "°");
+                Log.d(TAG, "  Bearing: " + first.getBearing() + "掳");
                 
                 Log.d(TAG, "Last GNSS point:");
                 Log.d(TAG, "  Lat: " + last.getPosition().getLatitude());
@@ -97,12 +93,12 @@ public class TrajectoryVerifier {
                 );
                 Log.d(TAG, "Distance first->last: " + String.format("%.1f", distance) + "m");
             } else {
-                Log.e(TAG, "✗ NO GNSS DATA - trajectory will not display!");
+                Log.e(TAG, "鉁?NO GNSS DATA - trajectory will not display!");
             }
             
             Log.d(TAG, "---------- PDR Data Details ----------");
             if (hasPdr) {
-                Log.d(TAG, "✓ PDR data present - " + traj.getPdrDataCount() + " points");
+                Log.d(TAG, "鉁?PDR data present - " + traj.getPdrDataCount() + " points");
                 
                 Traj.RelativePosition firstPdr = traj.getPdrData(0);
                 Traj.RelativePosition lastPdr = traj.getPdrData(traj.getPdrDataCount() - 1);
@@ -116,19 +112,19 @@ public class TrajectoryVerifier {
                 );
                 Log.d(TAG, "PDR distance: " + String.format("%.1f", pdrDistance) + "m");
             } else {
-                Log.e(TAG, "✗ NO PDR DATA");
+                Log.e(TAG, "鉁?NO PDR DATA");
             }
             
             Log.d(TAG, "---------- Verdict ----------");
             if (hasGnss && hasPdr) {
-                Log.d(TAG, "✓✓ FILE IS VALID - Contains both GNSS and PDR data");
+                Log.d(TAG, "鉁撯湏 FILE IS VALID - Contains both GNSS and PDR data");
                 Log.d(TAG, "   Trajectory should replay correctly");
             } else if (hasGnss) {
-                Log.w(TAG, "⚠ FILE HAS GNSS ONLY - Trajectory will show (GNSS used)");
+                Log.w(TAG, "鈿?FILE HAS GNSS ONLY - Trajectory will show (GNSS used)");
             } else if (hasPdr) {
-                Log.w(TAG, "⚠ FILE HAS PDR ONLY - Trajectory will show (PDR used)");
+                Log.w(TAG, "鈿?FILE HAS PDR ONLY - Trajectory will show (PDR used)");
             } else {
-                Log.e(TAG, "✗✗ FILE IS INVALID - No trajectory data!");
+                Log.e(TAG, "鉁椻湕 FILE IS INVALID - No trajectory data!");
                 Log.e(TAG, "   Recording failed or data was not saved");
             }
             
@@ -143,9 +139,7 @@ public class TrajectoryVerifier {
         }
     }
     
-    /**
-     * Calculate distance between two GPS coordinates using Haversine formula
-     */
+    // Calculate distance between two GPS coordinates using Haversine formula
     private static double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
         final double R = 6371000; // Earth radius in meters
         double dLat = Math.toRadians(lat2 - lat1);
@@ -157,3 +151,5 @@ public class TrajectoryVerifier {
         return R * c;
     }
 }
+
+

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.utils;
+﻿package com.openpositioning.PositionMe.utils;
 
 import android.Manifest;
 import android.app.Activity;
@@ -17,26 +17,22 @@ import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A helper class responsible for checking and requesting all dangerous permissions
- * that the application needs in order to function.
- *
- * This class:
- *  - Manages the permissions list.
- *  - Checks if all permissions are granted.
- *  - Requests missing permissions.
- *  - Handles both the first-time and permanent denial scenarios.
- *
- * Usage from MainActivity:
- *   PermissionManager permissionManager = new PermissionManager(MainActivity.this, new PermissionManager.PermissionCallback() {
- *       @Override
- *       public void onAllPermissionsGranted() {
- *           // e.g. call allPermissionsObtained() in MainActivity
- *           allPermissionsObtained();
- *       }
- *   });
- *   permissionManager.checkAndRequestPermissions();
- */
+// A helper class responsible for checking and requesting all dangerous permissions
+// that the application needs in order to function.
+// This class:
+// Manages the permissions list.
+// Checks if all permissions are granted.
+// Requests missing permissions.
+// Handles both the first-time and permanent denial scenarios.
+// Usage from MainActivity:
+// PermissionManager permissionManager = new PermissionManager(MainActivity.this, new PermissionManager.PermissionCallback() {
+// @Override
+// public void onAllPermissionsGranted() {
+// // e.g. call allPermissionsObtained() in MainActivity
+// allPermissionsObtained();
+// }
+// });
+// permissionManager.checkAndRequestPermissions();
 public class PermissionManager {
 
     private static final int ALL_PERMISSIONS_REQUEST = 100;
@@ -65,9 +61,7 @@ public class PermissionManager {
         requiredPermissions.add(Manifest.permission.ACTIVITY_RECOGNITION);
     }
 
-    /**
-     * Checks if all required permissions are already granted; if not, requests them.
-     */
+    // Checks if all required permissions are already granted; if not, requests them.
     public void checkAndRequestPermissions() {
         if (!hasAllPermissions()) {
             ActivityCompat.requestPermissions(
@@ -81,15 +75,12 @@ public class PermissionManager {
         }
     }
 
-    /**
-     * Must be called from the Activity's onRequestPermissionsResult:
-     *
-     *   @Override
-     *   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-     *       super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-     *       permissionManager.handleRequestPermissionsResult(requestCode, permissions, grantResults);
-     *   }
-     */
+    // Must be called from the Activity's onRequestPermissionsResult:
+    // @Override
+    // public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    // super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    // permissionManager.handleRequestPermissionsResult(requestCode, permissions, grantResults);
+    // }
     public void handleRequestPermissionsResult(int requestCode,
                                                String[] permissions,
                                                int[] grantResults) {
@@ -126,9 +117,7 @@ public class PermissionManager {
         }
     }
 
-    /**
-     * Checks if the app has all the required permissions granted.
-     */
+    // Checks if the app has all the required permissions granted.
     private boolean hasAllPermissions() {
         for (String perm : requiredPermissions) {
             if (ContextCompat.checkSelfPermission(activity, perm) != PackageManager.PERMISSION_GRANTED) {
@@ -138,9 +127,7 @@ public class PermissionManager {
         return true;
     }
 
-    /**
-     * Shows an AlertDialog if the user has denied permissions for the first time.
-     */
+    // Shows an AlertDialog if the user has denied permissions for the first time.
     private void showFirstDenialDialog() {
         if (!activity.isFinishing()) {
             new AlertDialog.Builder(activity)
@@ -154,9 +141,7 @@ public class PermissionManager {
         }
     }
 
-    /**
-     * Shows an AlertDialog if the user has permanently denied the permissions.
-     */
+    // Shows an AlertDialog if the user has permanently denied the permissions.
     private void showPermanentDenialDialog() {
         if (!activity.isFinishing()) {
             new AlertDialog.Builder(activity)
@@ -175,10 +160,10 @@ public class PermissionManager {
         }
     }
 
-    /**
-     * Callback to notify the calling Activity when all permissions have been granted.
-     */
+    // Callback to notify the calling Activity when all permissions have been granted.
     public interface PermissionCallback {
         void onAllPermissionsGranted();
     }
 }
+
+

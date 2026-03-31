@@ -1,16 +1,12 @@
-package com.openpositioning.PositionMe.sensors;
+﻿package com.openpositioning.PositionMe.sensors;
 
 import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
 
-/**
- * Enum of the sensor types.
- *
- * Simplified version of default Android Sensor.TYPE, with the order matching the table layout for
- * the {@link MeasurementsFragment}. Includes virtual sensors and other
- * data providing devices as well as derived data.
- *
- * @author Mate Stodulka
- */
+// Enum of the sensor types.
+// Simplified version of default Android Sensor.TYPE, with the order matching the table layout for
+// the {@link MeasurementsFragment}. Includes virtual sensors and other
+// data providing devices as well as derived data.
+// @author Mate Stodulka
 public enum SensorTypes {
     ACCELEROMETER,
     GRAVITY,
@@ -20,7 +16,9 @@ public enum SensorTypes {
     PRESSURE,
     PROXIMITY,
     GNSSLATLONG,
-    PDR,   // Changed semicolon to comma to continue the list
-    WIFI,  // Added
-    BLE;   // Semicolon now correctly ends the constant list
+    PDR,
+    FUSED,
+    WIFI,
+    BLE;
 }
+

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.sensors;
+﻿package com.openpositioning.PositionMe.sensors;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -20,16 +20,12 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
 
-/**
- * Class for handling and recording location data.
- *
- * Uses Google's FusedLocationProviderClient for maximum accuracy by combining
- * GPS, WiFi, cell towers, and device sensors automatically.
- * Falls back to raw LocationManager if FusedLocation is unavailable.
- *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
- */
+// Class for handling and recording location data.
+// Uses Google's FusedLocationProviderClient for maximum accuracy by combining
+// GPS, WiFi, cell towers, and device sensors automatically.
+// Falls back to raw LocationManager if FusedLocation is unavailable.
+// @author Virginia Cangelosi
+// @author Mate Stodulka
 public class GNSSDataProcessor {
     private static final String TAG = "GNSSDataProcessor";
 
@@ -42,12 +38,9 @@ public class GNSSDataProcessor {
     private LocationCallback fusedLocationCallback;
     private boolean usingFusedLocation = false;
 
-    /**
-     * Public default constructor of the GNSSDataProcessor class.
-     *
-     * Uses Google FusedLocationProviderClient as primary source for maximum accuracy.
-     * Falls back to raw GPS + Network providers if fused location is unavailable.
-     */
+    // Public default constructor of the GNSSDataProcessor class.
+    // Uses Google FusedLocationProviderClient as primary source for maximum accuracy.
+    // Falls back to raw GPS + Network providers if fused location is unavailable.
     public GNSSDataProcessor(Context context, LocationListener locationListener) {
         this.context = context;
         this.locationListener = locationListener;
@@ -100,10 +93,8 @@ public class GNSSDataProcessor {
                 internetPermission == PackageManager.PERMISSION_GRANTED;
     }
 
-    /**
-     * Start location updates using Google Fused Location (primary) + raw GPS (fallback).
-     * FusedLocation combines GPS, WiFi, cell, and sensors for best accuracy.
-     */
+    // Start location updates using Google Fused Location (primary) + raw GPS (fallback).
+    // FusedLocation combines GPS, WiFi, cell, and sensors for best accuracy.
     @SuppressLint("MissingPermission")
     public void startLocationUpdates() {
         boolean permissionGranted = checkLocationPermissions();
@@ -146,9 +137,7 @@ public class GNSSDataProcessor {
         }
     }
 
-    /**
-     * Stops all location updates.
-     */
+    // Stops all location updates.
     public void stopUpdating() {
         // Stop fused location
         if (fusedLocationClient != null && fusedLocationCallback != null) {
@@ -160,3 +149,5 @@ public class GNSSDataProcessor {
         Log.d(TAG, "Stopped raw GPS/Network updates");
     }
 }
+
+

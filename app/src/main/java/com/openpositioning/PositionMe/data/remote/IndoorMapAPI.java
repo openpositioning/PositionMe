@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.data.remote;
+﻿package com.openpositioning.PositionMe.data.remote;
 
 import android.util.Log;
 
@@ -16,15 +16,13 @@ import okhttp3.Response;
 
 import java.util.Locale;
 
-/**
- * IndoorMapAPI - Handles API calls to fetch indoor map data
- * Communicates with servers to get building info, floor plans, etc.
- */
+// IndoorMapAPI - Handles API calls to fetch indoor map data
+// Communicates with servers to get building info, floor plans, etc.
 public class IndoorMapAPI {
     private static final String TAG = "IndoorMapAPI";
     
     // API endpoints - Update these with your actual server endpoints
-    private static final String BASE_URL = "https://openpositioning.org/api/live";
+    private static final String BASE_URL = "https:// openpositioning.org/api/live";
     
     private final OkHttpClient httpClient;
     
@@ -32,9 +30,7 @@ public class IndoorMapAPI {
         this.httpClient = new OkHttpClient();
     }
     
-    /**
-     * Building data class to represent building information
-     */
+    // Building data class to represent building information
     public static class BuildingInfo {
         public String buildingId;
         public String buildingName;
@@ -48,9 +44,7 @@ public class IndoorMapAPI {
         }
     }
     
-    /**
-     * Floor plan data class
-     */
+    // Floor plan data class
     public static class FloorPlan {
         public String floorId;
         public String floorName;
@@ -62,13 +56,11 @@ public class IndoorMapAPI {
         public double maxLon;
     }
     
-    /**
-     * Fetch buildings near a coordinate
-     * @param latitude User current latitude
-     * @param longitude User current longitude
-     * @param radiusMeters Search radius in meters
-     * @param callback Callback to handle results
-     */
+    // Fetch buildings near a coordinate
+    // @param latitude User current latitude
+    // @param longitude User current longitude
+    // @param radiusMeters Search radius in meters
+    // @param callback Callback to handle results
     public void fetchNearbyBuildings(double latitude, double longitude, double radiusMeters, 
                                      BuildingsCallback callback) {
         new Thread(() -> {
@@ -103,11 +95,9 @@ public class IndoorMapAPI {
         }).start();
     }
     
-    /**
-     * Fetch floor plans for a specific building
-     * @param buildingId Building ID to fetch floors for
-     * @param callback Callback to handle results
-     */
+    // Fetch floor plans for a specific building
+    // @param buildingId Building ID to fetch floors for
+    // @param callback Callback to handle results
     public void fetchBuildingFloors(String buildingId, FloorsCallback callback) {
         new Thread(() -> {
             try {
@@ -140,11 +130,9 @@ public class IndoorMapAPI {
         }).start();
     }
     
-    /**
-     * Fetch building outline/boundary polygon
-     * @param buildingId Building ID
-     * @param callback Callback with coordinate array
-     */
+    // Fetch building outline/boundary polygon
+    // @param buildingId Building ID
+    // @param callback Callback with coordinate array
     public void fetchBuildingOutline(String buildingId, OutlineCallback callback) {
         new Thread(() -> {
             try {
@@ -261,3 +249,5 @@ public class IndoorMapAPI {
         void onError(String error);
     }
 }
+
+

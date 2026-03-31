@@ -84,6 +84,7 @@ dependencies {
     implementation "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
     implementation 'com.google.android.gms:play-services-maps:19.0.0'
     implementation 'com.google.android.gms:play-services-location:21.0.1'
+    implementation 'androidx.biometric:biometric:1.2.0-alpha04'
 
     def nav_version = "2.8.6"
     implementation "androidx.navigation:navigation-fragment-ktx:$nav_version"

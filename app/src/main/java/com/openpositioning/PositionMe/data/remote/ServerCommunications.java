@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.data.remote;
+﻿package com.openpositioning.PositionMe.data.remote;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -53,10 +53,14 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import com.openpositioning.PositionMe.Traj;
 
-/**
- * Handles communication with the remote server for uploading and downloading trajectories.
- */
+// Network gateway for trajectory upload, download, and record metadata persistence.
+// This class is responsible for:
+// Preparing protobuf payloads for HTTP multipart upload.
+// Downloading zipped trajectory archives and extracting the selected entry.
+// Storing local download metadata used by file/replay screens.
+// Notifying UI observers about request completion state.
 public class ServerCommunications implements Observable {
+    private static final String REPLAY_DIAG_TAG = "ReplayDiag";
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     private final Context context;
 
@@ -69,20 +73,20 @@ public class ServerCommunications implements Observable {
     private boolean success;
     private List<Observer> observers;
 
-    // API Keys and URL constants
+    // API keys and endpoint constants.
     private static final String RAW_USER_KEY = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String RAW_MASTER_KEY = BuildConfig.OPENPOSITIONING_MASTER_KEY;
 
     private static final String userKey = RAW_USER_KEY.replace("<", "").replace(">", "").trim();
     private static final String masterKey = RAW_MASTER_KEY.replace("<", "").replace(">", "").trim();
 
-    private static final String BASE_UPLOAD_URL = "https://openpositioning.org/api/live/trajectory/upload/";
+    private static final String BASE_UPLOAD_URL = "https:// openpositioning.org/api/live/trajectory/upload/";
 
-    private static final String downloadURL =
-            "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
+        private static final String DOWNLOAD_BASE_URL =
+            "https:// openpositioning.org/api/live/trajectory/download/";
 
     private static final String infoRequestURL =
-            "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
+            "https:// openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
 
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
@@ -98,18 +102,15 @@ public class ServerCommunications implements Observable {
         this.observers = new ArrayList<>();
     }
 
-    /**
-     * Send trajectory data to the server.
-     * @param trajectory Trajectory data
-     * @param campaign Building name (e.g. "murchison_house"), empty string for no campaign
-     */
+    // Uploads one trajectory protobuf to the server.
+    // campaign is optional; when empty, upload is performed under the user root directory.
     public void sendTrajectory(Traj.Trajectory trajectory, String campaign){
-        // 1. URL construction - dynamically append campaign (upload to user root if empty)
+        // Build upload URL from campaign scope and user credentials.
         String dynamicUrl;
         if (campaign != null && !campaign.isEmpty()) {
             dynamicUrl = BASE_UPLOAD_URL + campaign + "/" + userKey + "/?key=" + masterKey;
         } else {
-            // Empty campaign: upload directly to user directory
+            // No campaign provided: upload to user-level trajectory directory.
             dynamicUrl = BASE_UPLOAD_URL + userKey + "/?key=" + masterKey;
         }
 
@@ -118,20 +119,20 @@ public class ServerCommunications implements Observable {
         Log.e("SERVER_DEBUG", "Dynamic Upload URL: " + dynamicUrl);
         Log.e("SERVER_DEBUG", "--------------------------------------------------");
 
-        // Crash protection: wrap all dangerous operations
+        // Guard upload preparation and local file operations to avoid hard crashes.
         try {
             logDataSize(trajectory);
 
-            // Convert the trajectory to byte array
+            // Serialize trajectory protobuf to raw bytes for local staging and HTTP body.
             byte[] binaryTrajectory = trajectory.toByteArray();
             Log.e("SERVER_DEBUG", "Trajectory Byte Size: " + binaryTrajectory.length);
 
-            // Determine file storage path
+            // Choose app-private storage for temporary upload file creation.
             File path = null;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
             }
-            // Fallback: if Documents unavailable or version low, use internal storage
+            // Fall back to internal storage when external app directory is unavailable.
             if (path == null) {
                 path = context.getFilesDir();
             }
@@ -142,7 +143,7 @@ public class ServerCommunications implements Observable {
 
             System.out.println(path.toString());
 
-        // Format the file name according to date AND user input name
+        // Build a timestamped filename from trajectory ID to keep uploads traceable.
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
 
@@ -151,13 +152,13 @@ public class ServerCommunications implements Observable {
             safeName = "trajectory";
         }
 
-            // File name format: traj_<name>_<date>.txt
+            // Local temp filename format: traj_<trajectoryId>_<timestamp>.txt
             String fileName = "traj_" + safeName + "_" + dateFormat.format(date) + ".txt";
 
             File file = new File(path, fileName);
             Log.e("SERVER_DEBUG", "Saving temp file to: " + file.getAbsolutePath());
 
-            // Write trajectory to file
+            // Persist serialized payload before network transmission.
             FileOutputStream stream = new FileOutputStream(file);
             stream.write(binaryTrajectory);
             stream.close();
@@ -168,7 +169,7 @@ public class ServerCommunications implements Observable {
             boolean enableMobileData = this.settings.getBoolean("mobile_sync", false);
             if(this.isWifiConn || (enableMobileData && isMobileConn)) {
                 
-                // Log detailed trajectory information before upload
+                // Emit payload and routing diagnostics before dispatching HTTP request.
                 Log.i("SERVER_DEBUG", "Starting upload for file: " + file.getName());
                 Log.e("SERVER_DEBUG", "File: " + file.getName());
                 Log.e("SERVER_DEBUG", "File Size: " + file.length() + " bytes");
@@ -190,7 +191,7 @@ public class ServerCommunications implements Observable {
                         .followSslRedirects(false)
                         .build();
 
-                // Use application/octet-stream
+                // Send file content as binary stream in multipart form-data.
                 RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                         .addFormDataPart("file", file.getName(),
                                 RequestBody.create(MediaType.parse("application/octet-stream"), file))
@@ -222,7 +223,7 @@ public class ServerCommunications implements Observable {
                             Log.e("SERVER_DEBUG", ">>> Response Code: " + response.code());
                             Log.e("SERVER_DEBUG", ">>> Response Message: " + response.message());
                             
-                            // Log response headers
+                            // Log response headers for troubleshooting upload failures.
                             Log.e("SERVER_DEBUG", ">>> Response Headers:");
                             for (String headerName : response.headers().names()) {
                                 Log.e("SERVER_DEBUG", "    " + headerName + ": " + response.headers().get(headerName));
@@ -232,7 +233,7 @@ public class ServerCommunications implements Observable {
                                 String errorBody = responseBody.string();
                                 infoResponse = "Upload failed (" + response.code() + "): " + errorBody;
                                 
-                                // Enhanced error logging
+                                // Log status and server-provided error body for diagnostics.
                                 Log.e("SERVER_DEBUG", "Upload Response Code: " + response.code());
                                 Log.e("SERVER_DEBUG", "Error Body: " + errorBody);
                                 
@@ -243,15 +244,15 @@ public class ServerCommunications implements Observable {
                                 return;
                             }
 
-                            // Success
+                            // Upload succeeded; keep response for debug visibility.
                             System.out.println("Successful post response: " + responseBody.string());
                             Log.d("SERVER_DEBUG", "UPLOAD SUCCESS!");
 
-                            // Success
+                            // Duplicate success print kept to preserve current runtime behavior.
                             System.out.println("Successful post response: " + responseBody.string());
                             Log.d("SERVER_DEBUG", "UPLOAD SUCCESS!");
 
-                            // Copy to Downloads
+                            // Copy uploaded file to public Downloads for manual inspection.
                             File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                             File downloadFile = new File(downloadsDir, file.getName());
                             try {
@@ -283,7 +284,7 @@ public class ServerCommunications implements Observable {
             }
 
         } catch (Exception e) {
-            // Catch all exceptions to prevent crash
+            // Last-line protection for unexpected exceptions in upload preparation path.
             Log.e("SERVER_DEBUG", "CRITICAL ERROR during sendTrajectory: ", e);
             e.printStackTrace();
 
@@ -293,15 +294,28 @@ public class ServerCommunications implements Observable {
     }
 
     public void uploadLocalTrajectory(File localTrajectory, String campaign) {
+        // Validate selected local file before creating HTTP multipart request.
+        if (localTrajectory == null || !localTrajectory.exists() || !localTrajectory.isFile()) {
+            String missingPath = (localTrajectory == null) ? "null" : localTrajectory.getAbsolutePath();
+            infoResponse = "Upload failed: local trajectory file not found: " + missingPath;
+            Log.e("SERVER_DEBUG", infoResponse);
+            success = false;
+            notifyObservers(1);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, infoResponse, Toast.LENGTH_LONG).show());
+            return;
+        }
+
         String dynamicUrl;
         if (campaign != null && !campaign.isEmpty()) {
             dynamicUrl = BASE_UPLOAD_URL + campaign + "/" + userKey + "/?key=" + masterKey;
         } else {
-            // Empty campaign: upload directly to user directory
+            // No campaign provided: upload to user-level trajectory directory.
             dynamicUrl = BASE_UPLOAD_URL + userKey + "/?key=" + masterKey;
         }
 
         Log.e("SERVER_DEBUG", "Local Upload URL: " + dynamicUrl);
+        Log.e("SERVER_DEBUG", "Local file exists: " + localTrajectory.exists() + ", path=" + localTrajectory.getAbsolutePath());
 
         OkHttpClient client = new OkHttpClient.Builder()
                 .followRedirects(false)
@@ -315,6 +329,8 @@ public class ServerCommunications implements Observable {
                 fileRequestBody = RequestBody.create(MediaType.parse("application/octet-stream"), fileBytes);
             } catch (IOException e) {
                 e.printStackTrace();
+                // Keep upload available on API levels where readAllBytes may fail on file handles.
+                Log.e("SERVER_DEBUG", "readAllBytes failed for: " + localTrajectory.getAbsolutePath() + ", fallback to file stream body", e);
                 fileRequestBody = RequestBody.create(MediaType.parse("application/octet-stream"), localTrajectory);
             }
         } else {
@@ -362,6 +378,7 @@ public class ServerCommunications implements Observable {
     }
 
     private void loadDownloadRecords() {
+        // Load locally cached download metadata into memory for quick lookup by id.
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
         if (recordsFile.exists()) {
@@ -387,6 +404,7 @@ public class ServerCommunications implements Observable {
     }
 
     private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
+        // Persist one downloaded trajectory entry to download_records.json.
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
         JSONObject jsonObject;
@@ -419,13 +437,27 @@ public class ServerCommunications implements Observable {
     }
 
     public void downloadTrajectory(int position, String id, String dateSubmitted) {
+        if (position < 0) {
+            Log.e(REPLAY_DIAG_TAG, "status=FILE_BAD reason=INVALID_POSITION position=" + position + " id=" + id);
+            new Handler(Looper.getMainLooper()).post(() ->
+                Toast.makeText(context, "Download failed: invalid trajectory index.", Toast.LENGTH_LONG).show());
+            return;
+        }
+
+        // Request enough archive entries so the selected index is guaranteed to be in range.
+        int requiredLimit = Math.max(position + 1, 30);
+        String dynamicDownloadUrl = DOWNLOAD_BASE_URL + userKey
+            + "?skip=0&limit=" + requiredLimit + "&key=" + masterKey;
+
         loadDownloadRecords();
         OkHttpClient client = new OkHttpClient();
         okhttp3.Request request = new okhttp3.Request.Builder()
-                .url(downloadURL)
+            .url(dynamicDownloadUrl)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
+
+        Log.i(REPLAY_DIAG_TAG, "status=DOWNLOAD_REQUEST position=" + position + " limit=" + requiredLimit + " id=" + id);
 
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override public void onFailure(Call call, IOException e) { e.printStackTrace(); }
@@ -434,7 +466,7 @@ public class ServerCommunications implements Observable {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
-                    // 1. Unzip to get data stream
+                    // Open zip response and move to the selected entry index.
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
                     java.util.zip.ZipEntry zipEntry;
@@ -444,7 +476,16 @@ public class ServerCommunications implements Observable {
                         zipCount++;
                     }
 
-                    // 2. Read binary data into memory (byte array)
+                    if (zipEntry == null) {
+                        Log.e(REPLAY_DIAG_TAG, "status=FILE_BAD reason=DOWNLOAD_ZIP_ENTRY_NOT_FOUND position=" + position + " id=" + id);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(context, "Download failed: selected trajectory data not found in archive.", Toast.LENGTH_LONG).show());
+                        zipInputStream.close();
+                        inputStream.close();
+                        return;
+                    }
+
+                    // Read selected zip entry into memory for protobuf parsing and file write.
                     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                     byte[] buffer = new byte[1024];
                     int bytesRead;
@@ -453,11 +494,46 @@ public class ServerCommunications implements Observable {
                     }
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
 
-                    // 3. Parse to get start timestamp
+                    if (byteArray.length == 0) {
+                        Log.e(REPLAY_DIAG_TAG, "status=FILE_BAD reason=DOWNLOAD_EMPTY_PAYLOAD entry=" + zipEntry.getName() + " id=" + id);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(context, "Download failed: trajectory payload is empty.", Toast.LENGTH_LONG).show());
+                        zipInputStream.closeEntry();
+                        byteArrayOutputStream.close();
+                        zipInputStream.close();
+                        inputStream.close();
+                        return;
+                    }
+
+                    // Parse protobuf and verify the payload contains replayable trajectory data.
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
+                    boolean hasReplayData = receivedTrajectory.getPdrDataCount() > 0
+                            || receivedTrajectory.getGnssDataCount() > 0
+                            || receivedTrajectory.hasInitialPosition();
+
+                    Log.i(REPLAY_DIAG_TAG,
+                            "status=DOWNLOAD_PARSED id=" + id
+                                    + " entry=" + zipEntry.getName()
+                                    + " bytes=" + byteArray.length
+                                    + " pdr=" + receivedTrajectory.getPdrDataCount()
+                                    + " gnss=" + receivedTrajectory.getGnssDataCount()
+                                    + " wifi_fp=" + receivedTrajectory.getWifiFingerprintsCount()
+                                    + " initial=" + receivedTrajectory.hasInitialPosition());
+
+                    if (!hasReplayData) {
+                        Log.e(REPLAY_DIAG_TAG, "status=FILE_NO_REPLAY_DATA reason=DOWNLOADED_TRAJECTORY_EMPTY id=" + id);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(context, "Downloaded trajectory contains no replayable data.", Toast.LENGTH_LONG).show());
+                        zipInputStream.closeEntry();
+                        byteArrayOutputStream.close();
+                        zipInputStream.close();
+                        inputStream.close();
+                        return;
+                    }
+
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
 
-                    // Save as .protobuf binary file
+                    // Use a deterministic local filename for replay screen lookup.
                     String fileName = "trajectory_" + dateSubmitted + ".protobuf";
 
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -467,7 +543,7 @@ public class ServerCommunications implements Observable {
 
                     File file = new File(appSpecificDownloads, fileName);
 
-                    // Use FileOutputStream to write bytes directly
+                    // Write raw protobuf bytes without text conversion.
                     try (FileOutputStream fos = new FileOutputStream(file)) {
                         fos.write(byteArray);
                         fos.flush();
@@ -481,7 +557,7 @@ public class ServerCommunications implements Observable {
                         inputStream.close();
                     }
 
-                    // 4. Save record
+                    // Update local metadata cache after successful file write.
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
                     loadDownloadRecords();
                 }
@@ -528,7 +604,7 @@ public class ServerCommunications implements Observable {
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "Proximity Data size: " + trajectory.getProximityDataCount());
         
-        // Highlight critical trajectory data
+        // Highlight GNSS and PDR counts because replay path quality depends on them.
         int gnssCount = trajectory.getGnssDataCount();
         int pdrCount = trajectory.getPdrDataCount();
         
@@ -568,3 +644,4 @@ public class ServerCommunications implements Observable {
         }
     }
 }
+
