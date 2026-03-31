@@ -1006,14 +1006,12 @@ private SwitchMaterial showPdrPathSwitch;
     public void updateFusedPosition(@NonNull LatLng fusedLocation) {
         if (gMap == null) return;
 
-        // Apply LPF to fused position; both polylines share the same filtered point
-        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
-
-        // Purple fused path — always grows
-        smoothedPoints.add(lpfFiltered);
+        // Raw fused path — always grows (no filter applied here)
+        smoothedPoints.add(fusedLocation);
         redrawFusedTrajectory();
 
-        // Teal LPF path — grows but only visible when smoothing toggle is ON
+        // LPF-smoothed path — grows but only visible when smoothing toggle is ON
+        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
         lpfPoints.add(lpfFiltered);
         if (lpfPolyline != null) {
             lpfPolyline.setPoints(new ArrayList<>(lpfPoints));
