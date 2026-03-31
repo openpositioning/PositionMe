@@ -69,5 +69,72 @@ public class ParticleFilter {
 
     }
 
+    public void updateGNSS(LatLng gnssPosition, float gnssAccuracy) {
+        if (!initialized) return; // ignore if not initialized
+
+        // Convert GNSS position to ENU coordinates 
+        float[] mesurementENU = UtilFunctions.convertWGS84ToENU(origin, gnssPosition);
+
+        float mx = mesurementENU[0]; //easting value of the measurement
+        float my = mesurementENU[1]; //northing value of the measurement
+
+        float variance = gnssAccuracy * gnssAccuracy; // Convert accuracy to variance sigma^2
+
+
+
+        //gaussian likelihood function
+
+        float weightSum = 0f;
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            float dx = particles[i][0] - mx;
+            float dy = particles[i][1] - my;
+            float distanceSquared = dx * dx + dy * dy;
+
+            // Calculate weight using Gaussian likelihood
+            weights[i] = (float) Math.exp(-distanceSquared / (2 * variance));
+            weightSum += weights[i];
+        }
+
+        if (weightSum < 1e-6) {
+            // Avoid division by zero, reinitialize weights uniformly
+            for (int i = 0; i < NUM_PARTICLES; i++) {
+                weights[i] = 1.0f / NUM_PARTICLES;
+            }
+        } else {
+            // Normalize weights
+            for (int i = 0; i < NUM_PARTICLES; i++) {
+                weights[i] /= weightSum;
+            }
+        }
+
+        //resample particles
+
+        float[][] newParticles = new float[NUM_PARTICLES][2]; // New array for resampled particles
+        float step = 1.0f / NUM_PARTICLES; // Step size for resampling
+        float cumulativeWeight = weights[0];  // Cumulative weight for resampling
+
+        float random1 = random.nextFloat() * step; //random start point for resampling
+
+        int j = 0; // Index for particles
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            float threshold = random1 + i * step; // Threshold for selecting particle
+            while (threshold > cumulativeWeight && j < NUM_PARTICLES - 1) { // Move to the next particle
+                j++;
+                
+                cumulativeWeight += weights[j]; // Move to next particle
+            }
+            newParticles[i][0] = particles[j][0]; // Resample east
+            newParticles[i][1] = particles[j][1]; // Resample north
+        }
+        particles = newParticles; // Replace old particles with resampled particles
+
+        //reset
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            weights[i] = 1.0f / NUM_PARTICLES; // Reset weights to uniform after resampling
+        }
+        Log.d(TAG, "GNSS UPDATE" + " GNSS position: " + gnssPosition + " accuracy: " + gnssAccuracy + "m" + (mx + ", " + my));
+
+    }
+
         
 }

@@ -670,14 +670,21 @@ public class SensorFusion implements SensorEventListener {
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
 
+            LatLng GNSSPosition = new LatLng(location.getLatitude(), location.getLongitude());
+            float acc = location.hasAccuracy() ? location.getAccuracy() : 20f;
+
             //initialize particle filter automatically on first GNSS fix with accuracy as spread
             if (!particleFilter.isInitialized()) {
-                    float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
-                    particleFilter.initialise(
-                        new LatLng(location.getLatitude(), location.getLongitude()),accuracy);
+                    // float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
+                    particleFilter.initialise(GNSSPosition, acc);
+            } else {
+                particleFilter.updateGNSS(GNSSPosition, acc);
+            }
+                    // particleFilter.initialise(
+                    //     new LatLng(location.getLatitude(), location.getLongitude()),accuracy);
                 }
         }
     }
 
     //endregion
-}
+
