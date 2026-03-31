@@ -226,29 +226,35 @@ public class RecordingFragment extends Fragment {
 
             SensorFusion.getInstance().addTestPoint(timestampMillis);
 
-            float[] gnss = SensorFusion.getInstance().getGNSSLatitude(false);
-            if (gnss != null) {
-                double lat = gnss[0];
-                double lon = gnss[1];
+            // Use fused position if available — places marker on the purple fused trajectory.
+            // Falls back to raw GNSS if the particle filter hasn't initialised yet.
+            double lat, lon;
+            double[] fused = SensorFusion.getInstance().getFusedLatLon();
 
-                SensorFusion.getInstance().addTestPoint(timestampMillis, lat, lon);
-
-                testPointCounter++;
-
-                if (trajectoryMapFragment != null) {
-                    trajectoryMapFragment.addTestPointMarker(
-                            new LatLng(lat, lon),
-                            testPointCounter
-                    );
-                }
-
-//                Toast.makeText(requireContext(),
-//                        "Test point " + testPointCounter + " marked",
-//                        Toast.LENGTH_SHORT).show();
+            if (fused != null) {
+                lat = fused[0];
+                lon = fused[1];
             } else {
-                Toast.makeText(requireContext(),
-                        "GNSS not available yet",
-                        Toast.LENGTH_SHORT).show();
+                // Particle filter not yet ready — fall back to raw GNSS
+                float[] gnss = SensorFusion.getInstance().getGNSSLatitude(false);
+                if (gnss == null || (gnss[0] == 0.0f && gnss[1] == 0.0f)) {
+                    Toast.makeText(requireContext(),
+                            "Position not available yet",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                lat = gnss[0];
+                lon = gnss[1];
+            }
+
+            SensorFusion.getInstance().addTestPoint(timestampMillis, lat, lon);
+            testPointCounter++;
+
+            if (trajectoryMapFragment != null) {
+                trajectoryMapFragment.addTestPointMarker(
+                        new LatLng(lat, lon),
+                        testPointCounter
+                );
             }
         });
 
@@ -425,19 +431,6 @@ public class RecordingFragment extends Fragment {
                 double[] wifi = sensorFusion.getLastWifiLatLon();
                 if (wifi != null) {
                     mapFrag.updateWifiPosition(new LatLng(wifi[0], wifi[1]));
-                    if (System.currentTimeMillis() - lastWifiToastMs > 5000) {
-                        lastWifiToastMs = System.currentTimeMillis();
-                        Toast.makeText(requireContext(),
-                                "WiFi fix: " + String.format("%.5f, %.5f", wifi[0], wifi[1]),
-                                Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    if (System.currentTimeMillis() - lastWifiToastMs > 5000) {
-                        lastWifiToastMs = System.currentTimeMillis();
-                        Toast.makeText(requireContext(),
-                                "WiFi: no fix yet",
-                                Toast.LENGTH_SHORT).show();
-                    }
                 }
 
                 // Green PDR observation dot — raw PDR position from step counting
