@@ -7,7 +7,9 @@ import java.io.File;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 
@@ -45,8 +47,17 @@ public class ReplayActivity extends AppCompatActivity {
     public static final String EXTRA_INITIAL_LAT = "extra_initial_lat";
     public static final String EXTRA_INITIAL_LON = "extra_initial_lon";
     public static final String EXTRA_TRAJECTORY_FILE_PATH = "extra_trajectory_file_path";
+    // Keys for passing the file's original recording position to StartLocationFragment
+    public static final String EXTRA_FILE_INITIAL_LAT = "extra_file_initial_lat";
+    public static final String EXTRA_FILE_INITIAL_LON = "extra_file_initial_lon";
+    public static final String EXTRA_FLOOR = "extra_floor";
 
     private String filePath;
+    // The original recording position extracted from the trajectory file
+    private float fileInitialLat = 0f;
+    private float fileInitialLon = 0f;
+    // The venue floor extracted from the trajectory file (e.g. "F1", "GF")
+    private String fileFloor = "";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -69,21 +80,56 @@ public class ReplayActivity extends AppCompatActivity {
             Log.e(TAG, "Trajectory file does NOT exist: " + filePath);
         } else {
             Log.i(TAG, "Trajectory file exists: " + filePath);
+
+            // Extract the original recording position from the trajectory file
+            LatLng filePosition = TrajParser.extractInitialPosition(filePath);
+            if (filePosition != null) {
+                fileInitialLat = (float) filePosition.latitude;
+                fileInitialLon = (float) filePosition.longitude;
+                Log.i(TAG, "Extracted recording position from file: Lat=" + fileInitialLat + ", Lon=" + fileInitialLon);
+            } else {
+                Log.w(TAG, "No initial position found in trajectory file, will use current GPS as fallback.");
+            }
+            // Extract the venue floor from the trajectory file
+            fileFloor = TrajParser.extractFloor(filePath);
+            Log.i(TAG, "Extracted floor from file: " + (fileFloor.isEmpty() ? "(none)" : fileFloor));
         }
 
         // Show StartLocationFragment first to let user pick location
         if (savedInstanceState == null) {
-            showStartLocationFragment();
+            // If we successfully extracted a position from the file, skip the
+            // StartLocationFragment and go directly to ReplayFragment with this position.
+            // The StartLocationFragment is only useful when recording (to let the user
+            // fine-tune their start location). During replay, the recording's original
+            // position should be used automatically.
+            if (fileInitialLat != 0f || fileInitialLon != 0f) {
+                Log.i(TAG, "File has a valid initial position, skipping StartLocationFragment.");
+                showReplayFragment(filePath, fileInitialLat, fileInitialLon);
+            } else {
+                Log.w(TAG, "No initial position from file, showing StartLocationFragment.");
+                showStartLocationFragment();
+            }
         }
     }
 
     /**
      * Display a StartLocationFragment to let user set their start location.
-     * Displays the ReplayFragment and passes the trajectory file path as an argument.
+     * Passes the file's original recording position so the map defaults to the correct location.
      */
     private void showStartLocationFragment() {
         Log.d(TAG, "Showing StartLocationFragment...");
         StartLocationFragment startLocationFragment = new StartLocationFragment();
+
+        // Pass the file's initial position to the fragment
+        if (fileInitialLat != 0f || fileInitialLon != 0f) {
+            Bundle args = new Bundle();
+            args.putFloat(EXTRA_FILE_INITIAL_LAT, fileInitialLat);
+            args.putFloat(EXTRA_FILE_INITIAL_LON, fileInitialLon);
+            startLocationFragment.setArguments(args);
+            Log.d(TAG, "Passing file recording position to StartLocationFragment: " 
+                    + fileInitialLat + ", " + fileInitialLon);
+        }
+
         getSupportFragmentManager()
                 .beginTransaction()
                 .replace(R.id.replayActivityContainer, startLocationFragment)
@@ -111,6 +157,7 @@ public class ReplayActivity extends AppCompatActivity {
         args.putString(EXTRA_TRAJECTORY_FILE_PATH, filePath);
         args.putFloat(EXTRA_INITIAL_LAT, initialLat);
         args.putFloat(EXTRA_INITIAL_LON, initialLon);
+        args.putString(EXTRA_FLOOR, fileFloor);
         replayFragment.setArguments(args);
 
         getSupportFragmentManager()

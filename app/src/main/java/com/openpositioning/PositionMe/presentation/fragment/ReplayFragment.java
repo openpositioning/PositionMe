@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.SeekBar;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -51,6 +52,7 @@ public class ReplayFragment extends Fragment {
     private float initialLat = 0f;
     private float initialLon = 0f;
     private String filePath = "";
+    private String initialFloor = "";   // venue floor extracted from the trajectory file
     private int lastIndex = -1;
 
     // UI Controls
@@ -74,6 +76,7 @@ public class ReplayFragment extends Fragment {
             filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
             initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
             initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
+            initialFloor = getArguments().getString(ReplayActivity.EXTRA_FLOOR, "");
         }
 
         // Log the received data
@@ -125,6 +128,19 @@ public class ReplayFragment extends Fragment {
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
+
+            // Pass initial coordinates and enable indoor map loading
+            Bundle mapArgs = new Bundle();
+            mapArgs.putBoolean("has_venue", true);
+            mapArgs.putString("venue_id", "");
+            mapArgs.putString("venue_name", "");
+            // Use the floor stored in the trajectory file; empty string lets
+            // TrajectoryMapFragment fall back to the first available floor from the API.
+            mapArgs.putString("venue_floor", initialFloor);
+            mapArgs.putDouble("initial_lat", (double) initialLat);
+            mapArgs.putDouble("initial_lon", (double) initialLon);
+            trajectoryMapFragment.setArguments(mapArgs);
+
             getChildFragmentManager()
                     .beginTransaction()
                     .replace(R.id.replayMapFragmentContainer, trajectoryMapFragment)
@@ -133,18 +149,18 @@ public class ReplayFragment extends Fragment {
 
 
 
+        // Always set initial camera position first, so map is centered correctly
+        if (initialLat != 0f || initialLon != 0f) {
+            LatLng startPoint = new LatLng(initialLat, initialLon);
+            Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+            trajectoryMapFragment.setInitialCameraPosition(startPoint);
+        }
+
         // 1) Check if the file contains any GNSS data
         boolean gnssExists = hasAnyGnssData(replayData);
 
         if (gnssExists) {
             showGnssChoiceDialog();
-        } else {
-            // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
-            }
         }
 
         // Initialize UI controls
@@ -161,8 +177,9 @@ public class ReplayFragment extends Fragment {
 
         // Button Listeners
         playPauseButton.setOnClickListener(v -> {
-            if (replayData.isEmpty()) {
-                Log.w(TAG, "Play/Pause button pressed but replayData is empty.");
+            if (replayData.size() < 2) {
+                Log.w(TAG, "Play/Pause pressed but replayData has insufficient points: " + replayData.size());
+                Toast.makeText(requireContext(), "Trajectory has too few replay points.", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (isPlaying) {
@@ -184,6 +201,7 @@ public class ReplayFragment extends Fragment {
         restartButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
+            lastIndex = -1; // Reset lastIndex so updateMapForIndex does a full redraw
             playbackSeekBar.setProgress(0);
             Log.i(TAG, "Restart button pressed. Resetting playback to index 0.");
             updateMapForIndex(0);
@@ -224,8 +242,12 @@ public class ReplayFragment extends Fragment {
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        if (!replayData.isEmpty()) {
-            updateMapForIndex(0);
+        // Don't call updateMapForIndex(0) here - the map isn't ready yet.
+        // lastIndex stays at -1 so the first playback call will do a full redraw.
+        if (replayData.size() >= 2) {
+            Log.i(TAG, "Replay data loaded with " + replayData.size() + " points. Ready to play.");
+        } else {
+            Log.w(TAG, "WARNING: replayData has insufficient points (" + replayData.size() + ").");
         }
     }
 
@@ -272,7 +294,7 @@ public class ReplayFragment extends Fragment {
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }
@@ -283,7 +305,7 @@ public class ReplayFragment extends Fragment {
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
             }
         }
         return null; // None found
@@ -299,17 +321,26 @@ public class ReplayFragment extends Fragment {
         public void run() {
             if (!isPlaying || replayData.isEmpty()) return;
 
-            Log.i(TAG, "Playing index: " + currentIndex);
-            updateMapForIndex(currentIndex);
-            currentIndex++;
-            playbackSeekBar.setProgress(currentIndex);
+            try {
+                Log.i(TAG, "Playing index: " + currentIndex);
+                updateMapForIndex(currentIndex);
+                currentIndex++;
+                playbackSeekBar.setProgress(currentIndex);
 
-            if (currentIndex < replayData.size()) {
-                playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
-            } else {
-                Log.i(TAG, "Playback completed. Reached end of data.");
-                isPlaying = false;
-                playPauseButton.setText("Play");
+                if (currentIndex < replayData.size()) {
+                    playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
+                } else {
+                    Log.i(TAG, "Playback completed. Reached end of data.");
+                    isPlaying = false;
+                    playPauseButton.setText("Play");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error during playback at index " + currentIndex + ": " + e.getMessage(), e);
+                // Continue playback from next index rather than crashing silently
+                currentIndex++;
+                if (currentIndex < replayData.size() && isPlaying) {
+                    playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
+                }
             }
         }
     };
@@ -323,6 +354,9 @@ public class ReplayFragment extends Fragment {
      */
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
+
+        // Check if map is ready before drawing
+        if (trajectoryMapFragment == null) return;
 
         // Detect if user is playing sequentially (lastIndex + 1)
         // or is skipping around (backwards, or jump forward)

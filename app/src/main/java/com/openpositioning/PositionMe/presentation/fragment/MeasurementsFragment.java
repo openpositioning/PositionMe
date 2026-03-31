@@ -47,6 +47,7 @@ public class MeasurementsFragment extends Fragment {
     // UI elements
     private ConstraintLayout sensorMeasurementList;
     private RecyclerView wifiListView;
+    private TextView wifiFingerprintStatus;
     // List of string resource IDs
     private int[] prefaces;
     private int[] gnssPrefaces;
@@ -124,6 +125,7 @@ public class MeasurementsFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
         wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
+        wifiFingerprintStatus = (TextView) getView().findViewById(R.id.wifiFingerprintStatus);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
     }
 
@@ -164,6 +166,10 @@ public class MeasurementsFragment extends Fragment {
                     ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
                 }
             }
+            // Update WiFi Fingerprint Collection Status
+            int fingerprintCount = sensorFusion.getWiFiFingerprintCount();
+            wifiFingerprintStatus.setText(String.format("Fingerprints: %d", fingerprintCount));
+
             // Get all WiFi values - convert to list of strings
             List<Wifi> wifiObjects = sensorFusion.getWifiList();
             // If there are WiFi networks visible, update the recycler view with the data.

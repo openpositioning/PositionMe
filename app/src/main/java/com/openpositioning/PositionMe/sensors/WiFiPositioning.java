@@ -137,7 +137,6 @@ public class WiFiPositioning {
                 Request.Method.POST, url, jsonWifiFeatures,
                 response -> {
                     try {
-                        Log.d("jsonObject",response.toString());
                         wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                         floor = response.getInt("floor");
                         callback.onSuccess(wifiLocation,floor);

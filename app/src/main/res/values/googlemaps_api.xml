@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-        <string name="google_maps_key" translatable="false" templateMergeStrategy="preserve">
-        AIzaSyAGqo26Wz1SUnGYP3TDDxLSDNK-EvHHtNc
-    </string>
+    <!-- This is a placeholder. The actual value comes from build.gradle via secrets.properties -->
+    <!-- If secrets.properties has MAPS_API_KEY, build.gradle will override this -->
 </resources>

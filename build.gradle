@@ -1,16 +1,20 @@
 // Top-level build file
 buildscript {
+    ext {
+        agp_version = '8.7.1'
+    }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
         // NOTE: Only classpath deps (plugins) go here
-        classpath 'com.android.tools.build:gradle:8.8.0'
+        classpath "com.android.tools.build:gradle:$agp_version"
         classpath 'com.google.gms:google-services:4.4.2'
         def nav_version = "2.5.3"
         classpath "androidx.navigation:navigation-safe-args-gradle-plugin:$nav_version"
         classpath "com.google.android.libraries.mapsplatform.secrets-gradle-plugin:secrets-gradle-plugin:2.0.1"
+        classpath "com.google.protobuf:protobuf-gradle-plugin:0.9.4"
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }

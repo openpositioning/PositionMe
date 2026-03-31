@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.io.File;
 import java.io.FileReader;
 import java.io.BufferedReader;
+import java.io.IOException;
 
 import android.content.Intent;
 import android.os.Handler;
@@ -214,13 +215,31 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 String fileName = recordDetails.optString("file_name", null);
                 if (fileName != null) {
                     File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
-                    filePath = file.getAbsolutePath();
+                    // Verify the cached file actually exists on disk
+                    if (file.exists() && file.length() > 0) {
+                        if (hasSufficientReplayPoints(file)) {
+                            filePath = file.getAbsolutePath();
+                        } else {
+                            Log.w("TrajDownloadListAdapter", "Cached file has insufficient replay points for ID "
+                                    + id + ": " + file.getAbsolutePath());
+                            matched = false;
+                        }
+                    } else {
+                        // File is missing or empty - treat as not downloaded
+                        Log.w("TrajDownloadListAdapter", "Cached file missing or empty for ID " + id + ": " + file.getAbsolutePath());
+                        matched = false;
+                    }
+                } else {
+                    matched = false;
                 }
-                // Set the button state to "downloaded".
-                setButtonState(holder.downloadButton, 1);
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+
+        // Set the button state based on the final matched status
+        if (matched) {
+            setButtonState(holder.downloadButton, 1);
         } else if (downloadingTrajIds.contains(id)) {
             // If the item is still being downloaded, set the button state to "downloading".
             setButtonState(holder.downloadButton, 2);
@@ -291,5 +310,50 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             button.setIconTintResource(R.color.md_theme_onSecondary);
             button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_light_primary));
         }
+    }
+
+    /**
+     * Lightweight replayability check for cached JSON trajectory files.
+     * Returns true when we can detect at least two replay points in either pdrData
+     * or correctedPositions arrays.
+     */
+    private boolean hasSufficientReplayPoints(File file) {
+        int pdrPoints = 0;
+        int correctedPoints = 0;
+        boolean inPdrArray = false;
+        boolean inCorrectedArray = false;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.contains("\"pdrData\"") || line.contains("\"pdr_data\"")) {
+                    inPdrArray = true;
+                    inCorrectedArray = false;
+                } else if (line.contains("\"correctedPositions\"") || line.contains("\"corrected_positions\"")) {
+                    inCorrectedArray = true;
+                    inPdrArray = false;
+                }
+
+                if (inPdrArray && line.contains("\"relativeTimestamp\"")) {
+                    pdrPoints++;
+                    if (pdrPoints >= 2) return true;
+                }
+
+                if (inCorrectedArray && line.contains("\"latitude\"")) {
+                    correctedPoints++;
+                    if (correctedPoints >= 2) return true;
+                }
+
+                if (line.contains("]")) {
+                    inPdrArray = false;
+                    inCorrectedArray = false;
+                }
+            }
+        } catch (IOException e) {
+            Log.w("TrajDownloadListAdapter", "Failed to validate cached trajectory file: " + e.getMessage());
+            return false;
+        }
+
+        return false;
     }
 }

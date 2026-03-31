@@ -65,8 +65,7 @@ public class UtilFunctions {
     }
 
     /**
-     * Calculates the distance between two LatLng points A and B (in meters)
-     * (Note: approximation: for short distances)
+     * Calculates the distance between two LatLng points A and B in meters
      * @param pointA initial point
      * @param pointB final point
      * @return the distance between the two points

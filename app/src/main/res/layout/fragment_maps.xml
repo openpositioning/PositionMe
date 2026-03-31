@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Map Container -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context=".presentation.fragment.MapsFragment" />
+
+    <!-- Back Button - Top Left -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/backToOutlineButton"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:text="← Return"
+        android:textColor="@android:color/white"
+        android:backgroundTint="@color/md_theme_primary"
+        android:elevation="8dp"
+        android:textAllCaps="false"
+        android:letterSpacing="0.01"
+        android:visibility="gone"
+        app:cornerRadius="14dp"
+        app:icon="@android:drawable/ic_menu_revert"
+        app:iconPadding="8dp"
+        app:iconTint="@android:color/white"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- 🆕 NEW: Venue Selection Button - Top Center, below back button row -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/selectVenueButton"
+        style="@style/Widget.Material3.Button"
+        android:layout_width="0dp"
+        android:layout_height="52dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="8dp"
+        android:text="Select Venue for Data Collection"
+        android:textColor="@android:color/white"
+        android:backgroundTint="@color/md_theme_secondary"
+        android:elevation="8dp"
+        android:visibility="gone"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textAllCaps="true"
+        android:letterSpacing="0.06"
+        app:cornerRadius="14dp"
+        app:icon="@drawable/ic_baseline_add_location_24"
+        app:iconGravity="textStart"
+        app:iconPadding="8dp"
+        app:iconTint="@android:color/white"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        app:layout_constraintTop_toBottomOf="@id/backToOutlineButton"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Floor Selector Container - Below Venue Button, horizontal, compact -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/floorSelectorContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="8dp"
+        android:elevation="8dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="@color/md_theme_surfaceContainerHigh"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/selectVenueButton">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fillViewport="true"
+            android:scrollbars="none"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp">
+
+            <LinearLayout
+                android:id="@+id/floorButtonLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical" />
+        </HorizontalScrollView>
+    </androidx.cardview.widget.CardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

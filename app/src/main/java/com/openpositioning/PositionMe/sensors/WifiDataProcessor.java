@@ -82,7 +82,7 @@ public class WifiDataProcessor implements Observable {
 
         // Decreapted method after API 29
         // Turn on wifi if it is currently disabled
-        // TODO - turn it to a notification toward user
+        // Keep this message in logs for now to avoid interrupting users with frequent toasts.
 //      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
 //      //      wifiManager.setWifiEnabled(true);
 //      //  }
@@ -209,14 +209,11 @@ public class WifiDataProcessor implements Observable {
      * broadcast receiver is registered to be called when the scan is complete.
      */
     private void startWifiScan() {
-        //Check settings for wifi permissions
-        if(checkWifiPermissions()) {
-            //if(sharedPreferences.getBoolean("wifi", false)) {
-            //Register broadcast receiver for wifi scans
+        // Check settings for wifi permissions
+        if (checkWifiPermissions()) {
+            // Register broadcast receiver for wifi scans
             context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
             wifiManager.startScan();
-
-            //}
         }
     }
 
@@ -317,8 +314,12 @@ public class WifiDataProcessor implements Observable {
             //Store the ssid, mac address and frequency of the current wifi
             currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
             String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
-            long intMacAddress = convertBssidToLong(wifiMacAddress);
-            currentWifi.setBssid(intMacAddress);
+            // getBSSID() can return null on Android 12+ without precise location permission.
+            // Leave bssid as 0 (default) in that case; SensorFusion will skip the aps_data entry.
+            if (wifiMacAddress != null) {
+                long intMacAddress = convertBssidToLong(wifiMacAddress);
+                currentWifi.setBssid(intMacAddress);
+            }
             currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
         }
         else{

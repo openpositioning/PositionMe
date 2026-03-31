@@ -2,20 +2,33 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/md_theme_background">
 
-    <!-- 🔹 TOP SECTION: Status Display -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/currentPositionCard"
-        android:layout_width="match_parent"
+    <!-- Map container: fills full screen, bottom panel overlays on top -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/recordingMap"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Venue信息卡片 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/venueInfoCard"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_margin="8dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="4dp"
-        app:strokeColor="@color/md_theme_outline"
-        app:strokeWidth="1dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="90dp"
+        android:layout_marginTop="12dp"
+        android:elevation="8dp"
+        app:cardCornerRadius="10dp"
+        app:cardBackgroundColor="@color/md_theme_primaryContainer"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -24,122 +37,555 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="12dp"
+            android:padding="10dp"
             android:gravity="center_vertical">
 
-            <!-- Red Dot -->
-            <ImageView
-                android:id="@+id/redDot"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="@string/red_dot_description_text"
-                android:src="@drawable/ic_baseline_red_dot_24"
-                android:layout_marginEnd="8dp" />
-
-            <!-- Distance Traveled -->
             <TextView
-                android:id="@+id/currentDistanceTraveled"
-                android:layout_width="wrap_content"
+                android:id="@+id/venueInfoText"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="@string/meter"
-                android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold" />
-
-            <!-- Elevation -->
-            <TextView
-                android:id="@+id/currentElevation"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/elevation"
-                android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:layout_weight="1"
+                android:text="@string/venue_outdoor_hint"
+                android:textSize="13sp"
                 android:textStyle="bold"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp" />
+                android:textColor="@color/md_theme_onPrimaryContainer" />
 
-
-            <!-- GNSS Error -->
-            <TextView
-                android:id="@+id/gnssError"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/changeVenueButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnss_error"
-                android:textColor="@color/md_theme_error"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:layout_marginStart="16dp" />
+                android:text="@string/change_venue"
+                android:textSize="11sp"
+                android:visibility="visible" />
         </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+    </androidx.cardview.widget.CardView>
 
-    <!-- 🔹 MIDDLE SECTION: Map Display -->
-    <FrameLayout
-        android:id="@+id/trajectoryMapFragmentContainer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
-        app:layout_constraintBottom_toTopOf="@id/controlLayout" />
+    <!-- 楼层选择器 - 横向展开/收起（初始为小正方形，点击原地展开） -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/floorSelectorContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="8dp"
+        android:elevation="0dp"
+        android:visibility="gone"
+        app:cardCornerRadius="10dp"
+        app:cardBackgroundColor="@android:color/transparent"
+        app:cardElevation="0dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/backToRecordingButton">
 
-    <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
-    <LinearLayout
-        android:id="@+id/controlLayout"
-        android:layout_width="match_parent"
+        <LinearLayout
+            android:id="@+id/floorButtonLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="4dp" />
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- 返回按钮 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/backToRecordingButton"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="8dp"
+        android:text="@string/back_to_recording"
+        android:textColor="@android:color/white"
+        android:textSize="11sp"
+        android:backgroundTint="@color/md_theme_secondary"
+        android:elevation="8dp"
+        android:visibility="gone"
+        app:cornerRadius="6dp"
+        app:icon="@android:drawable/ic_menu_revert"
+        app:iconSize="18dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/venueInfoCard"
+        tools:visibility="visible" />
+
+    <!-- 🆕 设置初始位置按钮 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/setInitialPositionButton"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="8dp"
+        android:text="Set Position"
+        android:textColor="@android:color/white"
+        android:textSize="11sp"
+        android:backgroundTint="@color/md_theme_secondary"
+        android:elevation="8dp"
+        app:cornerRadius="6dp"
+        app:icon="@android:drawable/ic_menu_mylocation"
+        app:iconSize="18dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/venueInfoCard"
+        tools:visibility="visible" />
+
+    <!-- 🆕 Mark Test Point Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/markTestPointButton"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="8dp"
+        android:text="Mark Test"
+        android:textColor="@android:color/white"
+        android:textSize="11sp"
+        android:backgroundTint="@color/md_theme_tertiary"
+        android:elevation="8dp"
+        app:cornerRadius="6dp"
+        app:icon="@android:drawable/ic_menu_add"
+        app:iconSize="18dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/setInitialPositionButton"
+        tools:visibility="visible" />
+
+    <!-- 小展开标签：仅在抽屉隐藏时显示，点击可恢复 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/expandDrawerTab"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="72dp"
+        android:layout_height="28dp"
+        android:layout_marginBottom="8dp"
+        android:text="▲"
+        android:textSize="14sp"
+        android:textColor="@color/md_theme_onSurface"
+        android:backgroundTint="@color/md_theme_surface"
+        android:elevation="8dp"
+        android:visibility="gone"
+        app:cornerRadius="14dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- 底部抽屉：向下滑动可隐藏，点击展开标签可恢复 -->
+    <com.openpositioning.PositionMe.presentation.fragment.SwipeDownLinearLayout
+        android:id="@+id/bottomDrawer"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp"
-        android:gravity="center"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Progress Bar -->
-        <com.google.android.material.progressindicator.LinearProgressIndicator
-            android:id="@+id/timeRemainingBar"
-            style="@style/Widget.Material3.LinearProgressIndicator"
+        <!-- 拖动手柄 -->
+        <View
+            android:id="@+id/drawerHandle"
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
+            android:background="@drawable/drawer_handle_bg"
+            android:clickable="true"
+            android:focusable="true" />
+
+    <!-- 信息面板 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/infoPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="6dp"
+        android:elevation="8dp"
+        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="@color/md_theme_surface"
+            >
+
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="20dp"
-            android:max="1800"
-            android:progress="0"
-            android:layout_marginBottom="12dp" />
-
-        <!-- Buttons Container -->
-        <LinearLayout
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
+            android:scrollbars="none"
+            android:fadeScrollbars="true">
 
-            <!-- Cancel Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/cancelButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                android:layout_marginEnd="16dp"
-                app:icon="@drawable/ic_unavailable"
-                android:text="@string/cancel"
-                android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onError"
-                app:backgroundTint="@color/md_theme_error"
-                app:cornerRadius="16dp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
 
-            <!-- Stop Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/stopButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
-                android:text="@string/stop"
-                android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onPrimary"
-                app:backgroundTint="@color/md_theme_primary"
-                app:cornerRadius="16dp" />
-        </LinearLayout>
+            <!-- Row 1: Trajectory ID -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Trajectory ID:"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/trajectoryIdText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="--"
+                    android:textSize="9sp"
+                    android:textColor="@color/md_theme_outline"
+                    android:ellipsize="end"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <!-- Row 2: Recording indicator -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/redDot"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_baseline_red_dot_24"
+                    android:contentDescription="@string/recording_indicator_desc"
+                    app:tint="@android:color/holo_red_dark" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/recording_status"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/holo_red_dark" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <ProgressBar
+                    android:id="@+id/timeRemainingBar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/md_theme_outlineVariant"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Row 3: WiFi / Pos / Tests — all three counters on one line -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="WiFi:"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface" />
+
+                <TextView
+                    android:id="@+id/wifiFingerprintsCount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="0"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_outline"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Pos:"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface" />
+
+                <TextView
+                    android:id="@+id/correctedPositionsCount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="0"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_outline"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tests:"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface" />
+
+                <TextView
+                    android:id="@+id/testPointsCount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="0"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_outline"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Row 4: Init Pos -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="6dp">
+
+                <ImageView
+                    android:id="@+id/initialPositionIndicator"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:src="@android:drawable/ic_dialog_info"
+                    android:contentDescription="Initial position status"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Init Pos:"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface" />
+
+                <TextView
+                    android:id="@+id/initialPositionStatus"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="Not set"
+                    android:textSize="10sp"
+                    android:textColor="@android:color/holo_red_dark"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Row 5: Distance & Elevation -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/currentDistanceTraveled"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/distance_default"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface" />
+
+                <TextView
+                    android:id="@+id/currentElevation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/elevation_default"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:gravity="end" />
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/md_theme_outlineVariant"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Row 6: Floor + colour legend (items spread evenly) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/floorDisplayText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Floor: 0"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/md_theme_primary" />
+
+                <!-- Legend items share equal weight so they spread evenly -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="3"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical|end">
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="#0000FF"
+                        android:layout_marginEnd="3dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="PDR"
+                        android:textSize="9sp"
+                        android:textColor="#0000FF"
+                        android:layout_marginEnd="10dp" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="#00AA00"
+                        android:layout_marginEnd="3dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="GNSS"
+                        android:textSize="9sp"
+                        android:textColor="#00AA00"
+                        android:layout_marginEnd="10dp" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="#FF8C00"
+                        android:layout_marginEnd="3dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="WiFi"
+                        android:textSize="9sp"
+                        android:textColor="#FF8C00"
+                        android:layout_marginEnd="10dp" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="#FF0000"
+                        android:layout_marginEnd="3dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Fused"
+                        android:textSize="9sp"
+                        android:textColor="#FF0000" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- GNSS Error (hidden by default) -->
+            <TextView
+                android:id="@+id/gnssError"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="@string/gnss_error_default"
+                android:textSize="10sp"
+                android:textColor="@android:color/holo_orange_dark"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/md_theme_outlineVariant"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Row 7: Smooth Trajectory toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Smooth Trajectory"
+                    android:textSize="10sp"
+                    android:textColor="@color/md_theme_onSurface" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/smoothTrajectorySwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="false" />
+            </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+    </androidx.cardview.widget.CardView>
+
+    <!-- 控制面板 -->
+    <LinearLayout
+        android:id="@+id/controlPanel"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="12dp"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <!-- Cancel Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/cancelButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="Cancel"
+            android:textSize="12sp"
+            android:textColor="@android:color/holo_red_dark"
+            app:strokeColor="@android:color/holo_red_dark"
+            app:cornerRadius="8dp"
+            app:icon="@android:drawable/ic_menu_close_clear_cancel"
+            app:iconSize="18dp"
+            app:iconGravity="textStart" />
+
+        <!-- Complete Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/stopButton"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Complete"
+            android:textSize="12sp"
+            android:backgroundTint="@color/md_theme_primary"
+            android:textColor="@color/md_theme_onPrimary"
+            app:cornerRadius="8dp"
+            app:icon="@android:drawable/ic_menu_save"
+            app:iconSize="18dp"
+            app:iconGravity="textStart" />
     </LinearLayout>
+
+    </com.openpositioning.PositionMe.presentation.fragment.SwipeDownLinearLayout><!-- end bottomDrawer -->
+
 </androidx.constraintlayout.widget.ConstraintLayout>

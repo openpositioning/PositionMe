@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +23,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
 import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 
 /**
@@ -72,14 +74,34 @@ public class StartLocationFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
-        // Obtain the start position from the GPS data from the SensorFusion class
-        startPosition = sensorFusion.getGNSSLatitude(false);
+        // Check if the trajectory file's original recording position was passed via arguments
+        // (from ReplayActivity). If available, use it instead of current GPS.
+        boolean hasFilePosition = false;
+        if (getArguments() != null) {
+            float fileLat = getArguments().getFloat(ReplayActivity.EXTRA_FILE_INITIAL_LAT, 0f);
+            float fileLon = getArguments().getFloat(ReplayActivity.EXTRA_FILE_INITIAL_LON, 0f);
+            if (fileLat != 0f || fileLon != 0f) {
+                startPosition[0] = fileLat;
+                startPosition[1] = fileLon;
+                hasFilePosition = true;
+                Log.i("StartLocationFragment", "Using file's recording position: " + fileLat + ", " + fileLon);
+            }
+        }
+
+        // If no file position, fall back to current GPS from SensorFusion
+        if (!hasFilePosition) {
+            startPosition = sensorFusion.getGNSSLatitude(false);
+        }
+
         // If no location found, zoom the map out
         if (startPosition[0] == 0 && startPosition[1] == 0) {
             zoom = 1f;
         } else {
             zoom = 19f;
         }
+
+        // Capture as final so it can be referenced inside the anonymous OnMapReadyCallback.
+        final boolean filePositionUsed = hasFilePosition;
 
         // Initialize map fragment
         SupportMapFragment supportMapFragment = (SupportMapFragment)
@@ -109,38 +131,37 @@ public class StartLocationFragment extends Fragment {
                 nucleusBuildingManager = new NucleusBuildingManager(mMap);
                 nucleusBuildingManager.getIndoorMapManager().hideMap();
 
-                // Add a marker at the current GPS location and move the camera
+                // Place a fixed (non-draggable) marker at the GPS-estimated position.
+                // The start location is set automatically by GPS/WiFi and cannot be
+                // modified manually by the user.
                 position = new LatLng(startPosition[0], startPosition[1]);
-                Marker startMarker = mMap.addMarker(new MarkerOptions()
+                final Marker[] markerRef = {mMap.addMarker(new MarkerOptions()
                         .position(position)
-                        .title("Start Position")
-                        .draggable(true));
+                        .title("Start location (set automatically)")
+                        .draggable(false))};
                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
 
-                // Drag listener for the marker to update the start position when dragged
-                mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-                    /**
-                     * {@inheritDoc}
-                     */
-                    @Override
-                    public void onMarkerDragStart(Marker marker) {}
-
-                    /**
-                     * {@inheritDoc}
-                     * Updates the start position of the user.
-                     */
-                    @Override
-                    public void onMarkerDragEnd(Marker marker) {
-                        startPosition[0] = (float) marker.getPosition().latitude;
-                        startPosition[1] = (float) marker.getPosition().longitude;
-                    }
-
-                    /**
-                     * {@inheritDoc}
-                     */
-                    @Override
-                    public void onMarkerDrag(Marker marker) {}
-                });
+                // Request WiFi-based positioning to refine the initial marker automatically.
+                // Does NOT touch positionFusion / fusionManager — no effect on recording.
+                if (!filePositionUsed) {
+                    sensorFusion.requestWifiPositioningForInitialLocation(new WiFiPositioning.VolleyCallback() {
+                        @Override
+                        public void onSuccess(LatLng wifiLocation, int floor) {
+                            if (isAdded()) {
+                                startPosition[0] = (float) wifiLocation.latitude;
+                                startPosition[1] = (float) wifiLocation.longitude;
+                                markerRef[0].setPosition(wifiLocation);
+                                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(wifiLocation, zoom));
+                                Log.i("StartLocationFragment", "Initial position refined by WiFi: "
+                                        + wifiLocation.latitude + ", " + wifiLocation.longitude);
+                            }
+                        }
+                        @Override
+                        public void onError(String message) {
+                            Log.w("StartLocationFragment", "WiFi initial positioning failed: " + message);
+                        }
+                    });
+                }
             }
         });
 
