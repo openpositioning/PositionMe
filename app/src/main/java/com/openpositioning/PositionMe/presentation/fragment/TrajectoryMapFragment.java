@@ -46,12 +46,16 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
+
+import android.content.SharedPreferences;
+import androidx.preference.PreferenceManager;
 
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
@@ -87,9 +91,12 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker gnssMarker; // GNSS position marker
 
     /** Raw (unfiltered) PDR trajectory — drawn in red. */
-    private Polyline polyline; // Polyline representing user's movement path
+    private Polyline pdrPolyline; // Polyline representing user's PDR movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+
+    /** Whether the blue GNSS trajectory polyline is visible. */
+    private boolean showGnssPath = false;
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
@@ -101,12 +108,13 @@ public class TrajectoryMapFragment extends Fragment {
     private SensorFusion sensorFusion;
     private TextView floorLabel;
 
+
     //    Added
 //    /** Raw (unfiltered) PDR trajectory — drawn in red. */
 //    private Polyline rawPolyline;
 
     /** Smoothed trajectory — drawn in purple, visible only when smoothing is ON. */
-    private Polyline smoothedPolyline;
+    private Polyline fusedPolyline;
 
     private static final String TAG = "TrajectoryMapFragment";
 
@@ -131,7 +139,7 @@ public class TrajectoryMapFragment extends Fragment {
      * Low-pass filter alpha. Range [0,1].
      * Lower = smoother but more lag; higher = less smoothing but more responsive.
      */
-    private static final double LOW_PASS_ALPHA = 0.15;
+    private static final double LOW_PASS_ALPHA = 0.3;
 
     // -------------------------------------------------------------------------
     // Smoothing state
@@ -165,12 +173,13 @@ public class TrajectoryMapFragment extends Fragment {
 
     /** Current rolling-window size — updated when user changes the N input. */
 //    private int maxObservations = DEFAULT_MAX_OBSERVATIONS;
-    private final int maxObservations = MAX_OBSERVATION_MARKERS;
+
+    private int maxObservations = 5;
 
     // Per-source visibility flags (all enabled by default)
-    private boolean showGnssDots = true;
-    private boolean showWifiDots = true;
-    private boolean showPdrDots  = true;
+    private boolean showGnssDots = false;
+    private boolean showWifiDots = false;
+    private boolean showPdrDots  = false;
 
     // Per-source rolling queues of on-map markers
     private final LinkedList<Marker> gnssObservationMarkers = new LinkedList<>();
@@ -237,6 +246,8 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssDotSwitch;
     private SwitchMaterial wifiDotSwitch;
     private SwitchMaterial pdrDotSwitch;
+
+    private SwitchMaterial gnssPathSwitch;
 
 //    Added
 //    private SwitchMaterial fusedPdrSwitch;
@@ -308,6 +319,7 @@ private SwitchMaterial showPdrPathSwitch;
         controlCardContent = view.findViewById(R.id.controlCardContent);
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        gnssPathSwitch = view.findViewById(R.id.gnssPathSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         smoothingSwitch   = view.findViewById(R.id.smoothingSwitch);
 //        fusedPdrSwitch = view.findViewById(R.id.fusedPdrSwitch);
@@ -324,6 +336,22 @@ private SwitchMaterial showPdrPathSwitch;
         floorLabel = view.findViewById(R.id.floorLabel);
         floorLabel.setText("Floor: -");
 
+        Drawable d1 = gnssPathSwitch.getCompoundDrawablesRelative()[0];
+        d1.setTint(Color.BLUE);
+
+        Drawable d2 = smoothingSwitch.getCompoundDrawablesRelative()[0];
+        d2.setTint(Color.CYAN);
+
+        Drawable d3 = showPdrPathSwitch.getCompoundDrawablesRelative()[0];
+        d3.setTint(Color.RED);
+
+        Drawable d4 = particleCloudSwitch.getCompoundDrawablesRelative()[0];
+        d4.setTint(Color.rgb(255,165,0)); // orange
+
+        // Hide particle cloud switch when EKF mode is active
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        boolean useEkf = prefs.getBoolean("use_ekf", false);
+        particleCloudSwitch.setVisibility(useEkf ? View.GONE : View.VISIBLE);
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
 //        setFloorControlsVisibility(View.GONE);
@@ -412,16 +440,24 @@ private SwitchMaterial showPdrPathSwitch;
             }
         });
 
+        gnssPathSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            showGnssPath = isChecked;
+            if (gnssPolyline != null) {
+                gnssPolyline.setVisible(showGnssPath);
+            }
+            Log.d(TAG, "GNSS path visible: " + isChecked);
+        });
+
         // Color switch
         switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
+            if (pdrPolyline != null) {
                 if (isRed) {
                     switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
+                    fusedPolyline.setColor(Color.BLACK);
                     isRed = false;
                 } else {
-                    switchColorButton.setBackgroundColor(COLOR_PDR);
-                    polyline.setColor(COLOR_PDR);
+                    switchColorButton.setBackgroundColor(Color.RED);
+                    fusedPolyline.setColor(Color.RED);
                     isRed = true;
                 }
             }
@@ -446,8 +482,8 @@ private SwitchMaterial showPdrPathSwitch;
         showPdrPathSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
             showPdrPath = isChecked;
             // Immediately show or hide the red PDR polyline
-            if (polyline != null) {
-                polyline.setVisible(showPdrPath);
+            if (pdrPolyline != null) {
+                pdrPolyline.setVisible(showPdrPath);
             }
             Log.d(TAG, "PDR path visible: " + isChecked);
         });
@@ -504,9 +540,29 @@ private SwitchMaterial showPdrPathSwitch;
     @Override
     public void onResume() {
         super.onResume();
+        // Read slider value
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        maxObservations = prefs.getInt("last_observations", 20);
+        trimObservationQueues();
+
+        Log.d("TrajectoryMapFragment", "Max observations set to: " + maxObservations);
+
         // Start the 1-second fused trajectory update loop
         isTrajectoryUpdateRunning = true;
         trajectoryUpdateHandler.postDelayed(trajectoryUpdateRunnable, 1000);
+    }
+
+    private void trimObservationQueues() {
+        trimQueue(gnssObservationMarkers);
+        trimQueue(wifiObservationMarkers);
+        trimQueue(pdrObservationMarkers);
+    }
+
+    private void trimQueue(LinkedList<Marker> queue) {
+        while (queue.size() > maxObservations) {
+            Marker m = queue.poll();
+            if (m != null) m.remove();
+        }
     }
 
     @Override
@@ -541,7 +597,7 @@ private SwitchMaterial showPdrPathSwitch;
      */
 
     private Bitmap createNumberedMarkerBitmap(int number) {
-        int size = 100; // marker size in pixels
+        int size = 60; // marker size in pixels
 
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
@@ -598,7 +654,7 @@ private SwitchMaterial showPdrPathSwitch;
         indoorMapManager = new IndoorMapManager(map);
 
         // Raw PDR trajectory — green, matches PDR observation dots
-        polyline = map.addPolyline(new PolylineOptions()
+        pdrPolyline = map.addPolyline(new PolylineOptions()
                 .color(COLOR_PDR)
                 .width(5f)
                 .add()
@@ -609,17 +665,19 @@ private SwitchMaterial showPdrPathSwitch;
                 .color(COLOR_GNSS)
                 .width(5f)
                 .add()
+                .visible(false)
+                .add() // start empty
         );
 
         // Fused trajectory — red, matches the arrow marker
-        smoothedPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
+        fusedPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.parseColor("#8B00FF"))
                 .width(6f)
                 .visible(true));
 
-        // LPF-smoothed fused trajectory — dark red, only visible when smoothing toggle is ON
+        // LPF-smoothed fused trajectory — only visible when smoothing toggle is ON
         lpfPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#B71C1C"))
+                .color(Color.parseColor("#00BCD4"))
                 .width(7f)
                 .visible(false));
 
@@ -827,10 +885,10 @@ private SwitchMaterial showPdrPathSwitch;
 //        }
 
         // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        if (oldLocation != null && !oldLocation.equals(newLocation) && pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
             points.add(newLocation);
-            polyline.setPoints(points);
+            pdrPolyline.setPoints(points);
         }
 
         //        Added
@@ -838,8 +896,8 @@ private SwitchMaterial showPdrPathSwitch;
 //        LatLng filtered = applyLowPassFilter(newLocation);
 //        if (oldLocation != null && !oldLocation.equals(newLocation)) {
 //            smoothedPoints.add(filtered);
-//            if (smoothedPolyline != null) {
-//                smoothedPolyline.setPoints(new ArrayList<>(smoothedPoints));
+//            if (fusedPolyline != null) {
+//                fusedPolyline.setPoints(new ArrayList<>(smoothedPoints));
 //            }
 //        }
 
@@ -1083,7 +1141,13 @@ private SwitchMaterial showPdrPathSwitch;
 //                lastGnssLocation = gnssLocation;
             } else {
                 gnssMarker.setPosition(gnssLocation);
-                if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
+//                if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
+//                    List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
+//                    gnssPoints.add(gnssLocation);
+//                    gnssPolyline.setPoints(gnssPoints);
+//                }
+                if (showGnssPath && lastGnssLocation != null
+                        && !lastGnssLocation.equals(gnssLocation)) {
                     List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
                     gnssPoints.add(gnssLocation);
                     gnssPolyline.setPoints(gnssPoints);
@@ -1092,6 +1156,12 @@ private SwitchMaterial showPdrPathSwitch;
         }
         // Always update lastGnssLocation so path builds correctly when gnssSwitch is turned ON mid-session
         lastGnssLocation = gnssLocation;
+
+        // Blue dot — independent of gnssSwitch, only controlled by gnssDotSwitch
+        if (showGnssDots && hasMoved(gnssLocation, lastGnssDotPos)) {
+            addObservationMarker(gnssLocation, COLOR_GNSS, gnssObservationMarkers);
+            lastGnssDotPos = gnssLocation;
+        }
     }
 
     /**
@@ -1175,6 +1245,9 @@ private SwitchMaterial showPdrPathSwitch;
      * Only the teal LPF line is toggled by the smoothing switch.
      */
     private void updatePolylineVisibility() {
+        if (fusedPolyline != null) {
+            fusedPolyline.setVisible(!isSmoothingEnabled);
+        }
         if (lpfPolyline != null) {
             lpfPolyline.setVisible(isSmoothingEnabled);
         }
@@ -1297,10 +1370,10 @@ private SwitchMaterial showPdrPathSwitch;
      * unnecessary Google Maps redraws.</p>
      */
     private void redrawFusedTrajectory() {
-        if (smoothedPolyline == null || smoothedPoints.isEmpty()) return;
+        if (fusedPolyline == null || smoothedPoints.isEmpty()) return;
         if (smoothedPoints.size() == lastDrawnPointCount) return; // nothing new
 
-        smoothedPolyline.setPoints(new ArrayList<>(smoothedPoints));
+        fusedPolyline.setPoints(new ArrayList<>(smoothedPoints));
         lastDrawnPointCount = smoothedPoints.size();
         Log.d(TAG, "Fused trajectory redrawn — " + lastDrawnPointCount + " points");
     }
@@ -1313,8 +1386,8 @@ private SwitchMaterial showPdrPathSwitch;
      * Adds a numbered observation dot at the given position for the specified source.
      *
      * After adding, ALL markers in the queue are renumbered so that:
-     *   - The oldest dot always shows "1"
-     *   - The newest dot shows the highest number (up to MAX_OBSERVATION_MARKERS)
+     *   - The newest dot always shows "1"
+     *   - The oldest dot shows the highest number (up to MAX_OBSERVATION_MARKERS)
      *
      * When the queue is full, the oldest marker is removed before the new one is added.
      *
@@ -1333,7 +1406,7 @@ private SwitchMaterial showPdrPathSwitch;
             if (oldest != null) oldest.remove();
         }
 
-        // Add the new dot — label is overwritten by the renumber loop below
+        // Add the new dot — starts as number 1 (most recent), others will be renumbered below
         Marker newDot = gMap.addMarker(new MarkerOptions()
                 .position(position)
                 .icon(BitmapDescriptorFactory.fromBitmap(
@@ -1347,14 +1420,14 @@ private SwitchMaterial showPdrPathSwitch;
             markerQueue.add(newDot);
         }
 
-        // Renumber all markers: oldest = 1, newest = queue.size()
-        // The queue is ordered oldest-first (LinkedList), so i=0 is oldest
+        // Renumber all markers: newest = 1, oldest = queue.size()
+        // The queue is ordered oldest-first (LinkedList), so we iterate in reverse
         List<Marker> markerList = new ArrayList<>(markerQueue);
         int total = markerList.size();
         for (int i = 0; i < total; i++) {
             Marker m = markerList.get(i);
             if (m == null) continue;
-            int recencyNumber = i + 1; // oldest = 1, newest = total
+            int recencyNumber = total - i; // oldest gets highest number
             Object tag = m.getTag();
             int markerColor = (tag instanceof Integer) ? (int) tag : color;
             m.setIcon(BitmapDescriptorFactory.fromBitmap(
@@ -1382,7 +1455,7 @@ private SwitchMaterial showPdrPathSwitch;
      * Numbers are updated across the whole queue after each new dot is added.
      *
      * @param color  fill colour of the dot.
-     * @param number the sequence label to display (1 = oldest, highest = newest).
+     * @param number the recency label to display (1 = most recent).
      * @return a 40×40 px Bitmap with a filled circle and white number.
      */
     private Bitmap createNumberedDotBitmap(int color, int number) {
@@ -1443,13 +1516,12 @@ private SwitchMaterial showPdrPathSwitch;
     private void setFloorControlsVisibility(int visibility) {
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
-        autoFloorSwitch.setVisibility(visibility);
     }
 
     public void clearMapAndReset() {
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
+        if (pdrPolyline != null) {
+            pdrPolyline.remove();
+            pdrPolyline = null;
         }
         if (gnssPolyline != null) {
             gnssPolyline.remove();
@@ -1487,18 +1559,19 @@ private SwitchMaterial showPdrPathSwitch;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
+            pdrPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(5f)
                     .add());
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
                     .width(5f)
+                    .visible(showGnssPath)
                     .add());
-            smoothedPolyline = gMap.addPolyline(new PolylineOptions()
+            fusedPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.parseColor("#8B00FF"))
                     .width(6f)
-                    .visible(true));
+                    .visible(!isSmoothingEnabled));
             lpfPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.parseColor("#00BCD4"))
                     .width(7f)
