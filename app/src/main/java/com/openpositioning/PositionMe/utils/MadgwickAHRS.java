@@ -4,10 +4,10 @@ import android.util.Log;
 
 // Lightweight Madgwick AHRS filter for Android sensor fusion.
 // Uses gyroscope integration corrected by accelerometer and magnetometer observations.
-// P1-2 IMPROVEMENT: Added magnetic anomaly detection for indoor environments
+// Includes magnetometer anomaly handling for indoor interference.
 public class MadgwickAHRS {
 
-    // P1-2: Improved Beta value (from 0.12 to 0.15) for better drift correction
+    // Default beta tuned for practical drift correction on handheld devices.
     private static final float DEFAULT_BETA = 0.15f;
     
 
@@ -20,7 +20,7 @@ public class MadgwickAHRS {
     private float q2 = 0.0f;
     private float q3 = 0.0f;
     
-    // P1-2: Track magnetic anomalies for logging
+    // Tracks consecutive anomaly events for diagnostics.
     private int magneticAnomalyCount = 0;
 
     public MadgwickAHRS() {
@@ -60,20 +60,20 @@ public class MadgwickAHRS {
         ay *= accNorm;
         az *= accNorm;
 
-        // ===== P1-2 IMPROVEMENT: Magnetic anomaly detection =====
+        // Detect magnetic field outliers before full fusion.
         float magIntensity = (float) Math.sqrt(mx * mx + my * my + mz * mz);
         
         // Check if magnetic field is outside normal range (indicates indoor metal/electrical interference)
         if (magIntensity < MAGNETOMETER_MIN || magIntensity > MAGNETOMETER_MAX) {
-            // Magnetic anomaly detected - use accelerometer only without magnetometer
+            // Fall back to gyro + accelerometer when magnetometer is unreliable.
             magneticAnomalyCount++;
-            Log.w("MadgwickAHRS", String.format("Magnetic anomaly #%d: %.1f 渭T (outside [%.0f-%.0f])", 
+            Log.w("MadgwickAHRS", String.format("Magnetic anomaly #%d: %.1f uT (outside [%.0f-%.0f])", 
                 magneticAnomalyCount, magIntensity, MAGNETOMETER_MIN, MAGNETOMETER_MAX));
             integrateGyroAndAccelOnly(gx, gy, gz, ax, ay, az, deltaTimeSeconds);
             return;
         }
         
-        // Magnetometer is reliable, proceed with standard fusion
+        // Magnetometer is reliable; continue with full AHRS update.
         magneticAnomalyCount = 0;
         float magNorm = invSqrt(mx * mx + my * my + mz * mz);
 
@@ -169,7 +169,7 @@ public class MadgwickAHRS {
         integrateGyroAndAccelOnly(gx, gy, gz, ax, ay, az, deltaTimeSeconds);
     }
 
-    // P1-2: Gyro + Accelerometer integration without magnetometer (for magnetic anomaly conditions)
+    // Gyro + accelerometer integration path without magnetometer correction.
     private void integrateGyroAndAccelOnly(float gx, float gy, float gz,
                                            float ax, float ay, float az,
                                            float deltaTimeSeconds) {
@@ -187,7 +187,7 @@ public class MadgwickAHRS {
         float ey = az * (2.0f * (q0q1 - q2 * q3)) - ax * (q0q0 - q1q1 - q2q2 + q3 * q3);
         float ez = ax * (2.0f * (q1 * q3 - q0q2)) - ay * (2.0f * (q0q1 + q2q2));
         
-        // P1-2: Use a more conservative beta when magnetometer is unavailable
+        // Reduce correction gain when heading cannot be constrained by magnetometer.
         float conservativeBeta = this.beta * 0.8f;  // Reduce correction strength
         
         // Integrate gyroscope with gravity correction (no magnetometer)
@@ -247,7 +247,7 @@ public class MadgwickAHRS {
         return (float) (1.0 / Math.sqrt(value));
     }
     
-    // P1-2: Getter for magnetic anomaly count (for monitoring)
+    // Exposes anomaly count for runtime monitoring.
     public int getMagneticAnomalyCount() {
         return magneticAnomalyCount;
     }

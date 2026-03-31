@@ -1408,7 +1408,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             canInitializeNow = true;
             Log.d("SensorFusion", "Using GNSS Start Location (outdoor): " + initLat + ", " + initLon);
         } else {
-            // Indoors without WiFi fix: defer fusion initialization until WiFi callback arrives.
+            // Indoors without a WiFi location: defer fusion initialization until callback arrives.
             initLat = latitude;
             initLon = longitude;
             canInitializeNow = false;

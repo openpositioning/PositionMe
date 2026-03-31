@@ -96,12 +96,12 @@ public class PdrProcessing {
 
     // Kalman filter covariances for fusion
     private double[][] P;
-    // ===== P1-1 IMPROVEMENT: More trust in PDR, better measurement noise =====
+    // Kalman filter noise settings tuned for PDR-dominant indoor fusion.
     private final double[][] Q = {{0.01, 0}, {0, 0.01}};        // process noise (decreased from 0.5)
     private final double[][] R_GNSS = {{4, 0}, {0, 4}};
     private final double[][] R_WIFI = {{36, 0}, {0, 36}};
     
-    // ===== GNSS/WiFi FILTERING: keep heading and path direction PDR-dominant =====
+    // GNSS/WiFi correction limits to keep heading and path direction PDR-dominant.
     private static final float GNSS_ERROR_THRESHOLD_METERS = 5.0f;
     private static final float WIFI_ERROR_THRESHOLD_METERS = 3.0f;
     private static final float GNSS_MIN_ACCURACY_METERS = 6.0f;
@@ -136,7 +136,7 @@ public class PdrProcessing {
     private float sumStepLength = 0;
     private int stepCount = 0;
 
-    // ===== COORDINATE HISTORY: Keep track of last 7 positions for each source =====
+    // Keep track of the most recent coordinates for each source.
     private static final int MAX_COORDINATE_HISTORY = 7;
     // History buffers for GNSS, WiFi, and PDR coordinates (stores LatLng)
     private java.util.Queue<LatLng> gnssHistoryBuffer = new java.util.LinkedList<>();
@@ -339,7 +339,7 @@ public class PdrProcessing {
             predictFusion(x, y);
         }
 
-        // ===== COORDINATE HISTORY: Save PDR position =====
+        // Save current PDR position in history buffer.
         LatLng pdrPoint = localToLatLon(this.positionX, this.positionY);
         pdrHistoryBuffer.offer(pdrPoint);
         if (pdrHistoryBuffer.size() > MAX_COORDINATE_HISTORY) {
@@ -386,7 +386,7 @@ public class PdrProcessing {
             predictFusion(x, y);
         }
 
-        // ===== COORDINATE HISTORY: Save PDR position =====
+        // Save current PDR position in history buffer.
         LatLng pdrPoint = localToLatLon(this.positionX, this.positionY);
         pdrHistoryBuffer.offer(pdrPoint);
         if (pdrHistoryBuffer.size() > MAX_COORDINATE_HISTORY) {
@@ -488,7 +488,7 @@ public class PdrProcessing {
     }
 
     // Uses the Weiberg Stride Length formula to calculate step length from accelerometer values.
-    // P1-3 IMPROVEMENT: Added step frequency classifier for better stride estimation
+    // Uses a step-frequency classifier to scale stride length.
     // @param accelMagnitude magnitude of acceleration values between the last and current step.
     // @param stepDurationMs duration of the current step in milliseconds.
     // @return float stride length in meters.
@@ -528,7 +528,7 @@ public class PdrProcessing {
         
         float stepFreq = 1000f / stepDurationMs; // Hz
         
-        // ===== P1-3 IMPROVEMENT: Step frequency classifier (from narrow 0.85-1.0 to 0.85-1.2) =====
+        // Scale stride by walking cadence class.
         float frequencyFactor;
         if (stepFreq < 1.2f) {
             // Slow walking
@@ -626,7 +626,7 @@ public class PdrProcessing {
                 this.positionX = 0f;
                 this.positionY = 0f;
 
-                // P1-1: Reduced initial covariance for faster convergence
+                // Reduced initial covariance for faster convergence.
                 this.P = new double[][]{{1.0, 0}, {0, 1.0}};
                 this.fusionInitialized = true;
                 initializationCandidates.clear(); // clean up
@@ -814,7 +814,7 @@ public class PdrProcessing {
             return;
         }
 
-        // ===== WIFI: Light position correction + floor detection (heading protected) =====
+        // Apply light WiFi position correction and floor detection.
         Log.d("PdrProcessing", String.format("WiFi received: lat=%.6f, lon=%.6f, floor=%d",
             wifiLocation.latitude, wifiLocation.longitude, floor));
         
@@ -885,7 +885,7 @@ public class PdrProcessing {
         this.fusedY += proposedY;
     }
 
-    // ===== COORDINATE HISTORY GETTER METHODS =====
+    // Coordinate history getters
     // Get the history of GNSS verified coordinates (last up to 7 positions)
     // @return List of LatLng points representing historical GNSS positions
     public List<LatLng> getGnssHistoryBuffer() {

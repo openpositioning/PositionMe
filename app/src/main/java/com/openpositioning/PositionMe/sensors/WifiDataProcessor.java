@@ -30,12 +30,7 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
-// WifiDataProcessor (Updated for Assignment 1)
-// Updates:
-// Fixed crash caused by unregistering receiver twice.
-// Populates SSID and Frequency in scan results (for Task B).
-// Improves MAC address conversion stability.
-// Ensures no duplicate BSSIDs in a single scan.
+// Collects periodic WiFi scans and publishes normalized results to observers.
 public class WifiDataProcessor implements Observable {
 
     // Time over which a new scan will be initiated.
@@ -57,7 +52,7 @@ public class WifiDataProcessor implements Observable {
     // Timer object
     private Timer scanWifiDataTimer;
 
-    // Fix: Track registration to prevent crash
+    // Tracks registration state to avoid double-unregister exceptions.
     private boolean isReceiverRegistered = false;
     private boolean isRttRanging = false;
 

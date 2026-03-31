@@ -73,7 +73,7 @@ public class InfoFragment extends Fragment {
         // Get singleton sensor fusion instance
         sensorFusion = SensorFusion.getInstance();
 
-        // Fix: Explicitly cast the generic objects back to SensorInfo
+        // Convert raw sensor objects to SensorInfo entries for the adapter.
         List<Object> rawList = sensorFusion.getSensorInfos();
         List<SensorInfo> sensorInfoList = new ArrayList<>();
 

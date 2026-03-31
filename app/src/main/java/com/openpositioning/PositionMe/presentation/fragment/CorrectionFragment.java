@@ -21,15 +21,13 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
-// Fix: Removed non-existent TrajMapPoints reference
-// import com.openpositioning.PositionMe.utils.TrajMapPoints;
 
 public class CorrectionFragment extends Fragment {
 
-    // UI Components
+    // UI components
     private Button uploadButton;
 
-    // Map & Logic
+    // Map and logic
     private GoogleMap gMap;
     private SensorFusion sensorFusion = SensorFusion.getInstance();
     private IndoorMapManager indoorMapManager;

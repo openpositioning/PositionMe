@@ -28,9 +28,6 @@ import android.widget.Toast;
 // A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
 // recording starts. This fragment displays a map in which the user can adjust their location to
 // correct the PDR when it is complete.
-// Updated for Assignment 1:
-// Removed immediate startRecording() call (moved to RecordingFragment).
-// Ensures start position is passed to SensorFusion before navigation.
 // @author Virginia Cangelosi
 // @see HomeFragment the previous fragment in the nav graph.
 // @see RecordingFragment the next fragment in the nav graph.

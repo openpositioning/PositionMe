@@ -18,8 +18,6 @@ import java.util.Collections;
 // PathView by calling method {@link PathView#drawTrajectory(float[])} in {@link SensorFusion}.
 // The coordinates are scaled and centered in {@link PathView#scaleTrajectory()} to fill the
 // device's screen.
-// Updates:
-// Removed dependency on CorrectionFragment to fix compilation error.
 // @author Michal Dvorak
 // @author Virginia Cangelosi
 public class PathView extends View {
@@ -34,9 +32,6 @@ public class PathView extends View {
     private static ArrayList<Float> yCoords = new ArrayList<Float>();
     // Scaling ratio for multiplying PDR coordinates to fill the screen size
     private static float scalingRatio;
-
-    // Fix: Removed CorrectionFragment instance
-    // private CorrectionFragment correctionFragment = new CorrectionFragment();
 
     // Boolean flag to avoid rescaling trajectory when view is redrawn
     private static boolean firstTimeOnDraw = true;
@@ -188,9 +183,6 @@ public class PathView extends View {
             scalingRatio = 23.926f;
         }
         System.out.println("Adjusted scaling ratio: " + scalingRatio);
-
-        // Fix: Removed CorrectionFragment call (unused)
-        // correctionFragment.setScalingRatio(scalingRatio);
 
         // Iterate over all coordinates, shifting to the center and scaling
         for (int i = 0; i < xCoords.size(); i++) {

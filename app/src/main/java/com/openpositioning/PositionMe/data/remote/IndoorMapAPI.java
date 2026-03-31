@@ -165,7 +165,7 @@ public class IndoorMapAPI {
         }).start();
     }
     
-    // ============= Parsing Methods =============
+    // Parsing methods
     
     private List<BuildingInfo> parseBuildings(String jsonData) throws JSONException {
         List<BuildingInfo> buildings = new ArrayList<>();
@@ -232,7 +232,7 @@ public class IndoorMapAPI {
         return result;
     }
     
-    // ============= Callbacks =============
+    // Callback interfaces
     
     public interface BuildingsCallback {
         void onSuccess(List<BuildingInfo> buildings);

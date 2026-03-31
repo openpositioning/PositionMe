@@ -76,7 +76,7 @@ public class TrajectoryMapFragment extends Fragment {
     private static final int RECENT_POINTS_N = 5;  // For trajectory
     private final List<Circle> recentCirclesBuffer = new ArrayList<>();
     
-    // ===== GNSS/WiFi History tracking (max 5 points each) =====
+    // GNSS/WiFi history tracking (max 5 points each).
     private static final int MAX_GNSS_WIFI_HISTORY = 5;
     private final List<Circle> gnssHistoryCircles = new ArrayList<>();
     private final List<Circle> wifiHistoryCircles = new ArrayList<>();
@@ -229,9 +229,7 @@ public class TrajectoryMapFragment extends Fragment {
                     gMap = googleMap;
                     initMapSettings(gMap);
 
-                    // ==========================================
-                    // Hybrid strategy: local fallback + API load
-                    // ==========================================
+                    // Hybrid strategy: local fallback plus API loading.
 
                     // Local fallback: immediately load Murchison/Nucleus/Library
                     if (indoorMapManager != null) {
@@ -568,7 +566,7 @@ public class TrajectoryMapFragment extends Fragment {
                 indoorMapManager.setCurrentLocation(displayLocation);
                 updateAutoFloorProximityState(displayLocation);
 
-                // ===== Auto-enable Indoor Map when Arrow Enters Building =====
+                // Auto-enable indoor map when the user marker enters a building.
                 // Check if the arrow is inside a building boundary
                 boolean isCurrentlyInsideBuilding = checkIfInsideBuilding(displayLocation);
 
@@ -757,7 +755,7 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null || !isGnssOn) return;
 
-        // ===== GNSS: No large pointer marker, only small circle for history =====
+        // GNSS rendering: keep only small history circles.
         // Remove old WiFi pointer to avoid simultaneous display
         if (wifiMarker != null) {
             wifiMarker.remove();
@@ -833,7 +831,7 @@ public class TrajectoryMapFragment extends Fragment {
             wifiPolyline = gMap.addPolyline(new PolylineOptions().color(Color.rgb(255, 191, 0)).width(5f));
         }
 
-        // ===== WiFi: No large pointer marker, only small circle for history =====
+        // WiFi rendering: keep only small history circles.
         // Remove old GNSS pointer to avoid simultaneous display
         if (gnssMarker != null) {
             gnssMarker.remove();
@@ -1195,7 +1193,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
         recentCirclesBuffer.clear();
         
-        // ===== Clear GNSS/WiFi history buffers =====
+        // Clear GNSS/WiFi history buffers.
         for (Circle c : gnssHistoryCircles) {
             if (c != null) c.remove();
         }

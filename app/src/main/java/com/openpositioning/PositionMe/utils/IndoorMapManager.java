@@ -117,9 +117,7 @@ public class IndoorMapManager {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
     }
 
-    // ============================================================
-    // Core API Methods
-    // ============================================================
+    // Core API methods
 
     public void fetchFloorPlan(LatLng loc, List<String> macs) {
         // Increment request ID and save expected building name
@@ -680,9 +678,7 @@ public class IndoorMapManager {
         }
     }
 
-    // ============================================================
-    // Helper Methods
-    // ============================================================
+    // Helper methods
 
     // Track selected polygon for visual feedback
     private Polygon selectedPolygon = null;
@@ -691,7 +687,7 @@ public class IndoorMapManager {
     public void addFallbackBuildings() {
         List<IndoorBuilding> fallbackList = new ArrayList<>();
 
-        // ========== Nucleus Building ==========
+        // Nucleus building
         // Precise polygon based on BuildingPolygon.java reference
         List<LatLng> nucleusPoints = new ArrayList<>();
         nucleusPoints.add(new LatLng(55.92332, -3.17388));  // NE corner
@@ -700,7 +696,7 @@ public class IndoorMapManager {
         nucleusPoints.add(new LatLng(55.92332, -3.17460));  // NW corner
         fallbackList.add(new IndoorBuilding("venue_nucleus", "The Nucleus Building", nucleusPoints, calculateBounds(nucleusPoints), new HashMap<>(), 4.2f, NUCLEUS_FLOOR_ALTITUDE_ANCHORS));
 
-        // ========== Murray Library ==========
+        // Murray Library
         // Moved west to eliminate overlap with Nucleus (east edge at -3.17477)
         List<LatLng> libraryPoints = new ArrayList<>();
         libraryPoints.add(new LatLng(55.92307, -3.17477));  // NE corner
@@ -709,7 +705,7 @@ public class IndoorMapManager {
         libraryPoints.add(new LatLng(55.92307, -3.17518));  // NW corner
         fallbackList.add(new IndoorBuilding("venue_library", "Murray Library", libraryPoints, calculateBounds(libraryPoints), new HashMap<>(), 4.0f));
 
-        // ========== Murchison House ==========
+        // Murchison House
         List<LatLng> murchisonPoints = new ArrayList<>();
         murchisonPoints.add(new LatLng(55.92447, -3.17868));  // NE
         murchisonPoints.add(new LatLng(55.92379, -3.17868));  // SE
@@ -717,7 +713,7 @@ public class IndoorMapManager {
         murchisonPoints.add(new LatLng(55.92447, -3.17964));  // NW
         fallbackList.add(new IndoorBuilding("venue_murchison", "Murchison House", murchisonPoints, calculateBounds(murchisonPoints), new HashMap<>(), 4.0f));
 
-        // ========== Fleeming Jenkin Building ==========
+        // Fleeming Jenkin Building
         List<LatLng> fjbPoints = new ArrayList<>();
         fjbPoints.add(new LatLng(55.92282, -3.17259));  // NE
         fjbPoints.add(new LatLng(55.92221, -3.17192));  // SE

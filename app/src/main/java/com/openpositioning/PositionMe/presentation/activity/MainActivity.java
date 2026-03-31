@@ -250,9 +250,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     };
     // endregion
 
-    // ====================================================================================
-    // File Saving Logic
-    // ====================================================================================
+    // File saving logic
 
     // Stops the sensor recording and saves the trajectory data to a file.
     // The file is saved with a .protobuf extension in the app's external files directory.
