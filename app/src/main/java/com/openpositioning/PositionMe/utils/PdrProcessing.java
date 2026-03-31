@@ -17,9 +17,8 @@ import java.util.stream.Collectors;
 
 /**
  * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
- * It calculates the position from the steps and directions detected, using either estimated values
- * (eg. stride length from the Weiberg algorithm) or provided constants, calculates the elevation
- * and attempts to estimate the current floor as well as elevators.
+ * Coordinates are relative to the session start, in meters (x east, y north). Elevation is
+ * relative to the initial barometer median. Attempts to estimate current floor and elevator use.
  *
  * @author Mate Stodulka
  * @author Michal Dvorak
@@ -44,6 +43,9 @@ public class PdrProcessing {
     // Settings for accessing shared variables
     private SharedPreferences settings;
 
+    // Centralized map-matching thresholds (currently informational only)
+    private final MapMatchingConfig mapMatchingConfig;
+
     // Step length
     private float stepLength;
     // Using manually input constants instead of estimated values
@@ -58,6 +60,7 @@ public class PdrProcessing {
     private float startElevation;
     private int setupIndex = 0;
     private float elevation;
+    // Floor-to-floor height in meters (manual setting)
     private int floorHeight;
     private int currentFloor;
 
@@ -80,8 +83,13 @@ public class PdrProcessing {
      * @param context   Application context for variable access.
      */
     public PdrProcessing(Context context) {
+        this(context, new MapMatchingConfig());
+    }
+
+    public PdrProcessing(Context context, MapMatchingConfig mapMatchingConfig) {
         // Initialise settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
+        this.mapMatchingConfig = mapMatchingConfig;
         // Check if estimate or manual values should be used
         this.useManualStep = this.settings.getBoolean("manual_step_values", false);
         if(useManualStep) {
@@ -123,7 +131,7 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = settings.getInt("floor_height", (int) mapMatchingConfig.baroHeightThreshold);
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
@@ -390,7 +398,7 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = settings.getInt("floor_height", (int) mapMatchingConfig.baroHeightThreshold);
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero

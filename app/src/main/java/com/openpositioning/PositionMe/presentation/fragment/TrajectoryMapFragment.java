@@ -23,7 +23,9 @@ import androidx.fragment.app.Fragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.MapMatchingConfig;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.openpositioning.PositionMe.utils.CrossFloorClassifier;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -85,6 +87,8 @@ public class TrajectoryMapFragment extends Fragment {
     private Runnable autoFloorTask;
     private int lastCandidateFloor = Integer.MIN_VALUE;
     private long lastCandidateTime = 0;
+
+    private final MapMatchingConfig mapMatchingConfig = new MapMatchingConfig();
 
     // UI
     private Spinner switchMapSpinner;
@@ -616,6 +620,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     //region Auto-floor logic
+    // Uses WiFi floor when available; otherwise barometric elevation divided by floor height (meters).
+    // Behavior unchanged; proximity to stairs/lift will be added in later steps.
 
     /**
      * Starts the periodic auto-floor evaluation task. Checks every second
@@ -658,8 +664,21 @@ public class TrajectoryMapFragment extends Fragment {
         } else {
             float elevation = sensorFusion.getElevation();
             float floorHeight = indoorMapManager.getFloorHeight();
+            if (floorHeight <= 0) {
+                // Fallback to config default if building metadata is missing
+                floorHeight = mapMatchingConfig.baroHeightThreshold;
+            }
+            if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
+                return; // Ignore small height changes
+            }
             if (floorHeight <= 0) return;
             candidateFloor = Math.round(elevation / floorHeight);
+
+            // Require proximity to stairs/lift when using barometer path
+            boolean nearFeature = indoorMapManager.isNearCrossFloorFeature(mapMatchingConfig.crossFeatureProximity);
+            if (!nearFeature) {
+                return;
+            }
         }
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
@@ -699,8 +718,23 @@ public class TrajectoryMapFragment extends Fragment {
             // Fallback: barometric elevation estimate
             float elevation = sensorFusion.getElevation();
             float floorHeight = indoorMapManager.getFloorHeight();
+            if (floorHeight <= 0) {
+                // Fallback to config default if building metadata is missing
+                floorHeight = mapMatchingConfig.baroHeightThreshold;
+            }
+            if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
+                return; // Ignore small height changes
+            }
             if (floorHeight <= 0) return;
             candidateFloor = Math.round(elevation / floorHeight);
+        }
+
+        // Require proximity to stairs/lift when using barometer path
+        if (sensorFusion.getLatLngWifiPositioning() == null) {
+            boolean nearFeature = indoorMapManager.isNearCrossFloorFeature(mapMatchingConfig.crossFeatureProximity);
+            if (!nearFeature) {
+                return;
+            }
         }
 
         // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS

@@ -40,6 +40,7 @@ public class IndoorMapManager {
     private boolean isIndoorMapSet = false;
     private int currentFloor;
     private int currentBuilding = BUILDING_NONE;
+    // Floor height in meters derived from building metadata
     private float floorHeight;
 
     // Vector shapes currently drawn on the map (cleared on floor switch or exit)
@@ -60,6 +61,9 @@ public class IndoorMapManager {
     private static final int ROOM_FILL = Color.argb(40, 33, 150, 243);
     private static final int DEFAULT_STROKE = Color.argb(150, 100, 100, 100);
 
+    // Last known user location (lat/lng on map)
+    private LatLng lastLocation;
+
     /**
      * Constructor to set the map instance.
      *
@@ -77,7 +81,13 @@ public class IndoorMapManager {
      */
     public void setCurrentLocation(LatLng currentLocation) {
         this.currentLocation = currentLocation;
+        this.lastLocation = currentLocation;
         setBuildingOverlay();
+    }
+
+    /** Returns last location stored via setCurrentLocation (may be null). */
+    public LatLng getLastLocation() {
+        return lastLocation;
     }
 
     /**
@@ -115,6 +125,39 @@ public class IndoorMapManager {
      */
     public int getCurrentFloor() {
         return currentFloor;
+    }
+
+    /**
+     * Returns true if the last known location is within the given radius (meters)
+     * of any stairs or lift feature on the current floor.
+     *
+     * @param radiusMeters proximity threshold in meters
+     * @return true when near stairs/lift; false otherwise or when data missing
+     */
+    public boolean isNearCrossFloorFeature(float radiusMeters) {
+        if (lastLocation == null || currentFloorShapes == null) return false;
+        if (currentFloor < 0 || currentFloor >= currentFloorShapes.size()) return false;
+
+        FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(currentFloor);
+        if (floor == null || floor.getFeatures() == null) return false;
+
+        double minDistance = Double.MAX_VALUE;
+        for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+            String type = feature.getIndoorType();
+            if (!"stairs".equals(type) && !"lift".equals(type)) continue;
+            for (List<LatLng> part : feature.getParts()) {
+                for (LatLng point : part) {
+                    double d = UtilFunctions.distanceBetweenPoints(lastLocation, point);
+                    if (d < minDistance) {
+                        minDistance = d;
+                    }
+                    if (minDistance <= radiusMeters) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
