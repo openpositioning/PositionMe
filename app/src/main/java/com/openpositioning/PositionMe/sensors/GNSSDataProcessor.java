@@ -18,6 +18,7 @@ import androidx.core.app.ActivityCompat;
  *
  * @author Virginia Cangelosi
  * @author Mate Stodulka
+ * test
  */
 public class GNSSDataProcessor {
     // Application context for handling permissions and locationManager instances
