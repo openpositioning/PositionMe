@@ -782,30 +782,23 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     private Traj.GNSSPosition buildReplayPositionForWifi(long relativeTime) {
-        LatLng fusedLocation = pdrProcessing != null ? pdrProcessing.getFusedLatLon() : null;
-        if (fusedLocation != null && isValidCoordinate(fusedLocation.latitude, fusedLocation.longitude)) {
+        // Replay WiFi trace must reflect WiFi positioning output only.
+        // Do not fallback to fused/GNSS here, otherwise WiFi appears to follow GNSS/PDR.
+        LatLng wifiLocation = wiFiPositioning != null ? wiFiPositioning.getWifiLocation() : null;
+        if (wifiLocation != null && isValidCoordinate(wifiLocation.latitude, wifiLocation.longitude)) {
             return Traj.GNSSPosition.newBuilder()
-                    .setLatitude(fusedLocation.latitude)
-                    .setLongitude(fusedLocation.longitude)
+                    .setLatitude(wifiLocation.latitude)
+                    .setLongitude(wifiLocation.longitude)
                     .setAltitude(altitude_val)
                     .setRelativeTimestamp(relativeTime)
                     .build();
         }
 
-        if (isValidCoordinate(latitude, longitude)) {
+        if (lastAcceptedWifiLocation != null
+                && isValidCoordinate(lastAcceptedWifiLocation.latitude, lastAcceptedWifiLocation.longitude)) {
             return Traj.GNSSPosition.newBuilder()
-                    .setLatitude(latitude)
-                    .setLongitude(longitude)
-                    .setAltitude(altitude_val)
-                    .setRelativeTimestamp(relativeTime)
-                    .build();
-        }
-
-        if (startLocation != null && startLocation.length >= 2
-                && isValidCoordinate(startLocation[0], startLocation[1])) {
-            return Traj.GNSSPosition.newBuilder()
-                    .setLatitude(startLocation[0])
-                    .setLongitude(startLocation[1])
+                    .setLatitude(lastAcceptedWifiLocation.latitude)
+                    .setLongitude(lastAcceptedWifiLocation.longitude)
                     .setAltitude(altitude_val)
                     .setRelativeTimestamp(relativeTime)
                     .build();

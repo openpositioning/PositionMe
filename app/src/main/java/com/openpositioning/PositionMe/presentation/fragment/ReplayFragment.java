@@ -48,6 +48,7 @@ public class ReplayFragment extends Fragment {
     // GPS start location (received from ReplayActivity)
     private float initialLat = 0f;
     private float initialLon = 0f;
+    private LatLng recordedStartPoint = null;
     private String filePath = "";
     private int lastIndex = -1;
 
@@ -99,14 +100,15 @@ public class ReplayFragment extends Fragment {
             Log.e(TAG, "Trajectory file verification FAILED - file may be corrupt or empty");
         }
 
-        // Check for GNSS data presence using robust check
+        // Check available start-point sources from file.
         boolean gnssExists = TrajParser.hasGnssData(filePath);
+        recordedStartPoint = TrajParser.getRecordedInitialPoint(filePath);
 
-        if (gnssExists) {
-            showGnssChoiceDialog();
+        if (gnssExists || recordedStartPoint != null) {
+            showStartChoiceDialog(gnssExists, recordedStartPoint != null);
         } else {
-            // No GNSS data -> automatically use param lat/lon
-            Log.i(TAG, "No GNSS data in file, using manual start location.");
+            // No file-based source -> fallback to manual start location.
+            Log.i(TAG, "No GNSS/recorded start in file, using manual start location.");
             loadTrajectory(initialLat, initialLon);
         }
     }
@@ -225,40 +227,47 @@ public class ReplayFragment extends Fragment {
 
 
 
-    // Show a simple dialog asking user to pick:
-    // GNSS from file
-    // Lat/Lon from ReplayActivity arguments
-    private void showGnssChoiceDialog() {
-        new AlertDialog.Builder(requireContext())
+    // Show a start source picker. Available options depend on file content.
+    private void showStartChoiceDialog(boolean hasGnss, boolean hasRecordedStart) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext())
                 .setTitle("Choose Starting Location")
-                .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
-                .setPositiveButton("Use File's GNSS", (dialog, which) -> {
-                    // Use robust method to get first GNSS point directly from file
-                    LatLng firstGnss = TrajParser.getFirstGnssPoint(filePath);
-                    
-                    if (firstGnss != null) {
-                        // Re-parse using this GNSS point as start
-                        loadTrajectory((float) firstGnss.latitude, (float) firstGnss.longitude);
-                    } else {
-                        // Fallback
-                        loadTrajectory(initialLat, initialLon);
-                    }
-                    dialog.dismiss();
-                })
+                .setMessage("Select which source should be used as replay trajectory start.")
                 .setNegativeButton("Use Manual Set", (dialog, which) -> {
                     loadTrajectory(initialLat, initialLon);
                     dialog.dismiss();
                 })
-                .setCancelable(false)
-                .show();
+                .setCancelable(false);
+
+        if (hasGnss) {
+            builder.setPositiveButton("Use File's GNSS", (dialog, which) -> {
+                LatLng firstGnss = TrajParser.getFirstGnssPoint(filePath);
+                if (firstGnss != null) {
+                    loadTrajectory((float) firstGnss.latitude, (float) firstGnss.longitude);
+                } else {
+                    loadTrajectory(initialLat, initialLon);
+                }
+                dialog.dismiss();
+            });
+        }
+
+        if (hasRecordedStart && recordedStartPoint != null) {
+            builder.setNeutralButton("Use Recorded Start", (dialog, which) -> {
+                loadTrajectory((float) recordedStartPoint.latitude, (float) recordedStartPoint.longitude);
+                dialog.dismiss();
+            });
+        }
+
+        builder.show();
     }
 
     private void loadTrajectory(float latitude, float longitude) {
         // Set map initial position
         LatLng startPoint = new LatLng(latitude, longitude);
+        LatLng recordedStartPoint = TrajParser.getRecordedInitialPoint(filePath);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         if (trajectoryMapFragment != null) {
             trajectoryMapFragment.setInitialCameraPosition(startPoint);
+            trajectoryMapFragment.setReplayStartMarker(recordedStartPoint != null ? recordedStartPoint : startPoint);
         }
 
         // Parse trajectory with the chosen start location

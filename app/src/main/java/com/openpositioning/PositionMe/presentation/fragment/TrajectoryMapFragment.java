@@ -85,7 +85,9 @@ public class TrajectoryMapFragment extends Fragment {
 
     private LatLng pendingCameraPosition = null;
     private boolean hasPendingCameraMove = false;
+    private LatLng pendingReplayStartPosition = null;
     private long lastDisplayFilterTimestampMs = -1L;
+    private Marker replayStartMarker;
 
     private IndoorMapManager indoorMapManager;
     private SensorFusion sensorFusion;
@@ -285,6 +287,11 @@ public class TrajectoryMapFragment extends Fragment {
                         currentLocation = pendingCameraPosition;
                         hasPendingCameraMove = false;
                         pendingCameraPosition = null;
+                    }
+
+                    if (pendingReplayStartPosition != null) {
+                        setReplayStartMarker(pendingReplayStartPosition);
+                        pendingReplayStartPosition = null;
                     }
 
                     updateMapToggleState();
@@ -709,6 +716,22 @@ public class TrajectoryMapFragment extends Fragment {
         } else {
             pendingCameraPosition = startLocation;
             hasPendingCameraMove = true;
+        }
+    }
+
+    public void setReplayStartMarker(@NonNull LatLng startLocation) {
+        if (gMap == null) {
+            pendingReplayStartPosition = startLocation;
+            return;
+        }
+
+        if (replayStartMarker == null) {
+            replayStartMarker = gMap.addMarker(new MarkerOptions()
+                    .position(startLocation)
+                    .title("Recorded Start")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+        } else {
+            replayStartMarker.setPosition(startLocation);
         }
     }
 

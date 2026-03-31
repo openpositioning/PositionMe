@@ -299,6 +299,26 @@ public class TrajParser {
         return null;
     }
 
+    // Returns the recorded initial position from the trajectory header when available.
+    public static LatLng getRecordedInitialPoint(String filePath) {
+        File file = new File(filePath);
+        if (!file.exists()) return null;
+
+        try (FileInputStream fis = new FileInputStream(file)) {
+            Traj.Trajectory traj = Traj.Trajectory.parseFrom(fis);
+            if (traj.hasInitialPosition()) {
+                double lat = traj.getInitialPosition().getLatitude();
+                double lon = traj.getInitialPosition().getLongitude();
+                if (isValidLatLon(lat, lon)) {
+                    return new LatLng(lat, lon);
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error parsing trajectory file for recorded initial point", e);
+        }
+        return null;
+    }
+
     // Extracts sensor-specific arrays for chart rendering and diagnostics.
     public List<Object[]> parse(SensorTypes type) {
         List<Object[]> dataList = new ArrayList<>();
