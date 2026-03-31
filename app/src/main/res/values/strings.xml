@@ -139,5 +139,11 @@
     <string name="markPoint">Mark Point</string>
     <string name="smooth">Smooth Path</string>
     <string name="floor_default">Floor G</string>
+    <string name="pdrPath">PDR Path</string>
+    <string name="smoothPath">Smooth Path</string>
+    <string name="gnssPath">GNSS Path</string>
+    <string name="particleCloud">Particle Cloud</string>
+    <string name="dropdownSymbol">▶</string>
+    <string name="mapControls">Map Controls</string>
 
 </resources>

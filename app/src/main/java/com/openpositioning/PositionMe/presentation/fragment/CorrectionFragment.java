@@ -26,10 +26,8 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import android.graphics.Color;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -101,13 +99,11 @@ public class CorrectionFragment extends Fragment {
                 if (fusedPoints != null && fusedPoints.size() > 1) {
                     mMap.addPolyline(new PolylineOptions()
                             .addAll(fusedPoints)
-                            .color(Color.parseColor("#8B00FF"))  // same purple as recording screen
+                            .color(Color.RED)  // same Red as recording screen
                             .width(6f));
                 }
-
             }
         });
-
         return rootView;
     }
 
@@ -118,6 +114,7 @@ public class CorrectionFragment extends Fragment {
         this.averageStepLengthText = view.findViewById(R.id.averageStepView);
         this.stepLengthInput = view.findViewById(R.id.inputStepLength);
         this.pathView = view.findViewById(R.id.pathView1);
+//        this.pathView.setTrajectoryColor(Color.GREEN);
 
         averageStepLength = sensorFusion.passAverageStepLength();
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
@@ -127,11 +124,20 @@ public class CorrectionFragment extends Fragment {
         this.stepLengthInput.setOnKeyListener((v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_ENTER) {
                 newStepLength = Float.parseFloat(changedText.toString());
+                float scalingFactor = newStepLength / averageStepLength;
                 // Rescale path
-                sensorFusion.redrawPath(newStepLength / averageStepLength);
+                sensorFusion.redrawPath(scalingFactor);
+
+                // Rescale FUSED trajectory
+                sensorFusion.rescaleFusedTrajectory(scalingFactor);
+
+
                 averageStepLengthText.setText(getString(R.string.averageStepLgn)
                         + ": " + String.format("%.2f", newStepLength));
                 pathView.invalidate();
+
+                // Update the fused trajectory on the map
+                updateFusedTrajectoryOnMap();
 
                 secondPass++;
                 if (secondPass == 2) {
@@ -158,18 +164,29 @@ public class CorrectionFragment extends Fragment {
         this.button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // ************* CHANGED CODE HERE *************
-                // Before:
-                //   NavDirections action = CorrectionFragmentDirections.actionCorrectionFragmentToHomeFragment();
-                //   Navigation.findNavController(view).navigate(action);
-                //   ((AppCompatActivity)getActivity()).getSupportActionBar().show();
-
-                // Now, simply tell the Activity we are done:
                 ((RecordingActivity) requireActivity()).finishFlow();
             }
         });
     }
 
+    private void updateFusedTrajectoryOnMap() {
+        if (mMap != null) {
+            // Clear the map (removes all polylines and markers)
+            mMap.clear();
+
+            // Re-add the start marker
+            mMap.addMarker(new MarkerOptions().position(start).title("Start Position"));
+
+            // Redraw the fused trajectory with updated points
+            List<LatLng> fusedPoints = sensorFusion.getFusedTrajectoryPoints();
+            if (fusedPoints != null && fusedPoints.size() > 1) {
+                mMap.addPolyline(new PolylineOptions()
+                        .addAll(fusedPoints)
+                        .color(Color.RED)
+                        .width(6f));
+            }
+        }
+    }
     public void setScalingRatio(float scalingRatio) {
         this.scalingRatio = scalingRatio;
     }

@@ -22,7 +22,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
@@ -44,7 +43,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -74,7 +72,6 @@ public class ServerCommunications implements Observable {
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     // Application context for handling permissions and devices
     private final Context context;
-
     // Network status checking
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
@@ -99,8 +96,6 @@ public class ServerCommunications implements Observable {
                     + "?key=" + masterKey;
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
-
-
 
     /**
      * Public default constructor of {@link ServerCommunications}. The constructor saves context,

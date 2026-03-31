@@ -3,7 +3,6 @@ package com.openpositioning.PositionMe.presentation.fragment;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
@@ -22,9 +21,6 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -36,11 +32,9 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
-import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -68,10 +62,8 @@ import java.util.List;
  */
 
 public class RecordingFragment extends Fragment {
-
     private List<String> observedMacs = new ArrayList<>();
     private TextView selectedVenueText;
-
     public void updateObservedMacs(@NonNull List<String> macs) {
         observedMacs = new ArrayList<>(macs);
     }
@@ -79,14 +71,8 @@ public class RecordingFragment extends Fragment {
     private List<String> getObservedMacsOrEmpty() {
         return observedMacs == null ? new ArrayList<>() : new ArrayList<>(observedMacs);
     }
-
     /** Throttle WiFi debug toast to once every 5 seconds. */
     private long lastWifiToastMs = 0;
-
-
-
-
-
 
     // UI elements
     private MaterialButton completeButton, cancelButton, markTestPointButton;
@@ -258,7 +244,6 @@ public class RecordingFragment extends Fragment {
             }
         });
 
-
         // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
             AlertDialog dialog = new AlertDialog.Builder(requireActivity())
@@ -275,13 +260,11 @@ public class RecordingFragment extends Fragment {
                         dialogInterface.dismiss();
                     })
                     .create(); // Create the dialog but do not show it yet
-
             // Show the dialog and change the button color
             dialog.setOnShowListener(dialogInterface -> {
                 Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
                 negativeButton.setTextColor(Color.RED); // Set "Yes" button color to red
             });
-
             dialog.show(); // Finally, show the dialog
         });
 
@@ -408,79 +391,20 @@ public class RecordingFragment extends Fragment {
                 Log.d("RecordingFragment", "passing macs size=" + macs.size());
                 mapFrag.updateObservedMacs(macs);
 
-//                trajectoryMapFragment.updateObservedMacs(sensorFusion.getLatestBssids());
                 mapFrag.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
 
-//                Added- must be updated to
-                // --- WiFi position → amber dot ---
-//                Remove
-//                LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
-//                if (wifiLocation != null
-//                        && wifiLocation.latitude != 0.0
-//                        && wifiLocation.longitude != 0.0) {
-//                    mapFrag.updateWifiPosition(wifiLocation);
-//                }
                 // Drive the arrow marker and fused trajectory polyline
                 mapFrag.updateFusedPosition(new LatLng(fused[0], fused[1]));
-                // Amber WiFi observation dot — raw WiFi fix from OpenPositioning API
-//                double[] wifi = sensorFusion.getLastWifiLatLon();
-//                if (wifi != null) {
-//                    mapFrag.updateWifiPosition(new LatLng(wifi[0], wifi[1]));
-//                }
                 double[] wifi = sensorFusion.getLastWifiLatLon();
                 if (wifi != null) {
                     mapFrag.updateWifiPosition(new LatLng(wifi[0], wifi[1]));
                 }
 
-                // Green PDR observation dot — raw PDR position from step counting
-//                double[] pdr = sensorFusion.getLastPdrLatLon();
-//                if (pdr != null) {
-//                    mapFrag.updatePdrPosition(new LatLng(pdr[0], pdr[1]));
-//                }
-
-                // Green PDR observation dot
                 mapFrag.updatePdrPosition(newLocation);
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
-//        float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-//        if (gnss != null && trajectoryMapFragment != null) {
-//            // If user toggles showing GNSS in the map, call e.g.
-//            if (trajectoryMapFragment.isGnssEnabled()) {
-//                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
-//                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
-//                if (currentLoc != null) {
-//                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
-//                    gnssError.setVisibility(View.VISIBLE);
-//                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
-//                }
-//                trajectoryMapFragment.updateGNSS(gnssLocation);
-//            } else {
-//                gnssError.setVisibility(View.GONE);
-//                trajectoryMapFragment.clearGNSS();
-//            }
-//        }
-
-//        changed to-
-//        double[] gnssRaw = sensorFusion.getLastGnssLatLon();
-//        if (gnssRaw != null && trajectoryMapFragment != null) {
-//            if (trajectoryMapFragment.isGnssEnabled()) {
-//                LatLng gnssLocation = new LatLng(gnssRaw[0], gnssRaw[1]);
-//                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
-//                if (currentLoc != null) {
-//                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
-//                    gnssError.setVisibility(View.VISIBLE);
-//                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
-//                }
-//                trajectoryMapFragment.updateGNSS(gnssLocation);
-//            } else {
-//                gnssError.setVisibility(View.GONE);
-//                trajectoryMapFragment.clearGNSS();
-//            }
-//        }
-//        changed to-
         double[] gnssRaw = sensorFusion.getLastGnssLatLon();
         if (gnssRaw != null && trajectoryMapFragment != null) {
             LatLng gnssLocation = new LatLng(gnssRaw[0], gnssRaw[1]);
@@ -513,7 +437,7 @@ public class RecordingFragment extends Fragment {
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
 
-    // Update live data counts - track actual recorded data
+        // Update live data counts - track actual recorded data
         if (sensorFusion != null && sensorFusion.getTrajectory() != null) {
             try {
                 // WiFi fingerprints (actual recorded)

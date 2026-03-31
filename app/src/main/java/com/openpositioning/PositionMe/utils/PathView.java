@@ -27,7 +27,7 @@ import java.util.Collections;
  */
 public class PathView extends View {
     // Set up drawing colour
-    private final int paintColor = Color.BLUE;
+    private final int paintColor = Color.parseColor("#BBF060");
     // Defines paint and canvas
     private Paint drawPaint;
     // Path of straight lines

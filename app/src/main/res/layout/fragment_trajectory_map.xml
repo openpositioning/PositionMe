@@ -44,19 +44,19 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Map Controls"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/md_theme_onSurface" />
+                    android:text="@string/mapControls"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/controlCardCollapseIcon"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="▶"
-                    android:textSize="11sp"
-                    android:textColor="@color/md_theme_onSurface" />
+                    android:text="@string/dropdownSymbol"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:textSize="15sp" />
 
             </LinearLayout>
 
@@ -73,7 +73,7 @@
                     android:layout_width="200dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
                     android:text="@string/gnssSwitch" />
 
@@ -82,20 +82,20 @@
                     android:layout_width="200dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
                     android:text="@string/auto_floor" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/particleCloudSwitch"
                     android:layout_width="200dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
-                    android:paddingStart="-5dp"
                     android:drawableStart="@android:drawable/ic_menu_compass"
-                    android:text="Particle cloud" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/particleCloud" />
 
                 <View
                     android:layout_width="match_parent"
@@ -109,35 +109,35 @@
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/gnssPathSwitch"
                     android:layout_width="200dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
-                    android:paddingStart="-5dp"
                     android:drawableStart="@android:drawable/ic_menu_directions"
-                    android:text="GNSS Path"/>
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/gnssPath" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/smoothingSwitch"
                     android:layout_width="200dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
-                    android:paddingStart="-5dp"
                     android:drawableStart="@android:drawable/ic_menu_directions"
-                    android:text="Smooth Path" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/smoothPath" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/fusedPdrSwitch"
                     android:layout_width="200dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
-                    android:paddingStart="-5dp"
                     android:drawableStart="@android:drawable/ic_menu_directions"
-                    android:text="PDR Path" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/pdrPath" />
 
                 <View
                     android:layout_width="match_parent"
@@ -147,20 +147,12 @@
                     android:background="@color/md_theme_onSurface"
                     android:alpha="0.15" />
 
-<!--                <TextView-->
-<!--                    android:layout_width="wrap_content"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:textSize="11sp"-->
-<!--                    android:textColor="@color/md_theme_onSurface"-->
-<!--                    android:alpha="0.6"-->
-<!--                    android:layout_marginBottom="0dp" />-->
-
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/gnssDotSwitch"
                     android:layout_width="200dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
                     android:text="🔵 GNSS dots" />
 
@@ -169,7 +161,7 @@
                     android:layout_width="200dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
                     android:text="🟠 WiFi dots" />
 
@@ -178,7 +170,7 @@
                     android:layout_width="200dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_height="20dp"
+                    android:layout_height="25dp"
                     android:checked="false"
                     android:text="🟢 PDR dots" />
 
@@ -193,7 +185,7 @@
                     android:layout_width="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_height="48dp"
+                    android:layout_height="45dp"
                     android:backgroundTint="@color/red"
                     android:text="@string/color"
                     android:textColor="@color/md_theme_onPrimary"
@@ -201,7 +193,7 @@
 
                 <Spinner
                     android:id="@+id/mapSwitchSpinner"
-                    android:layout_width="100dp"
+                    android:layout_width="80dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
                     android:layout_height="40dp"

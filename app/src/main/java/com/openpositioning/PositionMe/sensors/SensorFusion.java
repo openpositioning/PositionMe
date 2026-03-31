@@ -14,7 +14,6 @@ import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 import androidx.preference.PreferenceManager;
 
 import android.net.wifi.ScanResult;
@@ -43,7 +42,6 @@ import java.util.stream.Stream;
 
 import com.openpositioning.PositionMe.sensors.model.TestPoint;
 
-import com.openpositioning.PositionMe.sensors.ParticleFilter;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
 
 /**
@@ -76,13 +74,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private Traj.Fingerprint lastWifiFingerprint = null;
     private List<BleDataProcessor.BleDevice> lastBleDeviceList = null;
 
-
     long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
 
-    // Define a threshold for large time gaps (in milliseconds)
-    private static final long LARGE_GAP_THRESHOLD_MS = 500;  // Adjust this if needed
-
-    //region Static variables
+    //Static variables
     // Singleton Class
     private static final SensorFusion sensorFusion = new SensorFusion();
     // Static constant for calculations with milliseconds
@@ -93,9 +87,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final float ALPHA = 0.8f;
     // String for creating WiFi fingerprint JSO N object
     private static final String WIFI_FINGERPRINT= "wf";
-    //endregion
 
-    //region Instance variables
+    //Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
     private Context appContext;
@@ -114,6 +107,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private MovementSensor rotationSensor;
     private MovementSensor gravitySensor;
     private MovementSensor linearAccelerationSensor;
+
     // Other data recording
     private WifiDataProcessor wifiProcessor;
     private volatile List<String> latestBssids = new ArrayList<>();
@@ -221,14 +215,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Previous valid GNSS position in ENU (metres), used to derive heading from consecutive fixes
     private float[] lastGnssEnu = null;
-
     // Last WiFi position in ENU (metres), cached for stationary soft-update
     private float[] lastWifiEnu = null;
-
     private final List<TestPoint> testPoints = new ArrayList<>();
-
     boolean enuBaked = false;
-
     private IndoorMapManager indoorMapManager;
 
     //region Initialisation
@@ -293,7 +283,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             enuBaked = true;
         }
     }
-
 
     /**
      * Static function to access singleton instance of SensorFusion.
@@ -412,9 +401,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     }
 
-    //endregion
-
-    //region Sensor processing
+    // Sensor processing
     /**
      * {@inheritDoc}
      *
@@ -434,12 +421,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         if (lastTimestamp != null) {
             long timeGap = currentTime - lastTimestamp;
-
-//            // Log a warning if the time gap is larger than the threshold
-//            if (timeGap > LARGE_GAP_THRESHOLD_MS) {
-//                Log.e("SensorFusion", "Large time gap detected for sensor " + sensorType +
-//                        " | Time gap: " + timeGap + " ms");
-//            }
         }
 
         // Update timestamp and frequency counter for this sensor
@@ -493,11 +474,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 );
                 this.accelMagnitude.add(accelMagFiltered);
 
-//                // Debug logging
-//                Log.v("SensorFusion",
-//                        "Added new linear accel magnitude: " + accelMagFiltered
-//                                + "; accelMagnitude size = " + accelMagnitude.size());
-
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
@@ -505,9 +481,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 gravity[0] = sensorEvent.values[0];
                 gravity[1] = sensorEvent.values[1];
                 gravity[2] = sensorEvent.values[2];
-
-                // Possibly log gravity values if needed
-                //Log.v("SensorFusion", "Gravity: " + Arrays.toString(gravity));
 
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
@@ -698,10 +671,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
             if (saveRecording) {
                 if (!particleFilter.isInitialized()) {
-                    // First position: set East-North origin, spread particles around (0,0)
-//                    coordinateConverter = new CoordinateConverter(
-//                            location.getLatitude(), location.getLongitude());
-
                     particleFilter.initParticles(0f, 0f, Math.max(accuracy, 5f));
                     ekfPositioning.initParticles(0f, 0f, Math.max(accuracy, 5f));
                     prevPdrX = 0f;
@@ -771,7 +740,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                         Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
                                 + " → " + currentFloor + ", particles reset");
                     }
-
                 }
             }
             if(saveRecording) {
@@ -843,15 +811,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             } else {
                 android.util.Log.d("SensorFusion", "Duplicate WiFi fingerprint skipped");
             }
-
-
         }
-
         createWifiPositionRequestCallback();
         Log.d("SensorFusion", "wifiList length = " +
                 (wifiList == null ? 0 : wifiList.length));
-
-
     }
 
     /**
@@ -960,7 +923,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
         }
     }
-
 
     /**
      * Check if two WiFi fingerprints are similar enough to be considered duplicates
@@ -1099,8 +1061,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         return isDuplicate;
     }
-
-
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -1246,7 +1206,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Error log to keep record of errors (for secure programming and maintainability)
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
-
     }
 
     /**
@@ -1272,7 +1231,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             float[] enu = useEKF ? ekfPositioning.getBestEstimate()
                     : particleFilter.getBestEstimate();
             double[] latLon = coordinateConverter.toLatLon(enu[0], enu[1]);
-            if (fusedTrajectoryPoints.size() < 2000) {
+
+            // Only add points during active recording
+            if (saveRecording && fusedTrajectoryPoints.size() < 2000) {
                 fusedTrajectoryPoints.add(new LatLng(latLon[0], latLon[1]));
             }
             return latLon;
@@ -1314,7 +1275,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         return particleFilter == null ? -1.0 : particleFilter.getSigmaMetres();
     }
 
-
     /**
      * Returns a copy of all particle positions in local East-North metres.
      *
@@ -1331,13 +1291,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     public boolean isUsingEKF() {
         return useEKF;
     }
-
-
-
-
-
-
-
 
     /**
      * Method to get current floor the user is at, obtained using WiFiPositioning
@@ -1598,9 +1551,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    //endregion
-
-    //region Start/Stop
+    // Start/Stop
 
     /**
      * Registers all device listeners and enables updates with the specified sampling rate.
@@ -1734,7 +1685,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
                 .setTrajectoryId(trajectoryName)
-                .setInitialPosition(Traj.GNSSPosition.newBuilder()    // ← 添加这4行！
+                .setInitialPosition(Traj.GNSSPosition.newBuilder()
                         .setLatitude(initialLatitude)
                         .setLongitude(initialLongitude)
                         .setAltitude(initialAltitude)
@@ -1787,6 +1738,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGyroTimestampMs = 0;
         lastGnssEnu = null;
         lastWifiEnu = null;
+        fusedTrajectoryPoints.clear();  // Clear old fused trajectory points
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
@@ -1815,9 +1767,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    //endregion
-
-    //region Trajectory object
+    // Trajectory object
 
     /**
      * Send the trajectory object to servers.
@@ -1920,7 +1870,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             else {
                 counter++;
             }
-
         }
     }
 
@@ -1946,8 +1895,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (coordinateConverter == null) return null;
         return coordinateConverter.toLatLon(east, north);
     }
-
-    //endregion
 
     /**
      * Returns true if the linear acceleration samples indicate the device is stationary.
@@ -1978,4 +1925,61 @@ public class SensorFusion implements SensorEventListener, Observer {
         return angle;
     }
 
+    /**
+     * Rescales the fused trajectory points based on a new step length scaling factor.
+     * Called from CorrectionFragment when the user adjusts the average step length.
+     *
+     * @param scalingFactor ratio of new step length to original step length
+     */
+    public void rescaleFusedTrajectory(float scalingFactor) {
+        if (fusedTrajectoryPoints.isEmpty()) {
+            Log.w("SensorFusion", "rescaleFusedTrajectory: no points to rescale");
+            return;
+        }
+
+        if (coordinateConverter == null) {
+            Log.w("SensorFusion", "rescaleFusedTrajectory: coordinateConverter is null");
+            return;
+        }
+
+        // Get the first point as reference (this is the origin)
+        LatLng startPoint = fusedTrajectoryPoints.get(0);
+
+        // Convert start point to ENU
+        float[] startEnu = coordinateConverter.toEnu(startPoint.latitude, startPoint.longitude);
+
+        // Rescale each subsequent point relative to the start
+        for (int i = 1; i < fusedTrajectoryPoints.size(); i++) {
+            LatLng currentPoint = fusedTrajectoryPoints.get(i);
+
+            // Convert current point to ENU
+            float[] currentEnu = coordinateConverter.toEnu(
+                    currentPoint.latitude, currentPoint.longitude);
+
+            // Calculate offset from start
+            float eastOffset = currentEnu[0] - startEnu[0];
+            float northOffset = currentEnu[1] - startEnu[1];
+
+            // Apply scaling factor
+            float newEast = startEnu[0] + (eastOffset * scalingFactor);
+            float newNorth = startEnu[1] + (northOffset * scalingFactor);
+
+            // Convert back to lat/lon
+            double[] newLatLon = coordinateConverter.toLatLon(newEast, newNorth);
+
+            // Update the point in the list
+            fusedTrajectoryPoints.set(i, new LatLng(newLatLon[0], newLatLon[1]));
+        }
+
+        Log.i("SensorFusion", "Fused trajectory rescaled with factor: " + scalingFactor);
+    }
+
+    /**
+     * Clears accumulated fused trajectory points.
+     * Called when starting a new recording session.
+     */
+    public void clearFusedTrajectoryPoints() {
+        fusedTrajectoryPoints.clear();
+        Log.i("SensorFusion", "Fused trajectory points cleared");
+    }
 }
