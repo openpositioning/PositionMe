@@ -28,6 +28,8 @@ import org.json.JSONObject;
 
 import java.util.Map;
 import java.util.HashMap;
+import android.os.Handler;
+import android.os.Looper;
 import static java.lang.Math.*;
 /**
  * Class used to manage indoor floor map overlays
@@ -62,6 +64,17 @@ public class IndoorMapManager {
 
     // Stores the currently displayed floor key (e.g., "B1", "G", "1")
     private String currentFloorKey;
+
+    // Confirmed floor — set after a successful auto or manual floor change.
+    // Used by acceptFloorChange() to measure height delta from a known baseline.
+    private String confirmedFloorKey = null;
+    private float  confirmedFloorElevation = Float.NaN;
+
+    // Delay before a manual browse (floor up/down button) is committed as confirmed.
+    // Prevents accidental floor commits when the user taps the button quickly.
+    private static final long FLOOR_COMMIT_DELAY_MS = 1500;
+    private final Handler  floorCommitHandler = new Handler(Looper.getMainLooper());
+    private final Runnable commitBrowsedFloorRunnable = this::commitCurrentDisplayedFloor;
 
     // Map polygon (outline) → venue mapping
     private final Map<Polygon, IndoorVenue> polygonToVenue = new HashMap<>();
@@ -642,11 +655,17 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
     }
 
     private String getAdjacentFloorKey(String floorKey, boolean goingUp) {
+        if (currentVenue == null || currentVenue.rawMapShapes == null) return null;
         try {
-            int floor = Integer.parseInt(floorKey);
-            int next = goingUp ? floor + 1 : floor - 1;
-            return String.valueOf(next);
-        } catch (NumberFormatException e) {
+            JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
+            List<String> floorKeys = getSortedFloorKeys(floorsObj);
+            int idx = floorKeys.indexOf(floorKey);
+            if (idx < 0) return null;
+            int next = idx + (goingUp ? +1 : -1);
+            if (next < 0 || next >= floorKeys.size()) return null;
+            return floorKeys.get(next);
+        } catch (JSONException e) {
+            Log.e("IndoorMapManager", "getAdjacentFloorKey failed", e);
             return null;
         }
     }
@@ -797,14 +816,16 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
 
     /**
-     * Switch floor based on direction (+1 or -1)
+     * Switch floor based on direction (+1 or -1).
+     * After drawing, schedules a delayed commit so rapid taps don't
+     * prematurely update the confirmed elevation baseline.
      */
     private void switchFloor(int direction) {
         if (currentVenue == null || currentVenue.rawMapShapes == null) return;
 
         try {
             JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
-            List<String> floorKeys = getSortedFloorKeys(floorsObj); // already has all keys
+            List<String> floorKeys = getSortedFloorKeys(floorsObj);
 
             int idx = floorKeys.indexOf(currentFloorKey);
             if (idx < 0) return;
@@ -815,14 +836,78 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
                 clearIndoorFloor();
                 drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
                 isIndoorMapSet = true;
-                Log.d("IndoorMapManager", "Switched to floor: " + currentFloorKey);
                 bakeEnuCoordinates(SensorFusion.getInstance().getCoordinateConverter());
+                Log.d("IndoorMapManager", "Switched to floor: " + currentFloorKey);
+
+                // Delay before treating this as the confirmed floor baseline
+                floorCommitHandler.removeCallbacks(commitBrowsedFloorRunnable);
+                floorCommitHandler.postDelayed(commitBrowsedFloorRunnable, FLOOR_COMMIT_DELAY_MS);
             }
 
         } catch (JSONException e) {
             Log.e("IndoorMapManager", "Floor switch failed", e);
         }
     }
+
+    /**
+     * Records the currently displayed floor as confirmed and snapshots the
+     * current barometric elevation as the baseline for future floor-change detection.
+     */
+    private void commitCurrentDisplayedFloor() {
+        if (currentFloorKey == null) return;
+        confirmedFloorKey       = currentFloorKey;
+        confirmedFloorElevation = SensorFusion.getInstance().getElevation();
+        Log.d("IndoorMapManager", "Confirmed floor: " + confirmedFloorKey
+                + " at elevation " + confirmedFloorElevation);
+    }
+
+    /**
+     * Redraws the map for {@code newFloorKey} and commits it as the confirmed floor.
+     * Called by acceptFloorChange() after an automatic floor transition is validated.
+     */
+    private void commitAutoFloorChange(String newFloorKey, float elevation) {
+        currentFloorKey         = newFloorKey;
+        confirmedFloorKey       = newFloorKey;
+        confirmedFloorElevation = elevation;
+        floorCommitHandler.removeCallbacks(commitBrowsedFloorRunnable);
+
+        try {
+            JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
+            clearIndoorFloor();
+            drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
+            isIndoorMapSet = true;
+            bakeEnuCoordinates(SensorFusion.getInstance().getCoordinateConverter());
+        } catch (JSONException e) {
+            Log.e("IndoorMapManager", "Auto floor redraw failed", e);
+        }
+        Log.d("IndoorMapManager", "AUTO confirmed floor: " + confirmedFloorKey
+                + " at elevation " + confirmedFloorElevation);
+    }
+
+    /**
+     * Shows a floor on the map without changing confirmedFloorKey.
+     * Useful for previewing a floor before the change is validated.
+     */
+    private void showFloor(String floorKey) {
+        if (currentVenue == null || currentVenue.rawMapShapes == null || floorKey == null) return;
+        try {
+            JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
+            currentFloorKey = floorKey;
+            clearIndoorFloor();
+            drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
+            isIndoorMapSet = true;
+            bakeEnuCoordinates(SensorFusion.getInstance().getCoordinateConverter());
+            Log.d("IndoorMapManager", "Showing floor: " + currentFloorKey);
+        } catch (JSONException e) {
+            Log.e("IndoorMapManager", "Failed to show floor: " + floorKey, e);
+        }
+    }
+
+    /** Returns the last confirmed floor key, or null if not yet set. */
+    public String getConfirmedFloorKey() { return confirmedFloorKey; }
+
+    /** Returns the barometric elevation recorded when the floor was last confirmed. */
+    public float getConfirmedFloorElevation() { return confirmedFloorElevation; }
     
     /**
      * Draw a single floor from GeoJSON FeatureCollection.
