@@ -22,6 +22,23 @@ import java.util.List;
  */
 public class SensorEventHandler {
 
+    // FOR PARTICLE FILTER
+    public interface StepListener {
+        void onStep(float deltaEasting, float deltaNorthing);
+    }
+
+    private StepListener stepListener; // Listener for step events to update the particle filter
+    private float lastEasting = 0f; // Track last easting for calculating deltas
+    private float lastNorthing = 0f;// Track last northing for calculating deltas
+
+    public void setStepListener(StepListener listener) {
+        this.stepListener = listener; // Set the step listener for particle filter updates
+    }
+
+    // END OF PARTICLE FILTER
+
+
+
     private static final float ALPHA = 0.8f;
     private static final long LARGE_GAP_THRESHOLD_MS = 500;
 
@@ -180,6 +197,18 @@ public class SensorEventHandler {
                                 SystemClock.uptimeMillis() - bootTime,
                                 newCords[0], newCords[1]);
                     }
+
+                    // Update the particle filter with the new step data
+                    if (stepListener != null) {
+                        float deltaEasting = newCords[0] - lastEasting;
+                        float deltaNorthing = newCords[1] - lastNorthing;
+                        stepListener.onStep(deltaEasting, deltaNorthing);
+                    }
+
+                    lastEasting = newCords[0];
+                    lastNorthing = newCords[1];
+
+
                     break;
                 }
         }

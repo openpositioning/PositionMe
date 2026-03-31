@@ -166,8 +166,9 @@ public class SensorFusion implements SensorEventListener {
         this.eventHandler = new SensorEventHandler(
                 state, pdrProcessing, pathView, recorder, bootTime);
 
-        // Register WiFi observer on WifiPositionManager (not on SensorFusion)
+        // Create wifiProcessor first, then register all observers on it
         this.wifiProcessor = new WifiDataProcessor(context);
+        wifiProcessor.registerObserver(wifiPositionManager);
         wifiProcessor.registerObserver(objects -> {
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 if (!particleFilter.isInitialized()) {
@@ -210,6 +211,12 @@ public class SensorFusion implements SensorEventListener {
                             "WiFi RTT is not supported on this device",
                             Toast.LENGTH_LONG).show());
         }
+
+        eventHandler.setStepListener((deltaEasting, deltaNorthing) -> {
+            if (particleFilter.isInitialized()) {
+                particleFilter.predict(deltaEasting, deltaNorthing);
+            }
+        });
     }
 
     //endregion
