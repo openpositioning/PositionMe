@@ -187,6 +187,9 @@ public class IndoorMapManager {
 
             Log.d("IndoorMapManager", "Selected floor: " + currentFloorKey);
 
+            // Initialise the confirmed floor baseline so acceptFloorChange() can fire
+            commitCurrentDisplayedFloor();
+
         } catch (JSONException e) {
             Log.e("IndoorMapManager", "Failed parsing floor GeoJSON", e);
         }

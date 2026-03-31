@@ -593,33 +593,48 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Apply wall constraints after prediction
                         if (coordinateConverter != null && indoorMapManager != null
                                 && settings.getBoolean("use_wall_constraints", true)) {
-                            float[] currEast = particleFilter.getParticlesXRef();
-                            float[] currNorth = particleFilter.getParticlesYRef();
-                            float[] liveWeights = particleFilter.getWeightsRef();
 
-                            float[] prevEast = new float[prevParticles.length];
-                            float[] prevNorth = new float[prevParticles.length];
+                            if (useEKF) {
+                                // EKF mode: clamp single position to wall boundary
+                                float[] prevEnu  = {prevPdrX, prevPdrY};
+                                float[] ekfState = ekfPositioning.getBestEstimate();
+                                float[] clamped  = indoorMapManager.constrainMovementToWalls(
+                                        prevEnu, ekfState);
+                                // Use value comparison — constrainMovementToWalls always returns
+                                // a new array, so reference equality would always be true.
+                                boolean wallHit = Math.abs(clamped[0] - ekfState[0]) > 1e-4f
+                                               || Math.abs(clamped[1] - ekfState[1]) > 1e-4f;
+                                if (wallHit) {
+                                    ekfPositioning.resetAroundPosition(
+                                            clamped[0], clamped[1],
+                                            (float) ekfPositioning.getSigmaMetres());
+                                    Log.d("SensorFusion", "EKF wall clamp applied");
+                                }
+                            } else {
+                                // Particle filter mode: batch weight penalty per particle
+                                float[] currEast = particleFilter.getParticlesXRef();
+                                float[] currNorth = particleFilter.getParticlesYRef();
+                                float[] liveWeights = particleFilter.getWeightsRef();
 
-                            for (int i = 0; i < prevParticles.length; i++) {
-                                prevEast[i] = prevParticles[i][0];
-                                prevNorth[i] = prevParticles[i][1];
+                                float[] prevEast = new float[prevParticles.length];
+                                float[] prevNorth = new float[prevParticles.length];
+
+                                for (int i = 0; i < prevParticles.length; i++) {
+                                    prevEast[i] = prevParticles[i][0];
+                                    prevNorth[i] = prevParticles[i][1];
+                                }
+
+                                indoorMapManager.applyWallConstraints(
+                                        prevEast, prevNorth,
+                                        currEast, currNorth,
+                                        liveWeights, coordinateConverter);
+                                particleFilter.normalizeWeights();
+
+                                Log.d("SensorFusion", "PF wall constraints applied");
+                                float[] bestAfter = particleFilter.getBestEstimate();
+                                Log.d("PFDebug", "Best BEFORE: " + bestBefore[0] + ", " + bestBefore[1]);
+                                Log.d("PFDebug", "Best AFTER:  " + bestAfter[0] + ", " + bestAfter[1]);
                             }
-
-                            indoorMapManager.applyWallConstraints(
-                                    prevEast,
-                                    prevNorth,
-                                    currEast,
-                                    currNorth,
-                                    liveWeights,
-                                    coordinateConverter
-                            );
-                            particleFilter.normalizeWeights();
-
-                            Log.d("SensorFusion", "Applied wall constraints to particle cloud");
-                            float[] bestAfter = particleFilter.getBestEstimate();
-
-                            Log.d("PFDebug", "Best BEFORE constraints: " + bestBefore[0] + ", " + bestBefore[1]);
-                            Log.d("PFDebug", "Best AFTER constraints: " + bestAfter[0] + ", " + bestAfter[1]);
                         }
 
                         prevPdrX = newCords[0];
