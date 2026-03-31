@@ -86,6 +86,7 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
+    private Circle activeAccessHighlight = null;
 
     /** Raw (unfiltered) PDR trajectory — drawn in red. */
     private Polyline polyline; // Polyline representing user's movement path
@@ -637,6 +638,21 @@ private SwitchMaterial showPdrPathSwitch;
                 .visible(false));
     }
 
+    private void highlightAccessPoint(LatLng center) {
+        if (center == null || gMap == null) return;
+
+        if (activeAccessHighlight != null) {
+            activeAccessHighlight.remove();
+            activeAccessHighlight = null;
+        }
+
+        activeAccessHighlight = gMap.addCircle(new CircleOptions()
+                .center(center)
+                .radius(2.0)          // meters
+                .strokeWidth(4f)
+                .strokeColor(Color.GREEN)
+                .fillColor(0x2200FF00));
+    }
     private void maybeRequestNearbyVenues(@NonNull LatLng loc) {
         Log.d("MapDebug", "maybeRequestNearbyVenues called, timeSinceLast=" + (System.currentTimeMillis() - lastVenueQueryMs) + " loc=" + loc);
         if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) return;
@@ -789,12 +805,11 @@ private SwitchMaterial showPdrPathSwitch;
                 correctedLocation = floorResult.snappedLocation;
                 newfloor = floorResult.floorKey;
             }
+            if (floorResult.changedFloor && floorResult.highlightcenter != null) {
+                highlightAccessPoint(floorResult.highlightcenter);
+            }
         }
             if (!Objects.equals(oldfloor, newfloor)) {
-//            if(!(oldfloor.equals (newfloor))) {
-//                Log.d("MapMatch", "new floor: " + newfloor);
-
-
                 if (floorLabel != null) {
                     floorLabel.post(() -> floorLabel.setText("Floor: " + newfloor));
                 }
@@ -807,7 +822,6 @@ private SwitchMaterial showPdrPathSwitch;
         Log.d("IndoorTest", "newLocation = " + newLocation);
         Log.d("IndoorTest", "heightChange = " + heightChange);
 
-//
         // Extend polyline if movement occurred
         if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());

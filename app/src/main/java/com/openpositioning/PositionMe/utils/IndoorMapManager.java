@@ -5,6 +5,8 @@ import android.util.Log;
 
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.GroundOverlay;
 import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLng;
@@ -621,6 +623,25 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
         return toEnu.clone();
     }
 
+    private Circle activeAccessHighlight = null;
+
+    public void highlightAccessPoint(LatLng center) {
+        if (center == null || gMap == null) return;
+
+        // remove previous highlight
+        if (activeAccessHighlight != null) {
+            activeAccessHighlight.remove();
+        }
+
+        activeAccessHighlight = gMap.addCircle(new CircleOptions()
+                .center(center)
+                .radius(2.0) // meters (tweak)
+                .strokeWidth(3f)
+                .strokeColor(Color.GREEN)
+                .fillColor(0x2200FF00) // translucent green
+        );
+    }
+
     private LatLng getWalkableSnapNearAccessPoint(LatLng accessCenter,
                                                   LatLng referenceLocation,
                                                   IndoorVenue.FloorFeatures floorFeatures) {
@@ -892,18 +913,18 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
                 currentFloorKey == null ||
                 correctedLocation == null ||
                 oldLocation == null) {
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         if (confirmedFloorKey == null || Float.isNaN(confirmedFloorElevation)) {
             Log.d("MapMatch", "No confirmed floor reference yet");
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         long now = System.currentTimeMillis();
         if (now - lastFloorChangeTimeMs < MIN_FLOOR_CHANGE_INTERVAL_MS) {
             Log.d("MapMatch", "Floor change blocked by debounce");
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
         startFloorTransitionIfNeeded(correctedLocation, currentHeight);
 
@@ -911,13 +932,13 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
         if (Math.abs(heightChangeMeters) < HEIGHT_THRESHOLD_METERS) {
             Log.d("MapMatch", "Height change too small: " + heightChangeMeters);
             resetFloorTransitionState();
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         IndoorVenue.FloorFeatures currentFloorFeatures = currentVenue.floorFeatures.get(confirmedFloorKey);
         if (currentFloorFeatures == null) {
             Log.d("MapMatch", "No floor features for confirmed floor: " + confirmedFloorKey);
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         int direction = heightChangeMeters > 0 ? 1 : -1;
@@ -930,13 +951,13 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
         if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
             Log.d("MapMatch", "Next floor invalid");
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         IndoorVenue.FloorFeatures nextFloorFeatures = currentVenue.floorFeatures.get(nextFloorKey);
         if (nextFloorFeatures == null) {
             Log.d("MapMatch", "No floor features for destination floor: " + nextFloorKey);
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         boolean nearStairs = isNearAnyPoint(
@@ -969,11 +990,14 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
         if (!usedLift && !usedStairs) {
             Log.d("MapMatch", "Rejected floor change: not near stairs/lift in a plausible way");
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
+        LatLng highlightCenter = null;
+
+
 
         if (nextFloorKey.equals(confirmedFloorKey)) {
-            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         LatLng snappedDestination = correctedLocation;
@@ -983,16 +1007,19 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
             LatLng nearestLiftOnNextFloor = getNearestPoint(correctedLocation, nextFloorFeatures.liftCenters);
             if (nearestLiftOnNextFloor != null) {
                 snappedDestination = nearestLiftOnNextFloor;
+                highlightCenter = nearestLiftOnNextFloor;
             }
         } else if (usedStairs) {
             LatLng nearestStairsOnNextFloor = getNearestPoint(correctedLocation, nextFloorFeatures.stairsCenters);
+                highlightCenter = nearestStairsOnNextFloor;
+
             if (nearestStairsOnNextFloor != null) {
-//                snappedDestination = nearestStairsOnNextFloor;
-                snappedDestination = getWalkableSnapNearAccessPoint(
-                        nearestStairsOnNextFloor,
-                        oldLocation,
-                        nextFloorFeatures
-                );
+                snappedDestination = nearestStairsOnNextFloor;
+//                snappedDestination = getWalkableSnapNearAccessPoint(
+//                        nearestStairsOnNextFloor,
+//                        oldLocation,
+//                        nextFloorFeatures
+//                );
             }
         }
 
@@ -1010,7 +1037,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
 
 
-        return new FloorChangeResult(nextFloorKey, snappedDestination, true);
+        return new FloorChangeResult(nextFloorKey, snappedDestination, true, highlightCenter);
     }
 
 
@@ -1066,10 +1093,13 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
         public final LatLng snappedLocation;
         public final boolean changedFloor;
 
-        public FloorChangeResult(String floorKey, LatLng snappedLocation, boolean changedFloor) {
+        public LatLng highlightcenter;
+
+        public FloorChangeResult(String floorKey, LatLng snappedLocation, boolean changedFloor, LatLng highlightcenter) {
             this.floorKey = floorKey;
             this.snappedLocation = snappedLocation;
             this.changedFloor = changedFloor;
+            this.highlightcenter = highlightcenter;
         }
     }
 
@@ -1360,7 +1390,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
                 fillColor = Color.argb(0, 250, 0, 0);
                 strokeWidth = 3.5f;
             } else if (t.contains("lift")) {
-                strokeColor = Color.RED;
+                strokeColor = Color.BLUE;
                 fillColor = Color.argb(0, 0, 0, 0);
                 strokeWidth = 8f;
             } else if (t.contains("stairs")) {
