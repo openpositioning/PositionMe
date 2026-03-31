@@ -35,7 +35,6 @@ import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
 import android.widget.Toast;
-import android.util.Log;
 /**
  * Fragment responsible for managing the recording process of trajectory data.
  * <p>
@@ -78,10 +77,27 @@ public class RecordingFragment extends Fragment {
     private SensorFusion sensorFusion;
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
-    //Chen
+    //CHEN 2 SWITCH FLOOR
+
+    private long lastFloorChangeTimeMs = 0L;
+    //CHEN 2
+
+    private long allowFloorChangeUntilMs = 0L;
+    private static final long FLOOR_CHANGE_ALLOW_WINDOW_MS = 3000L;
+    //END
+    private static final double VERTICAL_FEATURE_NEAR_THRESHOLD_METERS = 4.0;
+    private static final long FLOOR_CHANGE_COOLDOWN_MS = 4000L;
 
     //end
+    //DISTINGUISH LIFT/STAIRS
+    private String lastVerticalMode = "unknown";
+    private static final float LIFT_HORIZONTAL_MOVE_THRESHOLD = 1.2f;
 
+    private long lastWallToastTimeMs = 0L;
+    private static final long WALL_TOAST_COOLDOWN_MS = 2000L;
+    private long lastVerticalHintToastTimeMs = 0L;
+    private static final long VERTICAL_HINT_TOAST_COOLDOWN_MS = 2000L;
+    //END
     // Distance tracking
     private float distance = 0f;
     private float previousPosX = 0f;
@@ -110,6 +126,19 @@ public class RecordingFragment extends Fragment {
         Context context = requireActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
+
+        this.sensorFusion.setWallEventListener(() -> {
+            long now = System.currentTimeMillis();
+
+            if (now - lastWallToastTimeMs > WALL_TOAST_COOLDOWN_MS && isAdded()) {
+                requireActivity().runOnUiThread(() ->
+                        Toast.makeText(requireContext(),
+                                "Wall detected. Cannot pass through.",
+                                Toast.LENGTH_SHORT).show()
+                );
+                lastWallToastTimeMs = now;
+            }
+        });
     }
 
     @Nullable
@@ -230,7 +259,7 @@ public class RecordingFragment extends Fragment {
             }.start();
         } else {
             // No set time limit, just keep refreshing
-            refreshDataHandler.post(refreshDataTask);
+            //refreshDataHandler.post(refreshDataTask);
         }
     }
 
@@ -250,34 +279,129 @@ public class RecordingFragment extends Fragment {
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
-            //Chen :Sync real-time location and orientation to the map, and trigger a floorplan request only once during recording to avoid duplicates.
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+        // Main displayed position: ONLY use fused result
+        LatLng fusedLatLng = sensorFusion.getFusedEstimatedLatLng();
 
-                trajectoryMapFragment.requestFloorplansIfNeeded(newLocation);
+        if (trajectoryMapFragment != null) {
+            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
+            LatLng candidateLocation = fusedLatLng;
 
+            if (candidateLocation != null) {
+                LatLng finalLocation = candidateLocation;
+
+                // Step 1: wall-based map matching
+                if (oldLocation != null && trajectoryMapFragment.crossesWall(oldLocation, candidateLocation)) {
+                    finalLocation = trajectoryMapFragment.getLastValidPointBeforeWall(oldLocation, candidateLocation);
+                    Log.d("MapMatching", "Blocked by wall, using last valid point");
+
+                }
+
+                // Step 2: floor-change gating and vertical-mode classification
+                boolean allowFloorChange = false;
+
+                if (finalLocation != null) {
+                    long now = System.currentTimeMillis();
+
+                    boolean nearStairs =
+                            trajectoryMapFragment.isNearStairs(finalLocation, VERTICAL_FEATURE_NEAR_THRESHOLD_METERS);
+
+                    boolean nearLift =
+                            trajectoryMapFragment.isNearLift(finalLocation, VERTICAL_FEATURE_NEAR_THRESHOLD_METERS);
+
+                    boolean nearVerticalFeature = nearStairs || nearLift;
+
+                    if (now - lastVerticalHintToastTimeMs > VERTICAL_HINT_TOAST_COOLDOWN_MS) {
+                        if (nearStairs) {
+                            Toast.makeText(requireContext(), "Near stairs area", Toast.LENGTH_SHORT).show();
+                            lastVerticalHintToastTimeMs = now;
+                        } else if (nearLift) {
+                            Toast.makeText(requireContext(), "Near lift area", Toast.LENGTH_SHORT).show();
+                            lastVerticalHintToastTimeMs = now;
+                        }
+                    }
+
+                    boolean cooldownPassed =
+                            (now - lastFloorChangeTimeMs) >= FLOOR_CHANGE_COOLDOWN_MS;
+
+                    float horizontalStep =
+                            (float) Math.sqrt(
+                                    Math.pow(pdrValues[0] - previousPosX, 2) +
+                                            Math.pow(pdrValues[1] - previousPosY, 2)
+                            );
+
+                    String verticalMode = "unknown";
+
+                    if (cooldownPassed) {
+                        if (nearLift && horizontalStep <= LIFT_HORIZONTAL_MOVE_THRESHOLD) {
+                            verticalMode = "lift";
+                            allowFloorChange = true;
+                            allowFloorChangeUntilMs = now + FLOOR_CHANGE_ALLOW_WINDOW_MS;
+                            lastFloorChangeTimeMs = now;
+                        } else if (nearStairs && horizontalStep > LIFT_HORIZONTAL_MOVE_THRESHOLD) {
+                            verticalMode = "stairs";
+                            allowFloorChange = true;
+                            allowFloorChangeUntilMs = now + FLOOR_CHANGE_ALLOW_WINDOW_MS;
+                            lastFloorChangeTimeMs = now;
+                        } else if (nearVerticalFeature) {
+                            verticalMode = nearLift ? "lift?" : "stairs?";
+                            allowFloorChange = true;
+                            allowFloorChangeUntilMs = now + FLOOR_CHANGE_ALLOW_WINDOW_MS;
+                            lastFloorChangeTimeMs = now;
+                        }
+                    }
+
+                    lastVerticalMode = verticalMode;
+
+                    Log.d("MapMatching",
+                            "elevation=" + elevationVal
+                                    + ", horizontalStep=" + horizontalStep
+                                    + ", nearStairs=" + nearStairs
+                                    + ", nearLift=" + nearLift
+                                    + ", verticalMode=" + verticalMode
+                                    + ", allowFloorChange=" + allowFloorChange);
+                } else {
+                    lastVerticalMode = "unknown";
+                }
+
+                if (System.currentTimeMillis() < allowFloorChangeUntilMs) {
+                    allowFloorChange = true;
+                }
+
+                trajectoryMapFragment.setMapMatchingAllowsFloorChange(allowFloorChange);
+                trajectoryMapFragment.updateUserLocation(
+                        finalLocation,
+                        (float) Math.toDegrees(sensorFusion.passOrientation())
+                );
+                trajectoryMapFragment.requestFloorplansIfNeeded(finalLocation);
+            } else {
+                // No fused result yet -> keep the red main marker still
+                trajectoryMapFragment.setMapMatchingAllowsFloorChange(false);
+                lastVerticalMode = "unknown";
             }
-            //END
 
+            // Keep elevation state updated even when fused is not ready
+
+            // ===== 3.3 last N observations =====
+            LatLng gnssObs = sensorFusion.getCurrentGnssLatLng();
+            LatLng wifiObs = sensorFusion.getCurrentWifiLatLng();
+            LatLng pdrObs  = sensorFusion.getCurrentPdrLatLng();
+
+            if (gnssObs != null) {
+                trajectoryMapFragment.addGnssObservation(gnssObs);
+            }
+
+            if (wifiObs != null) {
+                trajectoryMapFragment.addWifiObservation(wifiObs);
+            }
+
+            if (pdrObs != null) {
+                trajectoryMapFragment.addPdrObservation(pdrObs);
+            }
         }
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -293,7 +417,7 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // Update previous
+        // Update previous PDR values
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
@@ -354,4 +478,5 @@ public class RecordingFragment extends Fragment {
                 "Test Point " + testPointCount + " saved",
                 Toast.LENGTH_SHORT).show();
     }
+
 }

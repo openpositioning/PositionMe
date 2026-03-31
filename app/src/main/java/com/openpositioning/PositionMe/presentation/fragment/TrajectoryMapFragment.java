@@ -12,6 +12,8 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
@@ -25,6 +27,7 @@ import org.json.JSONArray;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
 
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
@@ -45,6 +48,10 @@ import com.google.android.gms.maps.model.*;
 import android.widget.Toast;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 
 
 /**
@@ -112,31 +119,84 @@ public class TrajectoryMapFragment extends Fragment {
     private final android.os.Handler autoFloorHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable autoFloorRunnable;
 
+    //CHEN 2 CONTROL FLOORCHANGE
+    private boolean mapMatchingAllowsFloorChange = false;
+
     private Float autoFloorBaseElevation = null;
     private long lastAutoFloorSwitchMs = 0L;
     private Integer autoFloorBaseIdx = null;
     private static final long AUTO_FLOOR_INTERVAL_MS = 800;
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 1500;
-    private static final float DEFAULT_FLOOR_HEIGHT_M = 3.2f;
+
+    // ===== 3.3 Data display: last N observations =====
+    private static final int MAX_OBSERVATIONS = 10;
+
+    private final List<Marker> gnssObservationMarkers = new ArrayList<>();
+    private final List<Marker> wifiObservationMarkers = new ArrayList<>();
+    private final List<Marker> pdrObservationMarkers  = new ArrayList<>();
+
+    private LatLng lastGnssObservation = null;
+    private LatLng lastWifiObservation = null;
+    private LatLng lastPdrObservation  = null;
+
+    private static final float OBSERVATION_MIN_DISTANCE_METERS = 0.5f;
+
+    private SwitchMaterial observationSwitch;
+    private View observationLegendLayout;
+
+    private boolean observationsVisible = true;
+
+    private BitmapDescriptor gnssObservationIcon;
+    private BitmapDescriptor wifiObservationIcon;
+    private BitmapDescriptor pdrObservationIcon;
+
+    private static final int GNSS_OBS_COLOR = Color.parseColor("#2D9CDB");
+    private static final int WIFI_OBS_COLOR = Color.parseColor("#27AE60");
+    private static final int PDR_OBS_COLOR  = Color.parseColor("#9B51E0");
 
     private com.google.android.material.chip.Chip floorLabelChip;
-    private int currentFloorIndex = 0;
 
-
-    private float indoorPrevPosX = 0f;
-    private float indoorPrevPosY = 0f;
     private boolean indoorRunning = false;
+    // ===== 3.3 smooth display =====
+    // currentLocation
+    // displayedLocation TRUE LOCATE
+    private LatLng displayedLocation = null;
+    private float displayedOrientationDeg = 0f;
+
+    private static final float DISPLAY_ALPHA_SLOW = 0.18f;
+    private static final float DISPLAY_ALPHA_MEDIUM = 0.30f;
+    private static final float DISPLAY_ALPHA_FAST = 0.50f;
+
+    private static final float DISPLAY_MEDIUM_JUMP_METERS = 2.0f;
+    private static final float DISPLAY_LARGE_JUMP_METERS = 6.0f;
+    private static final float DISPLAY_SNAP_JUMP_METERS = 15.0f;
+
+    private static final float DISPLAY_ORIENTATION_ALPHA = 0.25f;
+
+    // ===== 3.3 fused trajectory update control =====
+    private static final long FUSED_TRAJECTORY_UPDATE_INTERVAL_MS = 1000L;
+    private static final float FUSED_TRAJECTORY_MOVE_THRESHOLD_METERS = 0.7f;
+
+    private LatLng lastTrajectoryPoint = null;
+    private long lastTrajectoryAppendMs = 0L;
+
+    //CHEN 2 COLOR FILL
+    private final List<Polygon> indoorShapePolygons = new ArrayList<>();
+
+    private View indoorLegendLayout;
+    private View legendWallColor;
+    private View legendStairsColor;
+    private View legendLiftColor;
 
     // ===== Floorplan request timing control =====
     private boolean hasReceivedFloorplan = false;
-    private long lastFloorplanRequestTime = 0L;
-
-    private static final long FLOORPLAN_FAST_INTERVAL_MS = 5_000;
-    private static final long FLOORPLAN_SLOW_INTERVAL_MS = 30_000;
 
     //end
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+
+
     //Chen :Check the venue nearby
     // ===== Remote floorplan drawing state =====
     private static class NearbyVenue {
@@ -159,6 +219,13 @@ public class TrajectoryMapFragment extends Fragment {
     private int currentFloorIdx = 0;
 
     //end
+    //CHEN 2
+    //HUNG
+    // THE FIX: Upgraded to Thread-Safe Maps so the UI and Math engines don't collide
+    private final Map<String, List<List<LatLng>>> wallSegmentsByFloor = new ConcurrentHashMap<>();
+    private final Map<String, List<List<LatLng>>> stairsSegmentsByFloor = new ConcurrentHashMap<>();
+    private final Map<String, List<List<LatLng>>> liftSegmentsByFloor = new ConcurrentHashMap<>();
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -173,7 +240,7 @@ public class TrajectoryMapFragment extends Fragment {
         // Inflate the separate layout containing map + map-related UI
         return inflater.inflate(R.layout.fragment_trajectory_map, container, false);
     }
- //Bind UI controls and set their initial visibility (floor buttons/exit buttons, etc.)
+    //Bind UI controls and set their initial visibility (floor buttons/exit buttons, etc.)
     @Override
     public void onCreate(@androidx.annotation.Nullable android.os.Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -197,10 +264,42 @@ public class TrajectoryMapFragment extends Fragment {
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
+        //OBS
+        observationSwitch = view.findViewById(R.id.observationSwitch);
+        observationLegendLayout = view.findViewById(R.id.observationLegendLayout);
+        gnssObservationIcon = createObservationDot(GNSS_OBS_COLOR);
+        wifiObservationIcon = createObservationDot(WIFI_OBS_COLOR);
+        pdrObservationIcon  = createObservationDot(PDR_OBS_COLOR);
+
+        if (observationSwitch != null) {
+            observationSwitch.setChecked(true);
+            observationSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                setObservationVisibility(isChecked);
+            });
+        }
+
+        setObservationVisibility(true);
+
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
 
+        //CHEN 2
+        indoorLegendLayout = view.findViewById(R.id.indoorLegendLayout);
+        legendWallColor = view.findViewById(R.id.legendWallColor);
+        legendStairsColor = view.findViewById(R.id.legendStairsColor);
+        legendLiftColor = view.findViewById(R.id.legendLiftColor);
+
+        if (legendWallColor != null) {
+            legendWallColor.setBackgroundColor(getIndoorFillColor("wall"));
+        }
+        if (legendStairsColor != null) {
+            legendStairsColor.setBackgroundColor(getIndoorFillColor("stairs"));
+        }
+        if (legendLiftColor != null) {
+            legendLiftColor.setBackgroundColor(getIndoorFillColor("lift"));
+        }
+        //end
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
         Log.e("INDOOR", "HIDE floor controls called, selectedVenue=start" );
@@ -212,6 +311,7 @@ public class TrajectoryMapFragment extends Fragment {
         recenterButton = view.findViewById(R.id.recenterButton);
         recenterButton.setVisibility(View.VISIBLE);
         recenterButton.setOnClickListener(v -> {
+            forceRelocateToLatestPosition();
             recenterToCurrentLocation(true);
         });
 
@@ -323,18 +423,13 @@ public class TrajectoryMapFragment extends Fragment {
 
                     if (autoFloorBaseElevation == null) autoFloorBaseElevation = elev;
 
-                    float floorHeight = DEFAULT_FLOOR_HEIGHT_M;
-
-                    if (autoFloorBaseElevation == null) autoFloorBaseElevation = elev;
-                    if (autoFloorBaseIdx == null) autoFloorBaseIdx = currentFloorIdx;
-
-                    int deltaIdx = elevationToFloorIndex(elev, autoFloorBaseElevation, floorHeight);
-                    int targetIdx = autoFloorBaseIdx + deltaIdx;
-
+                    int targetIdx = elevationToFloorIndexByBands(elev);
                     targetIdx = Math.max(0, Math.min(targetIdx, availableFloors.size() - 1));
 
                     long now = android.os.SystemClock.uptimeMillis();
-                    if (targetIdx != currentFloorIdx && (now - lastAutoFloorSwitchMs) > AUTO_FLOOR_DEBOUNCE_MS) {
+                    if (targetIdx != currentFloorIdx
+                            && mapMatchingAllowsFloorChange
+                            && (now - lastAutoFloorSwitchMs) > AUTO_FLOOR_DEBOUNCE_MS) {
                         lastAutoFloorSwitchMs = now;
                         currentFloorIdx = targetIdx;
                         drawIndoorShapesForFloor(selectedVenue, availableFloors.get(currentFloorIdx));
@@ -418,7 +513,7 @@ public class TrajectoryMapFragment extends Fragment {
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
         // Initialize indoor manager
-        indoorMapManager = new IndoorMapManager(map);
+//        indoorMapManager = new IndoorMapManager(map);
 
         // Initialize an empty polyline
         polyline = map.addPolyline(new PolylineOptions()
@@ -501,8 +596,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
         Log.e("Floorplan", "updateUserLocation CALLED newLocation=" + newLocation);
 
-        // Keep track of current location
-        LatLng oldLocation = this.currentLocation;
+        LatLng oldRawLocation = this.currentLocation;
         this.currentLocation = newLocation;
 
         if (serverCommunications == null) {
@@ -510,51 +604,77 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        int wifiCount = (sensorFusion != null && sensorFusion.getWifiList() != null) ? sensorFusion.getWifiList().size() : 0;        Log.d("Floorplan", "sending floorplan request lat=" + currentLocation.latitude
+        int wifiCount = (sensorFusion != null && sensorFusion.getWifiList() != null)
+                ? sensorFusion.getWifiList().size() : 0;
+        Log.d("Floorplan", "sending floorplan request lat=" + currentLocation.latitude
                 + " lon=" + currentLocation.longitude
                 + " wifiCount=" + wifiCount);
 
         Log.e("Floorplan", "🚨 HIT FLOORPLAN CALL SITE");
 
+        LatLng markerLocation = smoothDisplayLocation(displayedLocation, newLocation);
 
-        // If no marker, create it
+        float targetOrientation = normalizeAngle(orientation);
+        float markerOrientation = (displayedLocation == null)
+                ? targetOrientation
+                : smoothDisplayOrientation(displayedOrientationDeg, targetOrientation, DISPLAY_ORIENTATION_ALPHA);
+
+        displayedLocation = markerLocation;
+        displayedOrientationDeg = markerOrientation;
+
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
+                    .position(markerLocation)
                     .flat(true)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
+
+            if (orientationMarker != null) {
+                orientationMarker.setRotation(markerOrientation);
+            }
+
             if (pendingInitialRecenter) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(markerLocation, 19f));
                 pendingInitialRecenter = false;
             }
         } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
+            orientationMarker.setPosition(markerLocation);
+            orientationMarker.setRotation(markerOrientation);
+
             if (followMyLocation) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(markerLocation));
             }
+
             if (pendingInitialRecenter) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(markerLocation, 19f));
                 pendingInitialRecenter = false;
             }
         }
 
-        // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
+        if (polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
-            polyline.setPoints(points);
+            long nowMs = System.currentTimeMillis();
+
+            if (points.isEmpty()) {
+                points.add(newLocation);
+                polyline.setPoints(points);
+                lastTrajectoryPoint = newLocation;
+                lastTrajectoryAppendMs = nowMs;
+            } else if (oldRawLocation != null && shouldAppendFusedTrajectory(newLocation, nowMs)) {
+                LatLng tail = points.get(points.size() - 1);
+                if (!tail.equals(newLocation)) {
+                    points.add(newLocation);
+                    polyline.setPoints(points);
+                }
+            }
         }
 
-        // Update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
+
             boolean apiIndoorActive = (selectedVenue != null && !availableFloors.isEmpty());
             boolean overlayIndoorActive = indoorMapManager.getIsIndoorMapSet();
 
@@ -562,11 +682,10 @@ public class TrajectoryMapFragment extends Fragment {
             if (exitIndoorButton != null) {
                 exitIndoorButton.setVisibility((apiIndoorActive || overlayIndoorActive) ? View.VISIBLE : View.GONE);
             }
-
         }
     }
 
-//Chen
+    //Chen
     private long lastFloorplanRequestMs = 0L;
     private boolean floorplanInFlight = false;
     public void requestFloorplansIfNeeded(@NonNull LatLng location) {
@@ -712,11 +831,106 @@ public class TrajectoryMapFragment extends Fragment {
         return isGnssOn;
     }
 
+
     private void setFloorControlsVisibility(int visibility) {
-        floorUpButton.setVisibility(visibility);
-        floorDownButton.setVisibility(visibility);
-        autoFloorSwitch.setVisibility(visibility);
-        if (floorLabelChip != null) floorLabelChip.setVisibility(visibility);
+        if (floorUpButton != null) {
+            floorUpButton.setVisibility(visibility);
+        }
+        if (floorDownButton != null) {
+            floorDownButton.setVisibility(visibility);
+        }
+        if (autoFloorSwitch != null) {
+            autoFloorSwitch.setVisibility(visibility);
+        }
+        if (floorLabelChip != null) {
+            floorLabelChip.setVisibility(visibility);
+        }
+        if (indoorLegendLayout != null) {
+            indoorLegendLayout.setVisibility(visibility);
+        }
+    }
+    private boolean isFarEnoughForObservation(@Nullable LatLng oldPoint, @NonNull LatLng newPoint) {
+        if (oldPoint == null) return true;
+
+        float[] results = new float[1];
+        android.location.Location.distanceBetween(
+                oldPoint.latitude, oldPoint.longitude,
+                newPoint.latitude, newPoint.longitude,
+                results
+        );
+        return results[0] >= OBSERVATION_MIN_DISTANCE_METERS;
+    }
+
+    private void trimObservationMarkers(@NonNull List<Marker> markers) {
+        while (markers.size() > MAX_OBSERVATIONS) {
+            Marker oldest = markers.remove(0);
+            if (oldest != null) {
+                oldest.remove();
+            }
+        }
+    }
+
+    private void addObservationMarker(@NonNull LatLng position,
+                                      @NonNull BitmapDescriptor icon,
+                                      @NonNull List<Marker> markerList,
+                                      @Nullable String title) {
+        if (gMap == null) return;
+
+        Marker marker = gMap.addMarker(new MarkerOptions()
+                .position(position)
+                .title(title)
+                .icon(icon)
+                .anchor(0.5f, 0.5f)
+                .visible(observationsVisible)
+        );
+
+        if (marker != null) {
+            marker.setAlpha(0.95f);
+            markerList.add(marker);
+            trimObservationMarkers(markerList);
+        }
+    }
+
+    public void addGnssObservation(@NonNull LatLng position) {
+        if (!isFarEnoughForObservation(lastGnssObservation, position)) return;
+        addObservationMarker(
+                position,
+                gnssObservationIcon,
+                gnssObservationMarkers,
+                "GNSS observation"
+        );
+        lastGnssObservation = position;
+    }
+
+    public void addWifiObservation(@NonNull LatLng position) {
+        if (!isFarEnoughForObservation(lastWifiObservation, position)) return;
+        addObservationMarker(
+                position,
+                wifiObservationIcon,
+                wifiObservationMarkers,
+                "WiFi observation"
+        );
+        lastWifiObservation = position;
+    }
+
+    public void addPdrObservation(@NonNull LatLng position) {
+        if (!isFarEnoughForObservation(lastPdrObservation, position)) return;
+        addObservationMarker(
+                position,
+                pdrObservationIcon,
+                pdrObservationMarkers,
+                "PDR observation"
+        );
+        lastPdrObservation = position;
+    }
+
+    private void clearObservationMarkers(@NonNull List<Marker> markers) {
+        for (Marker marker : markers) {
+            if (marker != null) {
+                marker.remove();
+            }
+        }
+        markers.clear();
     }
 
     public void clearMapAndReset() {
@@ -736,15 +950,30 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker.remove();
             gnssMarker = null;
         }
+
+        clearObservationMarkers(gnssObservationMarkers);
+        clearObservationMarkers(wifiObservationMarkers);
+        clearObservationMarkers(pdrObservationMarkers);
+
+        lastGnssObservation = null;
+        lastWifiObservation = null;
+        lastPdrObservation = null;
+
         lastGnssLocation = null;
         currentLocation  = null;
 
-        // Re-create empty polylines with your chosen colors
+        displayedLocation = null;
+        displayedOrientationDeg = 0f;
+        lastTrajectoryPoint = null;
+        lastTrajectoryAppendMs = 0L;
+
+        // Re-create empty polylines
         if (gMap != null) {
             polyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(5f)
                     .add());
+
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
                     .width(5f)
@@ -803,8 +1032,8 @@ public class TrajectoryMapFragment extends Fragment {
 
         PolygonOptions buildingPolygonOptions = new PolygonOptions()
                 .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
-                .strokeColor(Color.RED)    // Red border
-                .strokeWidth(10f)           // Border width
+                .strokeColor(0xFF000000)    // Red border
+                .strokeWidth(2f)           // Border width
                 //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
                 .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
 
@@ -813,7 +1042,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .add(nkml1, nkml2, nkml3, nkml4, nkml1)
                 .strokeColor(Color.BLUE)    // Blue border
                 .strokeWidth(10f)           // Border width
-               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
+                // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
                 .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
 
         PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
@@ -879,33 +1108,51 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        float[] latLngArray = sensorFusion.getGNSSLatitude(false);
-        if (latLngArray == null) {
-            Log.e("IndoorDebug", "latLngArray == null (GNSS not ready)");
+        LatLng fusedLocation = sensorFusion.getFusedEstimatedLatLng();
+        LatLng gnssLocation  = sensorFusion.getCurrentGnssLatLng();
+        LatLng wifiLocation  = sensorFusion.getCurrentWifiLatLng();
+        LatLng pdrLocation   = sensorFusion.getCurrentPdrLatLng();
+
+        // fused
+        LatLng displayLocation = (fusedLocation != null) ? fusedLocation : gnssLocation;
+
+        if (displayLocation == null) {
+            Log.e("IndoorDebug", "No fused/GNSS location available yet");
             return;
         }
-
-        double lat = latLngArray[0];
-        double lon = latLngArray[1];
-
-        if (Math.abs(lat) < 1e-6 && Math.abs(lon) < 1e-6) {
-            Log.e("IndoorDebug", "GNSS is (0,0), waiting emulator location...");
-            return;
-        }
-
-        LatLng newLocation = new LatLng(lat, lon);
 
         float orientation = 0f;
         try {
             orientation = (float) Math.toDegrees(sensorFusion.passOrientation());
         } catch (Exception ignored) {}
 
-        Log.e("IndoorDebug", "GNSS newLocation=" + newLocation.latitude + "," + newLocation.longitude);
+        Log.e("IndoorDebug",
+                "displayLocation=" + displayLocation.latitude + "," + displayLocation.longitude +
+                        " fused=" + (fusedLocation != null) +
+                        " gnss=" + (gnssLocation != null) +
+                        " wifi=" + (wifiLocation != null) +
+                        " pdr=" + (pdrLocation != null));
 
-        updateUserLocation(newLocation, orientation);
-        requestFloorplansIfNeeded(newLocation);
+        updateUserLocation(displayLocation, orientation);
+
+        if (gnssLocation != null) {
+            updateGNSS(gnssLocation);
+        }
+
+        if (gnssLocation != null) {
+            addGnssObservation(gnssLocation);
+        }
+
+        if (wifiLocation != null) {
+            addWifiObservation(wifiLocation);
+        }
+
+        if (pdrLocation != null) {
+            addPdrObservation(pdrLocation);
+        }
+
+        requestFloorplansIfNeeded(displayLocation);
     }
-
 
     @Override
     public void onResume() {
@@ -967,6 +1214,14 @@ public class TrajectoryMapFragment extends Fragment {
             sensorFusion = SensorFusion.getInstance();
             Log.e("IndoorDebug", "TrajectoryMapFragment fallback SensorFusion.getInstance()=" + sensorFusion);
         }
+    //CHEN 2
+        if (sensorFusion != null) {
+            sensorFusion.setMapConstraint((oldX, oldY, newX, newY) -> {
+                LatLng start = sensorFusion.convertLocalMetersToLatLng(oldX, oldY);
+                LatLng end = sensorFusion.convertLocalMetersToLatLng(newX, newY);
+                return crossesWall(start, end);
+            });
+        }
 
     }
 
@@ -983,7 +1238,6 @@ public class TrajectoryMapFragment extends Fragment {
                 return false;
             }
 
-            // 你原来的 campaign 默认保存逻辑保持不变
             try {
                 String existing = com.openpositioning.PositionMe.utils.CampaignStore.get(requireContext());
                 if (existing == null || existing.isEmpty()) {
@@ -1046,9 +1300,10 @@ public class TrajectoryMapFragment extends Fragment {
 
                 PolygonOptions po = new PolygonOptions()
                         .clickable(true)
-                        .strokeWidth(10f)
-                        .strokeColor(0xFFFF0000)   // red
-                        .fillColor(0x3300AEEF);    // blue
+                        .strokeWidth(2f)
+                        .strokeColor(0xFF000000)
+                        .fillColor(0xCCDDD6C8)
+                        .zIndex(0f);
 
                 for (int pt = 0; pt < ring.length(); pt++) {
                     org.json.JSONArray xy = ring.getJSONArray(pt);
@@ -1118,11 +1373,20 @@ public class TrajectoryMapFragment extends Fragment {
             try { l.remove(); } catch (Exception ignored) {}
         }
         indoorShapeLines.clear();
+
+        for (Polygon p : indoorShapePolygons) {
+            try { p.remove(); } catch (Exception ignored) {}
+        }
+        indoorShapePolygons.clear();
     }
 
     //Chen :For a given floorKey, parse that floor’s GeoJSON shapes and render them as polylines on the map.
     private void drawIndoorShapesForFloor(@NonNull NearbyVenue v, @NonNull String floorKey) {
         clearIndoorShapes();
+        //CHEN
+        wallSegmentsByFloor.remove(floorKey);
+        stairsSegmentsByFloor.remove(floorKey);
+        liftSegmentsByFloor.remove(floorKey);
 
         try {
             JSONObject mapShapes = new JSONObject(v.mapShapesJson);
@@ -1144,24 +1408,30 @@ public class TrajectoryMapFragment extends Fragment {
                 JSONObject geom = feature.optJSONObject("geometry");
                 if (geom == null) continue;
 
+
+
+                //CHEN 2
+                JSONObject props = feature.optJSONObject("properties");
+                String indoorType = props != null ? props.optString("indoor_type", "") : "";
+
                 String type = geom.optString("type", "");
-                Log.e("INDOOR", "feature[" + i + "] type=" + type);
+                Log.e("INDOOR", "feature[" + i + "] type=" + type + ", indoorType=" + indoorType);
 
                 switch (type) {
                     case "MultiLineString":
-                        added += drawMultiLineString(geom.getJSONArray("coordinates"));
+                        added += drawMultiLineString(geom.getJSONArray("coordinates"), floorKey, indoorType);
                         break;
 
                     case "LineString":
-                        added += drawLineString(geom.getJSONArray("coordinates"));
+                        added += drawLineString(geom.getJSONArray("coordinates"), floorKey, indoorType);
                         break;
 
                     case "Polygon":
-                        added += drawPolygonAsLines(geom.getJSONArray("coordinates"));
+                        added += drawPolygonAsLines(geom.getJSONArray("coordinates"), floorKey, indoorType);
                         break;
 
                     case "MultiPolygon":
-                        added += drawMultiPolygonAsLines(geom.getJSONArray("coordinates"));
+                        added += drawMultiPolygonAsLines(geom.getJSONArray("coordinates"), floorKey, indoorType);
                         break;
 
                     default:
@@ -1171,56 +1441,114 @@ public class TrajectoryMapFragment extends Fragment {
 
             Log.e("INDOOR", "indoor drawn floor=" + floorKey + " linesAdded=" + added);
 
+            //CHEN 2
+            int wallCount = wallSegmentsByFloor.containsKey(floorKey) ? wallSegmentsByFloor.get(floorKey).size() : 0;
+            int stairsCount = stairsSegmentsByFloor.containsKey(floorKey) ? stairsSegmentsByFloor.get(floorKey).size() : 0;
+            int liftCount = liftSegmentsByFloor.containsKey(floorKey) ? liftSegmentsByFloor.get(floorKey).size() : 0;
+
+            Log.e("MapMatching", "floor=" + floorKey
+                    + " wall=" + wallCount
+                    + " stairs=" + stairsCount
+                    + " lift=" + liftCount);
+
         } catch (Exception e) {
             Log.e("INDOOR", "drawIndoorShapesForFloor error: " + e.getMessage());
         }
+        logIndoorFeatureCounts(floorKey);
+
     }
 
-    //Chen :Render a single LineString coordinate array as a polyline and store it in indoorShapeLines.
-    private int drawLineString(@NonNull JSONArray coords) throws Exception {
+    //CHEN 2
+    private int drawLineString(@NonNull JSONArray coords,
+                               @NonNull String floorKey,
+                               @NonNull String indoorType) throws Exception {
         PolylineOptions plo = new PolylineOptions()
-                .width(8f)
-                .color(0xFFFF0000);
+                .width(4f)
+                .color(getIndoorStrokeColor(indoorType))
+                .zIndex(getIndoorZIndex(indoorType) + 1f);
+
+        List<LatLng> points = new ArrayList<>();
 
         for (int pt = 0; pt < coords.length(); pt++) {
             JSONArray xy = coords.getJSONArray(pt);
             double lon = xy.getDouble(0);
             double lat = xy.getDouble(1);
-            plo.add(new LatLng(lat, lon));
+            LatLng point = new LatLng(lat, lon);
+            plo.add(point);
+            points.add(point);
         }
 
         indoorShapeLines.add(gMap.addPolyline(plo));
+        storeIndoorFeaturePoints(floorKey, indoorType, points);
         return 1;
     }
 
-    //Chen :Render a MultiLineString by drawing each line and returning the total count.
-    private int drawMultiLineString(@NonNull JSONArray lines) throws Exception {
+
+    //CHEN 2
+    private int drawMultiLineString(@NonNull JSONArray lines,
+                                    @NonNull String floorKey,
+                                    @NonNull String indoorType) throws Exception {
         int count = 0;
         for (int li = 0; li < lines.length(); li++) {
             JSONArray line = lines.getJSONArray(li);
-            count += drawLineString(line);
+            count += drawLineString(line, floorKey, indoorType);
         }
         return count;
     }
 
-    //Chen :Render Polygon rings as lines (each ring as a polyline) for indoor shape visualization.
-    // Polygon coordinates: [ ring1, ring2(hole)... ], ring: [ [lon,lat], ... ]
-    private int drawPolygonAsLines(@NonNull JSONArray polygonCoords) throws Exception {
-        int count = 0;
-        for (int r = 0; r < polygonCoords.length(); r++) {
-            JSONArray ring = polygonCoords.getJSONArray(r);
-            count += drawLineString(ring);
+    //CHEN 2
+    private int drawPolygonAsLines(@NonNull JSONArray polygonCoords,
+                                   @NonNull String floorKey,
+                                   @NonNull String indoorType) throws Exception {
+        if (gMap == null || polygonCoords.length() == 0) return 0;
+
+        JSONArray outerRing = polygonCoords.getJSONArray(0);
+        List<LatLng> outerPoints = new ArrayList<>();
+
+        for (int i = 0; i < outerRing.length(); i++) {
+            JSONArray xy = outerRing.getJSONArray(i);
+            double lon = xy.getDouble(0);
+            double lat = xy.getDouble(1);
+            outerPoints.add(new LatLng(lat, lon));
         }
-        return count;
+
+        PolygonOptions polygonOptions = new PolygonOptions()
+                .addAll(outerPoints)
+                .strokeWidth(2f)
+                .strokeColor(getIndoorStrokeColor(indoorType))
+                .fillColor(getIndoorFillColor(indoorType))
+                .zIndex(getIndoorZIndex(indoorType));
+
+        // holes / inner rings
+        for (int r = 1; r < polygonCoords.length(); r++) {
+            JSONArray holeRing = polygonCoords.getJSONArray(r);
+            List<LatLng> holePoints = new ArrayList<>();
+
+            for (int i = 0; i < holeRing.length(); i++) {
+                JSONArray xy = holeRing.getJSONArray(i);
+                double lon = xy.getDouble(0);
+                double lat = xy.getDouble(1);
+                holePoints.add(new LatLng(lat, lon));
+            }
+
+            polygonOptions.addHole(holePoints);
+        }
+
+        indoorShapePolygons.add(gMap.addPolygon(polygonOptions));
+
+        storeIndoorFeaturePoints(floorKey, indoorType, outerPoints);
+
+        return 1;
     }
 
-    //Render a MultiPolygon by drawing each polygon’s rings as lines and summing the counts.
-    // MultiPolygon coordinates: [ polygon1, polygon2... ], polygon: [ ring1, ring2... ]
-    private int drawMultiPolygonAsLines(@NonNull JSONArray multiPoly) throws Exception {
+    //CHEN 2
+    private int drawMultiPolygonAsLines(@NonNull JSONArray multiPoly,
+                                        @NonNull String floorKey,
+                                        @NonNull String indoorType) throws Exception {
         int count = 0;
         for (int p = 0; p < multiPoly.length(); p++) {
             JSONArray polygon = multiPoly.getJSONArray(p);
-            count += drawPolygonAsLines(polygon);
+            count += drawPolygonAsLines(polygon, floorKey, indoorType);
         }
         return count;
     }
@@ -1294,4 +1622,425 @@ public class TrajectoryMapFragment extends Fragment {
         float delta = elevation - baseElevation;
         return (int) Math.floor(delta / floorHeightM + 0.5f);
     }
+
+    private int elevationToFloorIndexByBands(float elevation) {
+
+        if (elevation < -3.5f) {
+            return 0;   // B1
+        } else if (elevation < 3.0f) {
+            return 1;   // GF
+        } else if (elevation < 10f) {
+            return 2;   // 1F
+        } else if (elevation < 14.5f) {
+            return 3;   // 2F
+        } else {
+            return 4;   // 3F
+        }
+    }
+
+    //CHEN 2
+    private void addFeatureToFloorMap(
+            Map<String, List<List<LatLng>>> targetMap,
+            String floorKey,
+            List<LatLng> points
+    ) {
+        if (floorKey == null || points == null || points.isEmpty()) return;
+
+        targetMap.computeIfAbsent(floorKey, k -> new CopyOnWriteArrayList<>()).add(new CopyOnWriteArrayList<>(points));
+    }
+
+    private void storeIndoorFeaturePoints(String floorKey, String indoorType, List<LatLng> points) {
+        if (indoorType == null || points == null || points.isEmpty()) return;
+
+        switch (indoorType.toLowerCase()) {
+            case "wall":
+            case "walls":
+                addFeatureToFloorMap(wallSegmentsByFloor, floorKey, points);
+                break;
+            case "stairs":
+                addFeatureToFloorMap(stairsSegmentsByFloor, floorKey, points);
+                break;
+            case "lift":
+                addFeatureToFloorMap(liftSegmentsByFloor, floorKey, points);
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void logIndoorFeatureCounts(String floorKey) {
+        int wallCount = wallSegmentsByFloor.containsKey(floorKey)
+                ? wallSegmentsByFloor.get(floorKey).size() : 0;
+        int stairsCount = stairsSegmentsByFloor.containsKey(floorKey)
+                ? stairsSegmentsByFloor.get(floorKey).size() : 0;
+        int liftCount = liftSegmentsByFloor.containsKey(floorKey)
+                ? liftSegmentsByFloor.get(floorKey).size() : 0;
+
+        android.util.Log.d("MapMatching", "Floor " + floorKey
+                + " wall=" + wallCount
+                + " stairs=" + stairsCount
+                + " lift=" + liftCount);
+    }
+    public String getCurrentFloorKey() {
+        if (availableFloors == null || availableFloors.isEmpty()) return null;
+        if (currentFloorIdx < 0 || currentFloorIdx >= availableFloors.size()) return null;
+        return availableFloors.get(currentFloorIdx);
+    }
+
+    public List<List<LatLng>> getWallSegmentsForCurrentFloor() {
+        String floorKey = getCurrentFloorKey();
+        if (floorKey == null) return new ArrayList<>();
+        return wallSegmentsByFloor.getOrDefault(floorKey, new ArrayList<>());
+    }
+
+    //CHEN 2 WALL
+    private android.graphics.PointF latLngToLocalMeters(LatLng ref, LatLng p) {
+        double dLat = (p.latitude - ref.latitude) * 111320.0;
+        double dLon = (p.longitude - ref.longitude) * 111320.0 * Math.cos(Math.toRadians(ref.latitude));
+        return new android.graphics.PointF((float) dLon, (float) dLat);
+    }
+
+    private float cross(android.graphics.PointF a, android.graphics.PointF b, android.graphics.PointF c) {
+        return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    }
+
+    private boolean onSegment(android.graphics.PointF a, android.graphics.PointF b, android.graphics.PointF p) {
+        return p.x <= Math.max(a.x, b.x) + 1e-6 &&
+                p.x >= Math.min(a.x, b.x) - 1e-6 &&
+                p.y <= Math.max(a.y, b.y) + 1e-6 &&
+                p.y >= Math.min(a.y, b.y) - 1e-6;
+    }
+
+    private boolean segmentsIntersect(android.graphics.PointF a,
+                                      android.graphics.PointF b,
+                                      android.graphics.PointF c,
+                                      android.graphics.PointF d) {
+        float d1 = cross(a, b, c);
+        float d2 = cross(a, b, d);
+        float d3 = cross(c, d, a);
+        float d4 = cross(c, d, b);
+
+        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+                ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+            return true;
+        }
+
+        if (Math.abs(d1) < 1e-6 && onSegment(a, b, c)) return true;
+        if (Math.abs(d2) < 1e-6 && onSegment(a, b, d)) return true;
+        if (Math.abs(d3) < 1e-6 && onSegment(c, d, a)) return true;
+        if (Math.abs(d4) < 1e-6 && onSegment(c, d, b)) return true;
+
+        return false;
+    }
+
+    public boolean crossesWall(LatLng start, LatLng end) {
+        if (start == null || end == null) return false;
+
+        List<List<LatLng>> walls = getWallSegmentsForCurrentFloor();
+        if (walls == null || walls.isEmpty()) return false;
+
+        android.graphics.PointF a = latLngToLocalMeters(start, start);
+        android.graphics.PointF b = latLngToLocalMeters(start, end);
+
+        for (List<LatLng> wall : walls) {
+            if (wall == null || wall.size() < 2) continue;
+
+            for (int i = 0; i < wall.size() - 1; i++) {
+                LatLng w1 = wall.get(i);
+                LatLng w2 = wall.get(i + 1);
+
+                android.graphics.PointF c = latLngToLocalMeters(start, w1);
+                android.graphics.PointF d = latLngToLocalMeters(start, w2);
+
+                if (segmentsIntersect(a, b, c, d)) {
+                    android.util.Log.d("MapMatching", "Wall crossing detected");
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    //matching
+    private LatLng interpolateLatLng(LatLng start, LatLng end, double t) {
+        double lat = start.latitude + (end.latitude - start.latitude) * t;
+        double lon = start.longitude + (end.longitude - start.longitude) * t;
+        return new LatLng(lat, lon);
+    }
+
+    public LatLng getLastValidPointBeforeWall(LatLng start, LatLng end) {
+        if (start == null || end == null) return end;
+
+        if (!crossesWall(start, end)) {
+            return end;
+        }
+
+        LatLng best = start;
+        int steps = 20;
+
+        for (int i = 1; i <= steps; i++) {
+            double t = i / (double) steps;
+            LatLng testPoint = interpolateLatLng(start, end, t);
+
+            if (crossesWall(start, testPoint)) {
+                break;
+            } else {
+                best = testPoint;
+            }
+        }
+
+        android.util.Log.d("MapMatching", "Using last valid point before wall");
+        return best;
+    }
+    //floor
+
+    public List<List<LatLng>> getStairsSegmentsForCurrentFloor() {
+        String floorKey = getCurrentFloorKey();
+        if (floorKey == null) return new ArrayList<>();
+        return stairsSegmentsByFloor.getOrDefault(floorKey, new ArrayList<>());
+    }
+
+    public List<List<LatLng>> getLiftSegmentsForCurrentFloor() {
+        String floorKey = getCurrentFloorKey();
+        if (floorKey == null) return new ArrayList<>();
+        return liftSegmentsByFloor.getOrDefault(floorKey, new ArrayList<>());
+    }
+
+    private double distanceMeters(LatLng a, LatLng b) {
+        float[] results = new float[1];
+        android.location.Location.distanceBetween(
+                a.latitude, a.longitude,
+                b.latitude, b.longitude,
+                results
+        );
+        return results[0];
+    }
+
+    private boolean isNearFeature(LatLng position, List<List<LatLng>> featureSegments, double thresholdMeters) {
+        if (position == null || featureSegments == null || featureSegments.isEmpty()) return false;
+
+        for (List<LatLng> segment : featureSegments) {
+            if (segment == null) continue;
+
+            for (LatLng point : segment) {
+                if (point == null) continue;
+
+                if (distanceMeters(position, point) <= thresholdMeters) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public boolean isNearStairs(LatLng position, double thresholdMeters) {
+        return isNearFeature(position, getStairsSegmentsForCurrentFloor(), thresholdMeters);
+    }
+
+    public boolean isNearLift(LatLng position, double thresholdMeters) {
+        return isNearFeature(position, getLiftSegmentsForCurrentFloor(), thresholdMeters);
+    }
+
+    //CHEN  CONTROL FLOOR CHANGE
+    public void setMapMatchingAllowsFloorChange(boolean allow) {
+        this.mapMatchingAllowsFloorChange = allow;
+    }
+
+    //COLOR FILL
+    private int getIndoorFillColor(String indoorType) {
+        if (indoorType == null) return 0xFF8A7F70;
+
+        switch (indoorType.toLowerCase()) {
+            case "wall":
+            case "walls":
+                return 0xFF6A3D9A;
+            case "stairs":
+                return 0xFFB56A1E;
+            case "lift":
+                return 0xFF2F5FA8;
+            default:
+                return 0xCCE8DCCB;
+        }
+    }
+    private int getIndoorStrokeColor(String indoorType) {
+        if (indoorType == null) return 0xFF6A3D9A;
+
+        switch (indoorType.toLowerCase()) {
+            case "wall":
+            case "walls":
+                return 0xFF6A3D9A;
+            case "stairs":
+                return 0xFFB56A1E;
+            case "lift":
+                return 0xFF2F5FA8;
+            default:
+                return 0xFF6A3D9A;
+        }
+    }
+
+    private float getIndoorZIndex(String indoorType) {
+        if (indoorType == null) return 1f;
+
+        switch (indoorType.toLowerCase()) {
+            case "wall":
+            case "walls":
+                return 3f;
+            case "stairs":
+                return 4f;
+            case "lift":
+                return 5f;
+            default:
+                return 1f;
+        }
+    }
+
+    private void setObservationVisibility(boolean visible) {
+        observationsVisible = visible;
+
+        setMarkerListVisibility(gnssObservationMarkers, visible);
+        setMarkerListVisibility(wifiObservationMarkers, visible);
+        setMarkerListVisibility(pdrObservationMarkers, visible);
+
+        if (observationLegendLayout != null) {
+            observationLegendLayout.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void setMarkerListVisibility(@NonNull List<Marker> markers, boolean visible) {
+        for (Marker marker : markers) {
+            if (marker != null) {
+                marker.setVisible(visible);
+            }
+        }
+    }
+
+    private BitmapDescriptor createObservationDot(int color) {
+        int sizePx = dpToPx(10);
+        Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fill.setColor(color);
+        fill.setStyle(Paint.Style.FILL);
+
+        Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+        stroke.setColor(Color.WHITE);
+        stroke.setStyle(Paint.Style.STROKE);
+        stroke.setStrokeWidth(Math.max(1f, sizePx * 0.12f));
+
+        float cx = sizePx / 2f;
+        float cy = sizePx / 2f;
+        float radius = sizePx * 0.34f;
+
+        canvas.drawCircle(cx, cy, radius, fill);
+        canvas.drawCircle(cx, cy, radius, stroke);
+
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
+    private int dpToPx(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    private void forceRelocateToLatestPosition() {
+        if (sensorFusion == null) return;
+
+        LatLng latest = sensorFusion.getFusedEstimatedLatLng();
+
+        if (latest == null) {
+            latest = sensorFusion.getCurrentWifiLatLng();
+        }
+        if (latest == null) {
+            latest = sensorFusion.getCurrentGnssLatLng();
+        }
+
+        if (latest == null) {
+            Toast.makeText(requireContext(), "Position not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        sensorFusion.forceRelocateToLatLng(latest);
+
+        currentLocation = latest;
+        displayedLocation = latest;
+        displayedOrientationDeg = normalizeAngle((float) Math.toDegrees(sensorFusion.passOrientation()));
+        lastTrajectoryPoint = latest;
+        lastTrajectoryAppendMs = System.currentTimeMillis();
+
+        if (orientationMarker == null && gMap != null) {
+            orientationMarker = gMap.addMarker(new MarkerOptions()
+                    .position(latest)
+                    .flat(true)
+                    .title("Current Position")
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(requireContext(),
+                                    R.drawable.ic_baseline_navigation_24)))
+            );
+            if (orientationMarker != null) {
+                orientationMarker.setRotation(displayedOrientationDeg);
+            }
+        } else if (orientationMarker != null) {
+            orientationMarker.setPosition(latest);
+            orientationMarker.setRotation(displayedOrientationDeg);
+        }
+
+        Toast.makeText(requireContext(), "Position force updated", Toast.LENGTH_SHORT).show();
+    }
+
+
+    //3.3 smooth
+    private LatLng smoothDisplayLocation(@Nullable LatLng previous, @NonNull LatLng target) {
+        if (previous == null) return target;
+
+        double jumpMeters = distanceMeters(previous, target);
+
+        if (jumpMeters >= DISPLAY_SNAP_JUMP_METERS) {
+            return target;
+        }
+
+        float alpha = DISPLAY_ALPHA_SLOW;
+        if (jumpMeters >= DISPLAY_LARGE_JUMP_METERS) {
+            alpha = DISPLAY_ALPHA_FAST;
+        } else if (jumpMeters >= DISPLAY_MEDIUM_JUMP_METERS) {
+            alpha = DISPLAY_ALPHA_MEDIUM;
+        }
+
+        double lat = previous.latitude + (target.latitude - previous.latitude) * alpha;
+        double lon = previous.longitude + (target.longitude - previous.longitude) * alpha;
+        return new LatLng(lat, lon);
+    }
+
+    private float smoothDisplayOrientation(float previousDeg, float targetDeg, float alpha) {
+        float delta = ((targetDeg - previousDeg + 540f) % 360f) - 180f;
+        return normalizeAngle(previousDeg + alpha * delta);
+    }
+
+    private float normalizeAngle(float angleDeg) {
+        float normalized = angleDeg % 360f;
+        if (normalized < 0f) normalized += 360f;
+        return normalized;
+    }
+
+    private boolean shouldAppendFusedTrajectory(@NonNull LatLng newPoint, long nowMs) {
+        if (lastTrajectoryPoint == null) {
+            lastTrajectoryPoint = newPoint;
+            lastTrajectoryAppendMs = nowMs;
+            return true;
+        }
+
+        double movedMeters = distanceMeters(lastTrajectoryPoint, newPoint);
+        boolean timeReached = (nowMs - lastTrajectoryAppendMs) >= FUSED_TRAJECTORY_UPDATE_INTERVAL_MS;
+        boolean movementReached = movedMeters >= FUSED_TRAJECTORY_MOVE_THRESHOLD_METERS;
+
+        if (timeReached || movementReached) {
+            lastTrajectoryPoint = newPoint;
+            lastTrajectoryAppendMs = nowMs;
+            return true;
+        }
+
+        return false;
+    }
+
 }
