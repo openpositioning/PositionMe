@@ -173,9 +173,8 @@ public class SensorFusion implements SensorEventListener {
                     updateFusedState();
                 });
 
-        this.wifiPositionManager.setWifiFixListener((wifiLocation, floor, measurementAgeMs) -> {
-            fusionEngine.updateWifi(wifiLocation.latitude, wifiLocation.longitude, floor,
-                    measurementAgeMs);
+        this.wifiPositionManager.setWifiFixListener((wifiLocation, floor) -> {
+            fusionEngine.updateWifi(wifiLocation.latitude, wifiLocation.longitude, floor);
             updateFusedState();
         });
 

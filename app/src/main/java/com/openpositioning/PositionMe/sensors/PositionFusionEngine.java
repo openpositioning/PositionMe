@@ -35,9 +35,6 @@ public class PositionFusionEngine {
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 4.5;
-    private static final double WIFI_FRESH_AGE_SEC = 1.0;
-    private static final double WIFI_AGE_SIGMA_GAIN_PER_SEC = 0.45;
-    private static final double WIFI_MAX_SIGMA_SCALE = 4.0;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
     private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 6.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
@@ -196,32 +193,12 @@ public class PositionFusionEngine {
      * WiFi absolute-fix update with fixed sigma and floor hint support.
      */
     public synchronized void updateWifi(double latDeg, double lonDeg, int wifiFloor) {
-        updateWifi(latDeg, lonDeg, wifiFloor, 0L);
-    }
-
-    /**
-     * WiFi absolute-fix update with age-aware confidence.
-     *
-     * <p>Older WiFi fixes are downweighted by inflating measurement sigma,
-     * while still allowing correction of large trajectory drift.</p>
-     */
-    public synchronized void updateWifi(double latDeg, double lonDeg, int wifiFloor,
-                                        long measurementAgeMs) {
-        double effectiveSigma = adjustedWifiSigma(measurementAgeMs);
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "WiFi update lat=%.7f lon=%.7f floor=%d ageMs=%d sigma=%.2f",
-                    latDeg, lonDeg, wifiFloor, measurementAgeMs, effectiveSigma));
+                    "WiFi update lat=%.7f lon=%.7f floor=%d sigma=%.2f",
+                    latDeg, lonDeg, wifiFloor, WIFI_SIGMA_M));
         }
-        applyAbsoluteFix(latDeg, lonDeg, effectiveSigma, wifiFloor);
-    }
-
-    private double adjustedWifiSigma(long measurementAgeMs) {
-        double ageSec = Math.max(0.0, measurementAgeMs / 1000.0);
-        double staleSec = Math.max(0.0, ageSec - WIFI_FRESH_AGE_SEC);
-        double sigmaScale = 1.0 + staleSec * WIFI_AGE_SIGMA_GAIN_PER_SEC;
-        sigmaScale = Math.min(sigmaScale, WIFI_MAX_SIGMA_SCALE);
-        return WIFI_SIGMA_M * sigmaScale;
+        applyAbsoluteFix(latDeg, lonDeg, WIFI_SIGMA_M, wifiFloor);
     }
 
     /**
