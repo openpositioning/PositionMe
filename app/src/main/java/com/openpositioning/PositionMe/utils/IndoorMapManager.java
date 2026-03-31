@@ -901,9 +901,9 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
     private static final double STAIRS_THRESHOLD_METERS = 12.0;
     private static final double LIFT_THRESHOLD_METERS = 10.0;
     private static final double LIFT_HORIZONTAL_THRESHOLD_METERS = 1.0;
-    private LatLng floorTransitionStartLocation = null;
-    private boolean floorTransitionInProgress = false;
-    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f;
+//    private LatLng floorTransitionStartLocation = null;
+//    private boolean floorTransitionInProgress = false;
+//    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f;
 
     public FloorChangeResult acceptFloorChange(LatLng correctedLocation,
                                                LatLng oldLocation,
@@ -926,18 +926,22 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
             Log.d("MapMatch", "Floor change blocked by debounce");
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
-        startFloorTransitionIfNeeded(correctedLocation, currentHeight);
+        updateFloorTransitionState(correctedLocation, currentHeight);
+
+        double horizontalDisplacement =
+                getFloorTransitionHorizontalDisplacement(correctedLocation);
 
         float heightChangeMeters = currentHeight - confirmedFloorElevation;
         if (Math.abs(heightChangeMeters) < HEIGHT_THRESHOLD_METERS) {
             Log.d("MapMatch", "Height change too small: " + heightChangeMeters);
-            resetFloorTransitionState();
+//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         IndoorVenue.FloorFeatures currentFloorFeatures = currentVenue.floorFeatures.get(confirmedFloorKey);
         if (currentFloorFeatures == null) {
             Log.d("MapMatch", "No floor features for confirmed floor: " + confirmedFloorKey);
+//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
@@ -951,12 +955,14 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
         if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
             Log.d("MapMatch", "Next floor invalid");
+//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         IndoorVenue.FloorFeatures nextFloorFeatures = currentVenue.floorFeatures.get(nextFloorKey);
         if (nextFloorFeatures == null) {
             Log.d("MapMatch", "No floor features for destination floor: " + nextFloorKey);
+//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
@@ -972,24 +978,25 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
                 LIFT_THRESHOLD_METERS
         );
 
-        double horizontalDisplacement = getFloorTransitionHorizontalDisplacement(correctedLocation);
-        resetFloorTransitionState();
+//        double horizontalDisplacement = getFloorTransitionHorizontalDisplacement(correctedLocation);
+//        resetFloorTransitionState();
 
         boolean usedLift = nearLift && horizontalDisplacement < LIFT_HORIZONTAL_THRESHOLD_METERS;
         boolean usedStairs = false;
-        if (!nearLift && nearStairs){
-            usedStairs = true;
-        }
+//        if (!nearLift && nearStairs){
+//            usedStairs = true;
+//        }
 
-        else {
+//        else {
             usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
-        }
+//        }
         Log.d("MapMatch", "nearStairs=" + nearStairs + ", nearLift=" + nearLift);
         Log.d("MapMatch", "horizontalDisplacement=" + horizontalDisplacement);
         Log.d("MapMatch", "usedLift=" + usedLift + ", usedStairs=" + usedStairs);
 
         if (!usedLift && !usedStairs) {
             Log.d("MapMatch", "Rejected floor change: not near stairs/lift in a plausible way");
+//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
         LatLng highlightCenter = null;
@@ -997,6 +1004,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
 
         if (nextFloorKey.equals(confirmedFloorKey)) {
+//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
@@ -1025,6 +1033,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
         commitAutoFloorChange(nextFloorKey, currentHeight);
         lastFloorChangeTimeMs = now;
+        resetFloorTransitionState();
 
         Log.d("MapMatch", "Accepted floor change to " + nextFloorKey +
                 " with snapped destination " + snappedDestination);
@@ -1042,33 +1051,75 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
 
 
-    private void startFloorTransitionIfNeeded(LatLng currentLocation, float currentHeight) {
+    // ================= FLOOR TRANSITION TRACKING =================
+
+    private LatLng floorTransitionStartLocation = null;
+    private LatLng lastStableFloorLocation = null;
+    private boolean floorTransitionInProgress = false;
+
+    // Tune these based on your barometer noise
+    private static final float FLOOR_STABLE_BAND_METERS = 0.5f;              // "definitely still on floor"
+    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f; // "transition has begun"
+
+    /**
+     * Updates transition tracking state.
+     * Call this every update BEFORE computing horizontal displacement.
+     */
+    private void updateFloorTransitionState(LatLng currentLocation, float currentHeight) {
         if (currentLocation == null) return;
         if (confirmedFloorKey == null || Float.isNaN(confirmedFloorElevation)) return;
 
         float heightDelta = currentHeight - confirmedFloorElevation;
+        float absDelta = Math.abs(heightDelta);
 
+        // Case 1: Still clearly on the confirmed floor → keep refreshing anchor
+        if (absDelta < FLOOR_STABLE_BAND_METERS) {
+            lastStableFloorLocation = currentLocation;
+
+            // If we had started a transition but came back, cancel it
+            floorTransitionInProgress = false;
+            floorTransitionStartLocation = null;
+            return;
+        }
+
+        // Case 2: Height has meaningfully deviated → start transition (once)
         if (!floorTransitionInProgress &&
-                Math.abs(heightDelta) >= FLOOR_TRANSITION_START_THRESHOLD_METERS) {
+                absDelta >= FLOOR_TRANSITION_START_THRESHOLD_METERS) {
+
             floorTransitionInProgress = true;
-            floorTransitionStartLocation = currentLocation;
-            Log.d("MapMatch", "Started floor transition at " + currentLocation +
+
+            // Prefer last stable location (more accurate than noisy trigger point)
+            floorTransitionStartLocation = (lastStableFloorLocation != null)
+                    ? lastStableFloorLocation
+                    : currentLocation;
+
+            Log.d("MapMatch", "Started floor transition at " + floorTransitionStartLocation +
+                    ", current location = " + currentLocation +
                     ", height delta = " + heightDelta);
         }
     }
 
+    /**
+     * Returns horizontal displacement since transition began.
+     */
     private double getFloorTransitionHorizontalDisplacement(LatLng currentLocation) {
-        if (!floorTransitionInProgress || floorTransitionStartLocation == null || currentLocation == null) {
+        if (!floorTransitionInProgress ||
+                floorTransitionStartLocation == null ||
+                currentLocation == null) {
             return 0.0;
         }
+
         return distanceMeters(floorTransitionStartLocation, currentLocation);
     }
 
+    /**
+     * Call this after a successful floor change.
+     */
     private void resetFloorTransitionState() {
         floorTransitionInProgress = false;
         floorTransitionStartLocation = null;
+        lastStableFloorLocation = null;
     }
-
     private LatLng getNearestPoint(LatLng location, List<LatLng> centers) {
         if (location == null || centers == null || centers.isEmpty()) {
             return null;
