@@ -58,8 +58,8 @@ import java.util.List;
 public class TrajectoryMapFragment extends Fragment {
 
     private static final int MAX_OBSERVATION_MARKERS = 20;
-    private static final long TRAJECTORY_APPEND_MIN_INTERVAL_MS = 1000;
-    private static final double TRAJECTORY_APPEND_MIN_METERS = 0.60;
+    private static final long TRAJECTORY_APPEND_MIN_INTERVAL_MS = 500;
+    private static final double TRAJECTORY_APPEND_MIN_METERS = 0.70;
     private static final double OBSERVATION_CIRCLE_RADIUS_M = 1.4;
     private static final long GNSS_OBSERVATION_TTL_MS = 15000;
     private static final long WIFI_OBSERVATION_TTL_MS = 20000;
@@ -650,8 +650,10 @@ public class TrajectoryMapFragment extends Fragment {
                 ? UtilFunctions.distanceBetweenPoints(oldLocation, newLocation)
                 : UtilFunctions.distanceBetweenPoints(lastTrajectoryPoint, newLocation);
 
-        if ((now - lastTrajectoryAppendMs) >= TRAJECTORY_APPEND_MIN_INTERVAL_MS
-                || moved >= TRAJECTORY_APPEND_MIN_METERS) {
+        // Distance-only gate: never add a point just because time passed.
+        // WiFi/GNSS noise causes small constant drift in the estimate — a time-based
+        // condition would commit that drift to the polyline even when standing still.
+        if (moved >= TRAJECTORY_APPEND_MIN_METERS) {
             points.add(newLocation);
             polyline.setPoints(points);
             lastTrajectoryPoint = newLocation;
