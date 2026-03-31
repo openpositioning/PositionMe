@@ -1,8 +1,9 @@
-package com.openpositioning.PositionMe.presentation.activity;
+﻿package com.openpositioning.PositionMe.presentation.activity;
 
 import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Menu;
@@ -39,7 +40,7 @@ import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity implements Observer {
 
-    //region Instance variables
+    // region Instance variables
     private NavController navController;
     private ActivityResultLauncher<String> locationPermissionLauncher;
     private ActivityResultLauncher<String[]> multiplePermissionsLauncher;
@@ -51,9 +52,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private PermissionManager permissionManager;
 
     private static final int PERMISSION_REQUEST_CODE = 100;
-    //endregion
+    // endregion
 
-    //region Activity Lifecycle
+    // region Activity Lifecycle
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -85,12 +86,16 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 result -> {
                     boolean locationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
                     boolean activityGranted = result.getOrDefault(Manifest.permission.ACTIVITY_RECOGNITION, false);
+                    boolean bluetoothScanGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                            result.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, false);
+                    boolean bluetoothConnectGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                            result.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, false);
 
-                    if (locationGranted && activityGranted) {
+                    if (locationGranted && activityGranted && bluetoothScanGranted && bluetoothConnectGranted) {
                         allPermissionsObtained();
                     } else {
                         Toast.makeText(this,
-                                "Location or Physical Activity permission denied. Some features may not work.",
+                                "Location, activity, or Bluetooth permission denied. Some features may not work.",
                                 Toast.LENGTH_LONG).show();
                     }
                 }
@@ -123,14 +128,25 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 boolean activityGranted = ContextCompat.checkSelfPermission(
                         this, Manifest.permission.ACTIVITY_RECOGNITION
                 ) == PackageManager.PERMISSION_GRANTED;
+                boolean bluetoothScanGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                        ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED;
+                boolean bluetoothConnectGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                        ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
 
-                if (!locationGranted || !activityGranted) {
-                    multiplePermissionsLauncher.launch(new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                    });
-                    multiplePermissionsLauncher.launch(new String[]{
-                            Manifest.permission.ACTIVITY_RECOGNITION
-                    });
+                if (!locationGranted || !activityGranted || !bluetoothScanGranted || !bluetoothConnectGranted) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        multiplePermissionsLauncher.launch(new String[]{
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACTIVITY_RECOGNITION,
+                                Manifest.permission.BLUETOOTH_SCAN,
+                                Manifest.permission.BLUETOOTH_CONNECT
+                        });
+                    } else {
+                        multiplePermissionsLauncher.launch(new String[]{
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACTIVITY_RECOGNITION
+                        });
+                    }
                 } else {
                     allPermissionsObtained();
                 }
@@ -153,9 +169,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
         super.onDestroy();
     }
-    //endregion
+    // endregion
 
-    //region Permissions
+    // region Permissions
     private void allPermissionsObtained() {
         settings.edit().putBoolean("permanentDeny", false).apply();
         if (this.sensorFusion == null) {
@@ -164,9 +180,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
         sensorFusion.registerForServerUpdate(this);
     }
-    //endregion
+    // endregion
 
-    //region Navigation
+    // region Navigation
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if(Objects.requireNonNull(navController.getCurrentDestination()).getId() == item.getItemId())
@@ -212,9 +228,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
             super.onBackPressed();
         }
     }
-    //endregion
+    // endregion
 
-    //region Global toasts
+    // region Global toasts
     @Override
     public void update(Object[] objList) {
         assert objList[0] instanceof Boolean;
@@ -232,24 +248,22 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private final Runnable displayToastTaskFailure = () -> {
         // Toast.makeText(MainActivity.this, "Failed to complete trajectory upload", Toast.LENGTH_SHORT).show();
     };
-    //endregion
+    // endregion
 
     // ====================================================================================
     // File Saving Logic
     // ====================================================================================
 
-    /**
-     * Stops the sensor recording and saves the trajectory data to a file.
-     * The file is saved with a .protobuf extension in the app's external files directory.
-     * Call this method in the Stop button of HomeFragment: ((MainActivity)getActivity()).stopRecordingAndSave();
-     */
+    // Stops the sensor recording and saves the trajectory data to a file.
+    // The file is saved with a .protobuf extension in the app's external files directory.
+    // Call this method in the Stop button of HomeFragment: ((MainActivity)getActivity()).stopRecordingAndSave();
     public void stopRecordingAndSave() {
-        // 1. Stop sensor collection
+        // Stop sensor collection
         if (sensorFusion != null) {
             sensorFusion.stopRecording();
         }
 
-        // 2. Prepare to save
+        // Prepare to save
         try {
             // File name suffix must be .protobuf for History interface recognition
             String filename = "Traj_" + System.currentTimeMillis() + ".protobuf";
@@ -282,3 +296,5 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
     }
 }
+
+

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.util.Log;
 
@@ -18,14 +18,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * IndoorMapFragment - Enhanced version with API support
- * Handles:
- * 1. Fetching building and floor data from API
- * 2. Drawing building outlines on map
- * 3. Displaying indoor floor plans
- * 4. Managing venue/building selection
- */
+// IndoorMapFragment - Enhanced version with API support
+// Handles:
+// Fetching building and floor data from API
+// Drawing building outlines on map
+// Displaying indoor floor plans
+// Managing venue/building selection
 public class IndoorMapFragment {
     private static final String TAG = "IndoorMapFragment";
     
@@ -64,16 +62,12 @@ public class IndoorMapFragment {
         this.indoorMapAPI = new IndoorMapAPI();
     }
     
-    /**
-     * Set the venue selection callback
-     */
+    // Set the venue selection callback
     public void setVenueSelectionCallback(VenueSelectionCallback callback) {
         this.venueCallback = callback;
     }
     
-    /**
-     * Fetch buildings near user location
-     */
+    // Fetch buildings near user location
     public void fetchNearbyBuildings(double latitude, double longitude, double radiusMeters) {
         if (indoorMapAPI == null) return;
         
@@ -92,9 +86,7 @@ public class IndoorMapFragment {
             });
     }
     
-    /**
-     * Display building outlines and enable selection
-     */
+    // Display building outlines and enable selection
     private void displayBuildings(List<IndoorMapAPI.BuildingInfo> buildings) {
         if (mMap == null) return;
         
@@ -154,9 +146,7 @@ public class IndoorMapFragment {
         });
     }
     
-    /**
-     * Draw building outline as polygon
-     */
+    // Draw building outline as polygon
     private void drawBuildingOutline(String buildingId, String buildingName, double[][] coordinates) {
         if (mMap == null || coordinates.length == 0) return;
         
@@ -176,9 +166,7 @@ public class IndoorMapFragment {
         polygon.setTag(buildingId);
     }
     
-    /**
-     * Fetch and display floor plans for selected building
-     */
+    // Fetch and display floor plans for selected building
     public void fetchBuildingFloors(String buildingId) {
         indoorMapAPI.fetchBuildingFloors(buildingId, 
             new IndoorMapAPI.FloorsCallback() {
@@ -195,9 +183,7 @@ public class IndoorMapFragment {
             });
     }
     
-    /**
-     * Display floor plans as ground overlays
-     */
+    // Display floor plans as ground overlays
     private void displayFloors(List<IndoorMapAPI.FloorPlan> floors) {
         if (mMap == null || floors.isEmpty()) return;
         
@@ -251,9 +237,7 @@ public class IndoorMapFragment {
         }
     }
     
-    /**
-     * Add floor plan from URL (as bitmap)
-     */
+    // Add floor plan from URL (as bitmap)
     public void addFloorFromUrl(int floorIndex, String imageUrl, LatLngBounds bounds) {
         // For now, we'll use a placeholder
         // In production, you'd need to download the image from URL
@@ -294,7 +278,7 @@ public class IndoorMapFragment {
     // Hide all floors
     public void hideMap() {
         if (groundOverlays == null) return;
-        //Hide all floors
+        // Hide all floors
         for (GroundOverlay overlay : groundOverlays) {
             if (overlay != null) {
                 overlay.setVisible(false);
@@ -302,9 +286,7 @@ public class IndoorMapFragment {
         }
     }
     
-    /**
-     * Select a venue/building and notify callback
-     */
+    // Select a venue/building and notify callback
     private void selectVenue(String buildingId, String venueName) {
         this.currentBuildingId = buildingId;
         this.currentVenueName = venueName;
@@ -316,17 +298,15 @@ public class IndoorMapFragment {
         }
     }
     
-    /**
-     * Get selected venue name
-     */
+    // Get selected venue name
     public String getSelectedVenueName() {
         return currentVenueName;
     }
     
-    /**
-     * Get selected building ID
-     */
+    // Get selected building ID
     public String getSelectedBuildingId() {
         return currentBuildingId;
     }
 }
+
+

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -20,16 +20,12 @@ import com.openpositioning.PositionMe.presentation.viewitems.SensorInfoListAdapt
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A simple {@link Fragment} subclass. The info fragment display the available sensors and data
- * collection devices with relevant information about their capabilities.
- *
- * @see HomeFragment the previous fragment in the nav graph.
- * @see com.openpositioning.PositionMe.sensors.SensorFusion the class containing all sensors.
- * @see SensorInfo the class used for each sensor instance's metadata
- *
- * @author Mate Stodulka
- */
+// A simple {@link Fragment} subclass. The info fragment display the available sensors and data
+// collection devices with relevant information about their capabilities.
+// @see HomeFragment the previous fragment in the nav graph.
+// @see com.openpositioning.PositionMe.sensors.SensorFusion the class containing all sensors.
+// @see SensorInfo the class used for each sensor instance's metadata
+// @author Mate Stodulka
 public class InfoFragment extends Fragment {
 
     // Singleton SensorFusion instance to access the sensors used
@@ -37,25 +33,19 @@ public class InfoFragment extends Fragment {
     // UI element recyclerview to display sensor information
     private RecyclerView sensorInfoView;
 
-    /**
-     * Public default constructor, empty.
-     */
+    // Public default constructor, empty.
     public InfoFragment() {
         // Required empty public constructor
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    // {@inheritDoc}
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
     }
 
-    /**
-     * {@inheritDoc}
-     * Set title in the action bar to Sensor Information.
-     */
+    // {@inheritDoc}
+    // Set title in the action bar to Sensor Information.
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -65,16 +55,13 @@ public class InfoFragment extends Fragment {
         return rootView;
     }
 
-    /**
-     * {@inheritDoc}
-     * Initialise the RecyclerView by creating and registering a Layout Manager, getting the
-     * {@link SensorFusion} instance and obtaining the Sensor Info data, and passing it to the
-     * {@link SensorInfoListAdapter}.
-     *
-     * @see SensorInfoListAdapter List adapter for the Sensor Info Recycler View.
-     * @see SensorInfoViewHolder View holder for the Sensor Infor RV.
-     * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view
-     */
+    // {@inheritDoc}
+    // Initialise the RecyclerView by creating and registering a Layout Manager, getting the
+    // {@link SensorFusion} instance and obtaining the Sensor Info data, and passing it to the
+    // {@link SensorInfoListAdapter}.
+    // @see SensorInfoListAdapter List adapter for the Sensor Info Recycler View.
+    // @see SensorInfoViewHolder View holder for the Sensor Infor RV.
+    // @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -102,3 +89,4 @@ public class InfoFragment extends Fragment {
         sensorInfoView.setAdapter(new SensorInfoListAdapter(getActivity(), sensorInfoList));
     }
 }
+

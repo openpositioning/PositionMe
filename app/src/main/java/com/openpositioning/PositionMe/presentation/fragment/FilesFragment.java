@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
 import android.os.Handler;
@@ -32,17 +32,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
- * uploaded with some metadata, and enabled re-downloading them to the device's local storage.
- *
- * @see HomeFragment the connected fragment in the nav graph.
- * @see UploadFragment sub-menu for uploading recordings that failed during recording.
- * @see com.openpositioning.PositionMe.Traj the data structure sent and received.
- * @see ServerCommunications the class handling communication with the server.
- *
- * @author Mate Stodulka
- */
+// A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
+// uploaded with some metadata, and enabled re-downloading them to the device's local storage.
+// @see HomeFragment the connected fragment in the nav graph.
+// @see UploadFragment sub-menu for uploading recordings that failed during recording.
+// @see com.openpositioning.PositionMe.Traj the data structure sent and received.
+// @see ServerCommunications the class handling communication with the server.
+// @author Mate Stodulka
 public class FilesFragment extends Fragment implements Observer {
 
     // UI elements
@@ -53,18 +49,14 @@ public class FilesFragment extends Fragment implements Observer {
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
 
-    /**
-     * Default public constructor, empty.
-     */
+    // Default public constructor, empty.
     public FilesFragment() {
         // Required empty public constructor
     }
 
-    /**
-     * {@inheritDoc}
-     * Initialise the server communication class and register the FilesFragment as an Observer to
-     * receive the async http responses.
-     */
+    // {@inheritDoc}
+    // Initialise the server communication class and register the FilesFragment as an Observer to
+    // receive the async http responses.
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -72,10 +64,8 @@ public class FilesFragment extends Fragment implements Observer {
         serverCommunications.registerObserver(this);
     }
 
-    /**
-     * {@inheritDoc}
-     * Sets the title in the action bar.
-     */
+    // {@inheritDoc}
+    // Sets the title in the action bar.
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -85,15 +75,12 @@ public class FilesFragment extends Fragment implements Observer {
         return rootView;
     }
 
-    /**
-     * {@inheritDoc}
-     * Initialises UI elements, including a navigation card to the {@link UploadFragment} and a
-     * RecyclerView displaying online trajectories.
-     *
-     * @see TrajDownloadViewHolder the View Holder for the list.
-     * @see TrajDownloadListAdapter the list adapter for displaying the recycler view.
-     * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
-     */
+    // {@inheritDoc}
+    // Initialises UI elements, including a navigation card to the {@link UploadFragment} and a
+    // RecyclerView displaying online trajectories.
+    // @see TrajDownloadViewHolder the View Holder for the list.
+    // @see TrajDownloadListAdapter the list adapter for displaying the recycler view.
+    // @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -102,10 +89,8 @@ public class FilesFragment extends Fragment implements Observer {
         // Get clickable card view
         uploadCard = view.findViewById(R.id.uploadCard);
         uploadCard.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigates to {@link UploadFragment}.
-             */
+            // {@inheritDoc}
+            // Navigates to {@link UploadFragment}.
             @Override
             public void onClick(View view) {
                 NavDirections action = FilesFragmentDirections.actionFilesFragmentToUploadFragment();
@@ -123,13 +108,10 @@ public class FilesFragment extends Fragment implements Observer {
         }, 500);
     }
 
-    /**
-     * {@inheritDoc}
-     * Called by {@link ServerCommunications} when the response to the HTTP info request is received.
-     *
-     * @param singletonStringList   a single string wrapped in an object array containing the http
-     *                              response from the server.
-     */
+    // {@inheritDoc}
+    // Called by {@link ServerCommunications} when the response to the HTTP info request is received.
+    // @param singletonStringList a single string wrapped in an object array containing the http
+    // response from the server.
     @Override
     public void update(Object[] singletonStringList) {
         // Cast input as a string
@@ -149,14 +131,11 @@ public class FilesFragment extends Fragment implements Observer {
         }
     }
 
-    /**
-     * Parses the info response string from the HTTP communication.
-     * Process the data using the Json library and return the matching Java data structure as a
-     * List of Maps of \<String, String\>. Throws a JSONException if the data is not valid.
-     *
-     * @param infoString    HTTP info request response as a single string
-     * @return              List of Maps of String to String containing ID, owner ID, and date.
-     */
+    // Parses the info response string from the HTTP communication.
+    // Process the data using the Json library and return the matching Java data structure as a
+    // List of Maps of \<String, String\>. Throws a JSONException if the data is not valid.
+    // @param infoString HTTP info request response as a single string
+    // @return List of Maps of String to String containing ID, owner ID, and date.
     private List<Map<String, String>> processInfoResponse(String infoString) {
         // Initialise empty list
         List<Map<String, String>> entryList = new ArrayList<>();
@@ -181,16 +160,13 @@ public class FilesFragment extends Fragment implements Observer {
         return entryList;
     }
 
-    /**
-     * Update the RecyclerView in the FilesFragment with new data.
-     * Must be called from a UI thread. Initialises a new Layout Manager, and passes it to the
-     * RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
-     * up a listener so that trajectories are downloaded when clicked, and a pop-up message is
-     * displayed to notify the user.
-     *
-     * @param entryList List of Maps of String to String containing metadata about the uploaded
-     *                  trajectories (ID, owner ID, date).
-     */
+    // Update the RecyclerView in the FilesFragment with new data.
+    // Must be called from a UI thread. Initialises a new Layout Manager, and passes it to the
+    // RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
+    // up a listener so that trajectories are downloaded when clicked, and a pop-up message is
+    // displayed to notify the user.
+    // @param entryList List of Maps of String to String containing metadata about the uploaded
+    // trajectories (ID, owner ID, date).
     private void updateView(List<Map<String, String>> entryList) {
         // Initialise RecyclerView with Manager and Adapter
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
@@ -204,18 +180,19 @@ public class FilesFragment extends Fragment implements Observer {
             // Pass ID and date_submitted
             serverCommunications.downloadTrajectory(position, id, dateSubmitted);
 
-//            new AlertDialog.Builder(getContext())
-//                    .setTitle("File downloaded")
-//                    .setMessage("Trajectory downloaded to local storage")
-//                    .setPositiveButton(R.string.ok, null)
-//                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
-//                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-//                    })
-//                    .setIcon(R.drawable.ic_baseline_download_24)
-//                    .show();
+// new AlertDialog.Builder(getContext())
+// .setTitle("File downloaded")
+// .setMessage("Trajectory downloaded to local storage")
+// .setPositiveButton(R.string.ok, null)
+// .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
+// startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+// })
+// .setIcon(R.drawable.ic_baseline_download_24)
+// .show();
         });
         filesList.setAdapter(listAdapter);
         // Force refresh RecyclerView to ensure downloadRecords changes are detected
         listAdapter.notifyDataSetChanged();
     }
 }
+

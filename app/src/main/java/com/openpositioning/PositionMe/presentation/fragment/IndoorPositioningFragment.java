@@ -1,12 +1,12 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -32,42 +33,57 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.Polygon;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 
+import java.util.ArrayList;
 import java.util.Locale;
 
-/**
- * IndoorPositioningFragment - Real-time indoor positioning debug panel
- * Displays current GPS coordinates, altitude, building selection, and indoor maps
- */
 public class IndoorPositioningFragment extends Fragment implements OnMapReadyCallback {
+    private static final int AUTO_FLOOR_CONFIRMATIONS = 4;
+    private static final long AUTO_FLOOR_SWITCH_COOLDOWN_MS = 6000L;
 
-    private static final String TAG = "IndoorPositioning";
-
-    // UI Elements
-    private TextView latitudeText, longitudeText, altitudeText, accuracyText, floorText, currentFloorText;
-    private MaterialButton nucleusButton, libraryButton, murchisonButton, fjbButton;
-    private FloatingActionButton floorUpBtn, floorDownBtn;
+    private TextView latitudeText;
+    private TextView longitudeText;
+    private TextView altitudeText;
+    private TextView accuracyText;
+    private TextView floorText;
+    private TextView currentFloorText;
+    private MaterialButton nucleusButton;
+    private MaterialButton libraryButton;
+    private MaterialButton murchisonButton;
+    private MaterialButton fjbButton;
+    private MaterialButton locationToggleButton;
+    private MaterialButton buildingToggleButton;
+    private FloatingActionButton floorUpBtn;
+    private FloatingActionButton floorDownBtn;
     private View floorControlsLayout;
+    private View locationContent;
+    private View buildingContent;
 
-    // Map and location
     private GoogleMap googleMap;
     private IndoorMapManager indoorMapManager;
     private FusedLocationProviderClient fusedLocationClient;
     private LocationCallback locationCallback;
     private Marker currentLocationMarker;
-    
-    // Sensor fusion for altitude
-    private SensorFusion sensorFusion;
 
-    // State
-    private MaterialButton selectedBuildingButton = null;
-    private Handler updateHandler = new Handler(Looper.getMainLooper());
+    private SensorFusion sensorFusion;
+    private Double latestGpsAltitudeMeters;
+    private Float latestEstimatedAbsoluteAltitudeMeters;
+    private LatLng latestGnssLatLng;
+    private float latestGnssAccuracy = Float.MAX_VALUE;
+    private String selectedBuildingName;
+    private boolean locationPanelExpanded = true;
+    private boolean buildingPanelExpanded = true;
+    private int pendingAutoFloorCandidate = Integer.MIN_VALUE;
+    private int pendingAutoFloorCandidateCount = 0;
+    private long lastAutoFloorSwitchTimestampMs = 0L;
+    private boolean wasNearVerticalTransition = false;
+
+    private final Handler updateHandler = new Handler(Looper.getMainLooper());
     private Runnable updateRunnable;
 
     @Nullable
@@ -75,7 +91,7 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         AppCompatActivity activity = (AppCompatActivity) getActivity();
         if (activity != null && activity.getSupportActionBar() != null) {
-            activity.getSupportActionBar().setTitle("Indoor Positioning Debug");
+            activity.getSupportActionBar().setTitle("Indoor Positioning");
         }
         return inflater.inflate(R.layout.fragment_indoor_positioning, container, false);
     }
@@ -84,7 +100,6 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize UI elements
         latitudeText = view.findViewById(R.id.latitudeText);
         longitudeText = view.findViewById(R.id.longitudeText);
         altitudeText = view.findViewById(R.id.altitudeText);
@@ -97,24 +112,27 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
         libraryButton = view.findViewById(R.id.libraryButton);
         murchisonButton = view.findViewById(R.id.murchisonButton);
         fjbButton = view.findViewById(R.id.fjbButton);
-        
+        locationToggleButton = view.findViewById(R.id.locationToggleButton);
+        buildingToggleButton = view.findViewById(R.id.buildingToggleButton);
         floorUpBtn = view.findViewById(R.id.floorUpBtn);
         floorDownBtn = view.findViewById(R.id.floorDownBtn);
+        locationContent = view.findViewById(R.id.locationContent);
+        buildingContent = view.findViewById(R.id.buildingContent);
 
-        // Initialize services
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireContext());
         sensorFusion = SensorFusion.getInstance();
 
-        // Set up building buttons
         nucleusButton.setOnClickListener(v -> selectBuilding("Nucleus", nucleusButton));
         libraryButton.setOnClickListener(v -> selectBuilding("Library", libraryButton));
         murchisonButton.setOnClickListener(v -> selectBuilding("Murchison", murchisonButton));
         fjbButton.setOnClickListener(v -> selectBuilding("FJB", fjbButton));
+        locationToggleButton.setOnClickListener(v -> toggleLocationPanel());
+        buildingToggleButton.setOnClickListener(v -> toggleBuildingPanel());
 
-        // Floor control buttons
         floorUpBtn.setOnClickListener(v -> {
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
+                syncIndoorFloorReference();
                 updateFloorDisplay();
             }
         });
@@ -122,19 +140,23 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
         floorDownBtn.setOnClickListener(v -> {
             if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
+                syncIndoorFloorReference();
                 updateFloorDisplay();
             }
         });
 
-        // Initialize map
-        SupportMapFragment mapFragment = (SupportMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.indoorMapFragment);
+        SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager()
+                .findFragmentById(R.id.indoorMapFragment);
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
 
-        // Start periodic UI updates
+        resetBuildingButtons();
         startPeriodicUpdates();
+        requestImmediateLocationSeed();
+        updateAltitudeDisplay();
+        applyPanelState(locationContent, locationToggleButton, locationPanelExpanded);
+        applyPanelState(buildingContent, buildingToggleButton, buildingPanelExpanded);
     }
 
     @Override
@@ -144,80 +166,79 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
         googleMap.getUiSettings().setCompassEnabled(true);
         googleMap.getUiSettings().setZoomControlsEnabled(true);
 
-        // Initialize IndoorMapManager
         indoorMapManager = new IndoorMapManager(googleMap, requireContext());
         indoorMapManager.addFallbackBuildings();
-        
-        // Set floor data listener
         indoorMapManager.setOnFloorDataLoadedListener(hasData -> {
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
-                    if (hasData) {
-                        floorControlsLayout.setVisibility(View.VISIBLE);
-                        updateFloorDisplay();
-                    } else {
-                        floorControlsLayout.setVisibility(View.GONE);
-                    }
+                    selectedBuildingName = indoorMapManager.getSelectedBuildingName();
+                    floorControlsLayout.setVisibility(hasData ? View.VISIBLE : View.GONE);
+                    syncIndoorFloorReference();
+                    updateFloorDisplay();
+                    updatePositionDisplay();
                 });
             }
         });
 
-        // Set up polygon click listener
         googleMap.setOnPolygonClickListener(polygon -> {
             if (indoorMapManager != null) {
                 indoorMapManager.onPolygonClick(polygon);
+                selectedBuildingName = indoorMapManager.getSelectedBuildingName();
                 updateFloorDisplay();
+                updatePositionDisplay();
             }
         });
 
-        // Move camera to Edinburgh KB campus
         LatLng kbCampus = new LatLng(55.9230, -3.1750);
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(kbCampus, 17f));
-
-        // Start location updates
         startLocationUpdates();
     }
 
-    /**
-     * Select a building and load its indoor map
-     */
     private void selectBuilding(String buildingName, MaterialButton button) {
-        // Update button styles
         resetBuildingButtons();
-        button.setBackgroundColor(getResources().getColor(R.color.md_theme_primary, null));
-        selectedBuildingButton = button;
+        setBuildingButtonSelected(button, true);
+        selectedBuildingName = buildingName;
+        clearPendingAutoFloorCandidate();
 
-        // Get building center coordinates
         LatLng buildingCenter = getBuildingCenter(buildingName);
         if (buildingCenter != null && googleMap != null) {
             googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(buildingCenter, 19f));
-            
-            // Trigger indoor map load
             if (indoorMapManager != null) {
-                // Set selected building BEFORE API call
-                // This enables building name verification in API response
+                indoorMapManager.setIndoorMapVisible(true);
                 indoorMapManager.setSelectedBuilding(buildingName, buildingCenter);
-                indoorMapManager.fetchFloorPlan(buildingCenter, new java.util.ArrayList<>());
+                indoorMapManager.fetchFloorPlan(buildingCenter, new ArrayList<>());
+                updateFloorDisplay();
             }
         }
 
+        buildingPanelExpanded = false;
+        applyPanelState(buildingContent, buildingToggleButton, buildingPanelExpanded);
         Toast.makeText(getContext(), "Loading " + buildingName + " indoor map...", Toast.LENGTH_SHORT).show();
     }
 
-    /**
-     * Reset all building buttons to outlined style
-     */
     private void resetBuildingButtons() {
-        int outlinedColor = getResources().getColor(android.R.color.transparent, null);
-        nucleusButton.setBackgroundColor(outlinedColor);
-        libraryButton.setBackgroundColor(outlinedColor);
-        murchisonButton.setBackgroundColor(outlinedColor);
-        fjbButton.setBackgroundColor(outlinedColor);
+        setBuildingButtonSelected(nucleusButton, false);
+        setBuildingButtonSelected(libraryButton, false);
+        setBuildingButtonSelected(murchisonButton, false);
+        setBuildingButtonSelected(fjbButton, false);
     }
 
-    /**
-     * Get building center coordinates
-     */
+    private void setBuildingButtonSelected(MaterialButton button, boolean selected) {
+        if (button == null || getContext() == null) {
+            return;
+        }
+
+        int background = ContextCompat.getColor(requireContext(), selected ? R.color.ios_blue : R.color.ios_surface);
+        int text = ContextCompat.getColor(requireContext(), selected ? R.color.white : R.color.ios_label);
+        int stroke = ContextCompat.getColor(requireContext(), selected ? R.color.ios_blue : R.color.ios_separator);
+        int icon = ContextCompat.getColor(requireContext(), selected ? R.color.white : R.color.ios_blue);
+
+        button.setBackgroundTintList(ColorStateList.valueOf(background));
+        button.setTextColor(text);
+        button.setStrokeColor(ColorStateList.valueOf(stroke));
+        button.setIconTint(ColorStateList.valueOf(icon));
+    }
+
     private LatLng getBuildingCenter(String name) {
         switch (name) {
             case "Nucleus":
@@ -233,18 +254,17 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
         }
     }
 
-    /**
-     * Start real-time location updates
-     */
     private void startLocationUpdates() {
-        if (ActivityCompat.checkSelfPermission(requireContext(), 
-                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
             return;
         }
 
-        LocationRequest locationRequest = new LocationRequest.Builder(
-                Priority.PRIORITY_HIGH_ACCURACY, 1000) // 1 second interval
+        requestImmediateLocationSeed();
+
+        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
                 .setMinUpdateIntervalMillis(500)
+                .setMinUpdateDistanceMeters(0.5f)
                 .build();
 
         locationCallback = new LocationCallback() {
@@ -252,103 +272,291 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
             public void onLocationResult(@NonNull LocationResult locationResult) {
                 Location location = locationResult.getLastLocation();
                 if (location != null) {
-                    updateLocationDisplay(location);
+                    latestGnssLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                    if (location.hasAltitude()) {
+                        latestGpsAltitudeMeters = location.getAltitude();
+                    }
+                    if (location.hasAccuracy()) {
+                        latestGnssAccuracy = location.getAccuracy();
+                    }
+                    updatePositionDisplay();
+                    updateAltitudeDisplay();
                 }
             }
         };
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, 
-                Looper.getMainLooper());
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
     }
 
-    /**
-     * Update location display with new GPS data
-     */
-    private void updateLocationDisplay(Location location) {
-        LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-
-        // Update marker on map
-        if (currentLocationMarker == null) {
-            currentLocationMarker = googleMap.addMarker(new MarkerOptions()
-                    .position(latLng)
-                    .title("Current Location"));
-        } else {
-            currentLocationMarker.setPosition(latLng);
+    private void requestImmediateLocationSeed() {
+        if (fusedLocationClient == null || ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
         }
 
-        // Update text displays
-        latitudeText.setText(String.format(Locale.US, "%.6f", location.getLatitude()));
-        longitudeText.setText(String.format(Locale.US, "%.6f", location.getLongitude()));
-        
-        if (location.hasAltitude()) {
-            altitudeText.setText(String.format(Locale.US, "%.1f m", location.getAltitude()));
-        }
-        
-        if (location.hasAccuracy()) {
-            accuracyText.setText(String.format(Locale.US, "± %.1f m", location.getAccuracy()));
-        }
+        fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
+            if (location == null) {
+                return;
+            }
+
+            latestGnssLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+            if (location.hasAltitude()) {
+                latestGpsAltitudeMeters = location.getAltitude();
+            }
+            if (location.hasAccuracy()) {
+                latestGnssAccuracy = location.getAccuracy();
+            }
+
+            updatePositionDisplay();
+            updateAltitudeDisplay();
+        });
     }
 
-    /**
-     * Start periodic UI updates for sensor data
-     */
     private void startPeriodicUpdates() {
         updateRunnable = new Runnable() {
             @Override
             public void run() {
                 updateSensorData();
-                updateHandler.postDelayed(this, 1000); // Update every second
+                updateHandler.postDelayed(this, 1000);
             }
         };
         updateHandler.post(updateRunnable);
     }
 
-    /**
-     * Update sensor data displays
-     */
     private void updateSensorData() {
         if (sensorFusion != null) {
-            // Update altitude from barometer sensor
-            float elevation = sensorFusion.getElevation();
-            if (elevation != 0) {
-                altitudeText.setText(String.format(Locale.US, "%.1f m", elevation));
+            float estimatedAltitude = sensorFusion.getEstimatedAbsoluteAltitude();
+            if (!Float.isNaN(estimatedAltitude)) {
+                latestEstimatedAbsoluteAltitudeMeters = estimatedAltitude;
             }
 
-            // Update floor estimation
             if (indoorMapManager != null && indoorMapManager.getAvailableFloorsCount() > 0) {
+                syncIndoorMapFloorWithEstimate();
                 String floorName = indoorMapManager.getCurrentFloorName();
                 if (floorName != null) {
                     floorText.setText(floorName);
                 }
+            } else {
+                floorText.setText(formatEstimatedFloor(sensorFusion.getEstimatedFloor()));
             }
+        }
+
+        updatePositionDisplay();
+        updateAltitudeDisplay();
+    }
+
+    private void syncIndoorFloorReference() {
+        if (sensorFusion == null || indoorMapManager == null) {
+            return;
+        }
+
+        sensorFusion.setIndoorFloorReference(
+                indoorMapManager.getFloorHeight(),
+                indoorMapManager.getCurrentFloor(),
+                indoorMapManager.getFloorAltitudeAnchors()
+        );
+        sensorFusion.setIndoorEnvironmentFeatures(
+                indoorMapManager.getCurrentFloorStairsZones(),
+                indoorMapManager.getCurrentFloorLiftZones(),
+                indoorMapManager.getCurrentFloorWalls()
+        );
+    }
+
+    private void syncIndoorMapFloorWithEstimate() {
+        if (indoorMapManager == null || sensorFusion == null) {
+            return;
+        }
+
+        int totalFloors = indoorMapManager.getAvailableFloorsCount();
+        if (totalFloors <= 0) {
+            clearPendingAutoFloorCandidate();
+            return;
+        }
+
+        int estimatedFloor = indoorMapManager.mapBarometerBandFloorToFloorIndex(
+            sensorFusion.getEstimatedFloor()
+        );
+        if (estimatedFloor == indoorMapManager.getCurrentFloor()) {
+            clearPendingAutoFloorCandidate();
+            return;
+        }
+
+        if (pendingAutoFloorCandidate == estimatedFloor) {
+            pendingAutoFloorCandidateCount++;
+        } else {
+            pendingAutoFloorCandidate = estimatedFloor;
+            pendingAutoFloorCandidateCount = 1;
+        }
+
+        if (pendingAutoFloorCandidateCount >= AUTO_FLOOR_CONFIRMATIONS) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (now - lastAutoFloorSwitchTimestampMs < AUTO_FLOOR_SWITCH_COOLDOWN_MS) {
+                return;
+            }
+            indoorMapManager.setCurrentFloor(estimatedFloor, true);
+            syncIndoorFloorReference();
+            lastAutoFloorSwitchTimestampMs = now;
+            clearPendingAutoFloorCandidate();
+            updateFloorDisplay();
         }
     }
 
-    /**
-     * Update floor display text
-     */
+    private void clearPendingAutoFloorCandidate() {
+        pendingAutoFloorCandidate = Integer.MIN_VALUE;
+        pendingAutoFloorCandidateCount = 0;
+    }
+
+    private void updatePositionDisplay() {
+        LatLng displayLatLng = latestGnssLatLng;
+        boolean usingFusion = false;
+
+        if (sensorFusion != null && sensorFusion.getFusedLatLng() != null) {
+            displayLatLng = sensorFusion.getFusedLatLng();
+            usingFusion = true;
+        }
+
+        if (displayLatLng == null && sensorFusion != null) {
+            float[] gnss = sensorFusion.getGNSSLatitude(false);
+            if (isValidCoordinate(gnss[0], gnss[1])) {
+                displayLatLng = new LatLng(gnss[0], gnss[1]);
+            }
+        }
+
+        if (displayLatLng == null) {
+            latitudeText.setText("--");
+            longitudeText.setText("--");
+            accuracyText.setText("Waiting for location");
+            return;
+        }
+
+        updateBarometerAutoFloorGate(displayLatLng);
+
+        if (indoorMapManager != null && currentLocationMarker != null) {
+            displayLatLng = indoorMapManager.validatePosition(displayLatLng, currentLocationMarker.getPosition());
+        }
+
+        latitudeText.setText(String.format(Locale.US, "%.6f", displayLatLng.latitude));
+        longitudeText.setText(String.format(Locale.US, "%.6f", displayLatLng.longitude));
+
+        if (googleMap != null) {
+            if (currentLocationMarker == null) {
+                currentLocationMarker = googleMap.addMarker(new MarkerOptions()
+                        .position(displayLatLng)
+                        .title("Current Location"));
+            } else {
+                currentLocationMarker.setPosition(displayLatLng);
+            }
+        }
+
+        if (usingFusion) {
+            float gnssAccuracy = sensorFusion != null ? sensorFusion.getGnssAccuracy() : latestGnssAccuracy;
+            if (gnssAccuracy < Float.MAX_VALUE) {
+                accuracyText.setText(String.format(Locale.US, "Fusion display | GNSS ref +/- %.1f m", gnssAccuracy));
+            } else {
+                accuracyText.setText("Fusion display");
+            }
+        } else if (latestGnssAccuracy < Float.MAX_VALUE) {
+            accuracyText.setText(String.format(Locale.US, "GNSS +/- %.1f m", latestGnssAccuracy));
+        } else {
+            accuracyText.setText("Waiting for location");
+        }
+    }
+
+    private boolean isValidCoordinate(float lat, float lon) {
+        return lat >= -90f && lat <= 90f && lon >= -180f && lon <= 180f
+                && !(Math.abs(lat) < 0.00001f && Math.abs(lon) < 0.00001f);
+    }
+
+    private void updateBarometerAutoFloorGate(@NonNull LatLng location) {
+        if (sensorFusion == null || indoorMapManager == null || indoorMapManager.getAvailableFloorsCount() <= 0) {
+            wasNearVerticalTransition = false;
+            if (sensorFusion != null) {
+                sensorFusion.setBarometerAutoFloorEnabled(false);
+            }
+            return;
+        }
+
+        boolean nearVerticalTransition = indoorMapManager.isNearCurrentFloorVerticalTransition(location);
+        if (nearVerticalTransition && !wasNearVerticalTransition) {
+            sensorFusion.setBarometerAutoFloorEnabled(true);
+        } else if (!nearVerticalTransition && wasNearVerticalTransition) {
+            sensorFusion.setBarometerAutoFloorEnabled(false);
+            clearPendingAutoFloorCandidate();
+        }
+
+        wasNearVerticalTransition = nearVerticalTransition;
+    }
+
+    private void updateAltitudeDisplay() {
+        if (altitudeText == null) {
+            return;
+        }
+
+        if (latestEstimatedAbsoluteAltitudeMeters != null) {
+            altitudeText.setText(String.format(Locale.US, "%.1f m", latestEstimatedAbsoluteAltitudeMeters));
+        } else if (latestGpsAltitudeMeters != null) {
+            altitudeText.setText(String.format(Locale.US, "%.1f m", latestGpsAltitudeMeters));
+        } else {
+            altitudeText.setText("--");
+        }
+    }
+
     private void updateFloorDisplay() {
         if (indoorMapManager != null) {
             int currentFloor = indoorMapManager.getCurrentFloor();
             int totalFloors = indoorMapManager.getAvailableFloorsCount();
             String floorName = indoorMapManager.getCurrentFloorName();
 
-            if (floorName != null) {
+            if (floorName != null && totalFloors > 0) {
                 currentFloorText.setText(floorName + " (" + (currentFloor + 1) + "/" + totalFloors + ")");
+                floorText.setText(floorName);
+            } else if (selectedBuildingName != null) {
+                currentFloorText.setText(selectedBuildingName + " loading...");
+            } else if (sensorFusion != null) {
+                currentFloorText.setText("Estimated " + formatEstimatedFloor(sensorFusion.getEstimatedFloor()));
             } else {
-                currentFloorText.setText("Floor " + currentFloor);
+                currentFloorText.setText("Select a building");
             }
         }
+    }
+
+    private void toggleLocationPanel() {
+        locationPanelExpanded = !locationPanelExpanded;
+        applyPanelState(locationContent, locationToggleButton, locationPanelExpanded);
+    }
+
+    private void toggleBuildingPanel() {
+        buildingPanelExpanded = !buildingPanelExpanded;
+        applyPanelState(buildingContent, buildingToggleButton, buildingPanelExpanded);
+    }
+
+    private void applyPanelState(View content, MaterialButton toggle, boolean expanded) {
+        if (content != null) {
+            content.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        }
+        if (toggle != null) {
+            toggle.setIconResource(expanded
+                    ? android.R.drawable.arrow_up_float
+                    : android.R.drawable.arrow_down_float);
+        }
+    }
+
+    private String formatEstimatedFloor(int estimatedFloor) {
+        if (estimatedFloor == 0) {
+            return "Ground";
+        }
+        if (estimatedFloor > 0) {
+            return "Floor " + estimatedFloor;
+        }
+        return "Basement " + Math.abs(estimatedFloor);
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        // Stop location updates
         if (fusedLocationClient != null && locationCallback != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
         }
-        // Stop periodic updates
         if (updateHandler != null && updateRunnable != null) {
             updateHandler.removeCallbacks(updateRunnable);
         }
@@ -357,9 +565,7 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
     @Override
     public void onResume() {
         super.onResume();
-        // Restart location updates
         startLocationUpdates();
-        // Restart periodic updates
         if (updateHandler != null && updateRunnable != null) {
             updateHandler.post(updateRunnable);
         }
@@ -373,3 +579,4 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
         }
     }
 }
+

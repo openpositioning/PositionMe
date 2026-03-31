@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
 import android.text.InputType;
@@ -8,14 +8,10 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import com.openpositioning.PositionMe.R;
 
-/**
- * SettingsFragment that inflates and displays the preferences (settings).
- * Sets type for numeric only fields.
- *
- * @see HomeFragment the return fragment when leaving the settings.
- *
- * @author Mate Stodulka
- */
+// SettingsFragment that inflates and displays the preferences (settings).
+// Sets type for numeric only fields.
+// @see HomeFragment the return fragment when leaving the settings.
+// @author Mate Stodulka
 public class SettingsFragment extends PreferenceFragmentCompat {
 
     // EditTextPreference fields with numeric only inputs accepted.
@@ -26,10 +22,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private EditTextPreference accelFilter;
     private EditTextPreference wifiInterval;
 
-    /**
-     * {@inheritDoc}
-     * Sets the relevant numeric type for the preferences that should not take string values.
-     */
+    // {@inheritDoc}
+    // Sets the relevant numeric type for the preferences that should not take string values.
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.root_preferences, rootKey);
@@ -55,3 +49,4 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     }
 }
+

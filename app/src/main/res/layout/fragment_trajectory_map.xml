@@ -3,7 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/trajectory_map_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
 
     <!-- The actual map container -->
     <androidx.fragment.app.FragmentContainerView
@@ -12,74 +13,214 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- ===== Top-left: Compact map controls ===== -->
+    <!-- ===== Top-center: Collapsible map controls ===== -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/mapControlsCard"
-        android:layout_width="wrap_content"
+        style="@style/Widget.PositionMe.CompactCard"
+        android:layout_width="336dp"
         android:layout_height="wrap_content"
-        android:layout_margin="8dp"
-        app:cardBackgroundColor="#E6FFFFFF"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="4dp"
+        android:layout_marginTop="52dp"
+        app:cardBackgroundColor="#F4FFFFFF"
         app:layout_anchor="@id/trajectoryMap"
-        app:layout_anchorGravity="top|start">
+        app:layout_anchorGravity="top|center_horizontal">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="6dp"
-            android:gravity="start">
+            android:paddingStart="12dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
-                android:layout_width="140dp"
-                android:layout_height="36dp"
-                android:textSize="12sp"
-                android:text="@string/gnssSwitch" />
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/indoorMapSwitch"
-                android:layout_width="140dp"
-                android:layout_height="36dp"
-                android:textSize="12sp"
-                android:checked="true"
-                android:text="@string/indoor_map" />
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
-                android:layout_width="140dp"
-                android:layout_height="36dp"
-                android:textSize="12sp"
-                android:visibility="gone"
-                android:text="@string/auto_floor" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Map Controls"
+                        android:textColor="@color/ios_label"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
 
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="2dp">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="Overlay and floor"
+                        android:textColor="@color/ios_secondary_label"
+                        android:textSize="10sp" />
+                </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/lineColorButton"
+                    android:id="@+id/mapControlsToggleButton"
+                    style="@style/Widget.PositionMe.IconButton"
                     android:layout_width="36dp"
                     android:layout_height="36dp"
-                    android:padding="0dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:backgroundTint="@color/red"
-                    app:cornerRadius="8dp"
-                    android:text=""
-                    android:contentDescription="@string/color"/>
+                    android:layout_gravity="end|center_vertical"
+                    android:contentDescription="Toggle map controls"
+                    app:icon="@android:drawable/arrow_down_float"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconSize="16dp" />
+            </FrameLayout>
 
-                <Spinner
-                    android:id="@+id/mapSwitchSpinner"
-                    android:layout_width="90dp"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="6dp"
-                    android:background="@android:color/white"
-                    android:spinnerMode="dropdown" />
+            <LinearLayout
+                android:id="@+id/mapControlsContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@color/ios_separator" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/ios_surface_secondary"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="6dp"
+                    android:weightSum="3">
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/pdrSwitch"
+                        android:layout_width="0dp"
+                        android:layout_height="32dp"
+                        android:layout_weight="1"
+                        android:checked="true"
+                        android:minHeight="32dp"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:text="PDR"
+                        android:textColor="@color/ios_label"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/gnssSwitch"
+                        android:layout_width="0dp"
+                        android:layout_height="32dp"
+                        android:layout_weight="1"
+                        android:checked="true"
+                        android:minHeight="32dp"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:text="GNSS"
+                        android:textColor="@color/ios_label"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/wifiSwitch"
+                        android:layout_width="0dp"
+                        android:layout_height="32dp"
+                        android:layout_weight="1"
+                        android:checked="true"
+                        android:minHeight="32dp"
+                        android:paddingStart="0dp"
+                        android:paddingEnd="0dp"
+                        android:text="WiFi"
+                        android:textColor="@color/ios_label"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@color/ios_surface_secondary"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="6dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/indoorMapSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:checked="false"
+                            android:minHeight="32dp"
+                            android:paddingStart="0dp"
+                            android:paddingEnd="2dp"
+                            android:text="Indoor"
+                            android:textColor="@color/ios_label"
+                            android:textSize="11sp" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/autoFloor"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:layout_marginStart="4dp"
+                            android:minHeight="32dp"
+                            android:paddingStart="0dp"
+                            android:paddingEnd="2dp"
+                            android:text="Auto"
+                            android:textColor="@color/ios_label"
+                            android:textSize="11sp"
+                            android:visibility="gone" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/lineColorButton"
+                            android:layout_width="30dp"
+                            android:layout_height="30dp"
+                            android:layout_marginStart="6dp"
+                            android:backgroundTint="@color/red"
+                            android:contentDescription="@string/color"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:padding="0dp"
+                            android:text=""
+                            app:cornerRadius="9dp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="108dp"
+                        android:layout_height="32dp"
+                        android:layout_marginStart="8dp"
+                        app:cardBackgroundColor="@color/ios_surface"
+                        app:cardCornerRadius="9dp"
+                        app:cardElevation="0dp"
+                        app:strokeColor="@color/ios_separator"
+                        app:strokeWidth="1dp">
+
+                        <Spinner
+                            android:id="@+id/mapSwitchSpinner"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="@android:color/transparent"
+                            android:gravity="center_vertical"
+                            android:popupBackground="@color/ios_surface"
+                            android:paddingStart="6dp"
+                            android:paddingEnd="6dp"
+                            android:spinnerMode="dropdown" />
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -89,11 +230,13 @@
         android:id="@+id/buildingInfoCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="8dp"
+        android:layout_marginTop="16dp"
         android:visibility="gone"
-        app:cardBackgroundColor="#E6000000"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="6dp"
+        app:cardBackgroundColor="#F6FFFFFF"
+        app:cardCornerRadius="22dp"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/ios_separator"
+        app:strokeWidth="1dp"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|center_horizontal">
 
@@ -101,10 +244,10 @@
             android:id="@+id/buildingNameText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp"
             android:text="Building"
-            android:textColor="@android:color/white"
+            android:textColor="@color/ios_label"
             android:textSize="13sp"
             android:textStyle="bold" />
     </com.google.android.material.card.MaterialCardView>
@@ -115,10 +258,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="12dp"
+        android:gravity="center_horizontal"
+        android:layout_margin="14dp"
         android:layout_marginBottom="24dp"
         android:orientation="vertical"
-        android:gravity="center_horizontal"
         android:visibility="gone">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -126,28 +269,33 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="#E6FFFFFF"
-            app:tint="@color/md_theme_primary"
+            app:backgroundTint="#F6FFFFFF"
+            app:borderWidth="0dp"
+            app:elevation="0dp"
+            app:fabCustomSize="44dp"
             app:fabSize="mini"
+            app:tint="@color/ios_blue"
             android:contentDescription="@string/floor_up" />
 
         <com.google.android.material.card.MaterialCardView
-            android:layout_width="48dp"
+            android:layout_width="56dp"
             android:layout_height="wrap_content"
-            android:layout_marginVertical="4dp"
-            app:cardBackgroundColor="@color/md_theme_primary"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="4dp">
+            android:layout_marginVertical="6dp"
+            app:cardBackgroundColor="#F4FFFFFF"
+            app:cardCornerRadius="18dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/ios_separator"
+            app:strokeWidth="1dp">
 
             <TextView
                 android:id="@+id/floorTextView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:paddingVertical="6dp"
+                android:paddingVertical="9dp"
                 android:text="G"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
+                android:textColor="@color/ios_label"
+                android:textSize="13sp"
                 android:textStyle="bold" />
         </com.google.android.material.card.MaterialCardView>
 
@@ -156,9 +304,12 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="#E6FFFFFF"
-            app:tint="@color/md_theme_primary"
+            app:backgroundTint="#F6FFFFFF"
+            app:borderWidth="0dp"
+            app:elevation="0dp"
+            app:fabCustomSize="44dp"
             app:fabSize="mini"
+            app:tint="@color/ios_blue"
             android:contentDescription="@string/floor_down" />
     </LinearLayout>
 

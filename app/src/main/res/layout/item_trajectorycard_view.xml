@@ -8,15 +8,13 @@
 
     <!-- MaterialCardView for each file item -->
     <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.PositionMe.CompactCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="15dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="5dp"
-        app:cardBackgroundColor="@color/md_theme_primaryContainer"
-        app:cardCornerRadius="16dp"
-        app:strokeColor="@color/md_theme_outlineVariant">
+        android:layout_marginStart="2dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="2dp"
+        android:layout_marginBottom="2dp">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
@@ -31,8 +29,8 @@
                 android:gravity="center"
                 android:text="99999"
                 android:textStyle="bold"
-                android:textColor="@color/pastelBlue"
-                android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
+                android:textColor="@color/ios_blue"
+                android:textAppearance="@style/TextAppearance.PositionMe.Display"
                 android:maxLines="1"
                 android:ellipsize="end"
                 app:layout_constraintStart_toStartOf="parent"
@@ -51,21 +49,19 @@
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
                 android:text="1998-05-19 05:28:42"
-                android:textColor="@color/md_theme_onSurface"
+                android:textColor="@color/ios_secondary_label"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton" />
 
-            <!-- Download button with icon -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/downloadTrajectoryButton"
+                style="@style/Widget.PositionMe.IconButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 app:icon="@drawable/ic_baseline_download_24"
-                app:iconTint="@color/md_theme_light_onPrimary"
-                style="@style/Widget.Material3.Button.Icon"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent" />

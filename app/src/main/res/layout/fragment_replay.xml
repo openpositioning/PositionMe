@@ -4,91 +4,73 @@
     android:id="@+id/replayRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="@color/ios_background"
+    android:padding="12dp">
 
-    <!-- Map container (reuse the same approach used in RecordingFragment) -->
-    <FrameLayout
-        android:id="@+id/replayMapFragmentContainer"
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/replayMapCard"
+        style="@style/Widget.PositionMe.Card"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
 
+        <FrameLayout
+            android:id="@+id/replayMapFragmentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </com.google.android.material.card.MaterialCardView>
 
-    <!-- Progress bar or seek bar to show current playback position -->
     <SeekBar
         android:id="@+id/playbackSeekBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="14dp"/>
+        android:layout_marginTop="12dp"
+        android:thumb="@drawable/seekbar_thumb_circle"
+        android:thumbOffset="0dp" />
 
-    <!-- Rotation Controls -->
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="4dp"
-        android:gravity="center_vertical">
-
-        <TextView
-            android:id="@+id/rotationLabel"
-            android:layout_width="80dp"
-            android:layout_height="wrap_content"
-            android:text="Rotate: 0°"
-            android:textColor="#000000"
-            android:textStyle="bold"/>
-
-        <SeekBar
-            android:id="@+id/rotationSeekBar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:max="360"
-            android:progress="0"/>
-    </LinearLayout>
-
-    <!-- Playback Controls -->
-    <LinearLayout
-        style="?android:attr/buttonBarStyle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
         android:orientation="horizontal"
-        android:padding="8dp">
+        android:layout_marginTop="12dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/restartButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
+            style="@style/Widget.PositionMe.NeutralButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="@string/replay_frag_restart"
-            android:layout_margin="2dp" />
+            android:layout_margin="4dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/playPauseButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
+            style="@style/Widget.PositionMe.PrimaryButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="@string/replay_frag_play"
-            android:layout_margin="2dp" />
+            android:layout_margin="4dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/goEndButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
+            style="@style/Widget.PositionMe.SecondaryButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="@string/replay_frag_end"
-            android:layout_margin="2dp" />
+            android:layout_margin="4dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/exitButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
+            style="@style/Widget.PositionMe.NeutralButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="@string/replay_frag_exit"
-            android:layout_margin="2dp"/>
+            android:layout_margin="4dp" />
     </LinearLayout>
-
-
 
 </LinearLayout>

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.viewitems;
+﻿package com.openpositioning.PositionMe.presentation.viewitems;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,16 +35,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Adapter used for displaying trajectory metadata in a RecyclerView list.
- * This adapter binds trajectory metadata from the server to individual view items.
- * The download status is indicated via a button with different icons.
- * The adapter also listens for file changes using FileObserver to update the download records in real time.
- * A local set of "downloading" trajectory IDs is maintained to support simultaneous downloads.
- * @see TrajDownloadViewHolder for the corresponding view holder.
- * @see FilesFragment for details on how the data is generated.
- * @see ServerCommunications for where the response items are received.
- */
+// Adapter used for displaying trajectory metadata in a RecyclerView list.
+// This adapter binds trajectory metadata from the server to individual view items.
+// The download status is indicated via a button with different icons.
+// The adapter also listens for file changes using FileObserver to update the download records in real time.
+// A local set of "downloading" trajectory IDs is maintained to support simultaneous downloads.
+// @see TrajDownloadViewHolder for the corresponding view holder.
+// @see FilesFragment for details on how the data is generated.
+// @see ServerCommunications for where the response items are received.
 public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
 
     // Date-time formatter used to format date and time.
@@ -60,13 +58,10 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     // Set to keep track of trajectory IDs that are currently downloading.
     private final Set<String> downloadingTrajIds = new HashSet<>();
 
-    /**
-     * Constructor for the adapter.
-     *
-     * @param context       Application context used for inflating layouts.
-     * @param responseItems List of response items from the server.
-     * @param listener      Callback listener for handling download click events.
-     */
+    // Constructor for the adapter.
+    // @param context Application context used for inflating layouts.
+    // @param responseItems List of response items from the server.
+    // @param listener Callback listener for handling download click events.
     public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
         this.context = context;
         this.responseItems = responseItems;
@@ -77,12 +72,10 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         initFileObserver();
     }
 
-    /**
-     * Loads the local download records from storage.
-     * The records are stored in a JSON file located in the app-specific Downloads directory.
-     * After loading, any trajectory IDs that have now finished downloading are removed
-     * from the downloading set.
-     */
+    // Loads the local download records from storage.
+    // The records are stored in a JSON file located in the app-specific Downloads directory.
+    // After loading, any trajectory IDs that have now finished downloading are removed
+    // from the downloading set.
     private void loadDownloadRecords() {
         try {
             File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
@@ -132,10 +125,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         }
     }
 
-    /**
-     * Initializes the FileObserver to listen for modifications on the "download_records.json" file.
-     * When the file is modified, it reloads the download records and refreshes the UI.
-     */
+    // Initializes the FileObserver to listen for modifications on the "download_records.json" file.
+    // When the file is modified, it reloads the download records and refreshes the UI.
     private void initFileObserver() {
         File downloadsFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         if (downloadsFolder == null) {
@@ -158,13 +149,10 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         fileObserver.startWatching();
     }
 
-    /**
-     * Creates a new view holder for a trajectory item.
-     *
-     * @param parent   The parent view group.
-     * @param viewType The view type.
-     * @return A new instance of TrajDownloadViewHolder.
-     */
+    // Creates a new view holder for a trajectory item.
+    // @param parent The parent view group.
+    // @param viewType The view type.
+    // @return A new instance of TrajDownloadViewHolder.
     @NonNull
     @Override
     public TrajDownloadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -172,16 +160,14 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 .inflate(R.layout.item_trajectorycard_view, parent, false), listener);
     }
 
-    /**
-     * Binds data to the view holder.
-     * Formats and assigns trajectory metadata fields to the corresponding views.
-     * The button state is determined as follows:
-     * - If the trajectory is present in the download records, it is set as "downloaded".
-     * - Else if the trajectory is in the downloading set, it is set as "downloading".
-     * - Otherwise, it is set as "not downloaded".
-     * @param holder   The view holder to bind data to.
-     * @param position The position of the item in the list.
-     */
+    // Binds data to the view holder.
+    // Formats and assigns trajectory metadata fields to the corresponding views.
+    // The button state is determined as follows:
+    // If the trajectory is present in the download records, it is set as "downloaded".
+    // Else if the trajectory is in the downloading set, it is set as "downloading".
+    // Otherwise, it is set as "not downloaded".
+    // @param holder The view holder to bind data to.
+    // @param position The position of the item in the list.
     @Override
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         // Retrieve the trajectory id from the response item.
@@ -258,25 +244,19 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         holder.downloadButton.invalidate();
     }
 
-    /**
-     * Returns the number of items in the response list.
-     *
-     * @return The size of the responseItems list.
-     */
+    // Returns the number of items in the response list.
+    // @return The size of the responseItems list.
     @Override
     public int getItemCount() {
         return responseItems.size();
     }
 
-    /**
-     * Sets the appearance of the button based on its state.
-     *
-     * @param button The MaterialButton to update.
-     * @param state  The state of the button:
-     *               0 - Not downloaded,
-     *               1 - Downloaded,
-     *               2 - Downloading.
-     */
+    // Sets the appearance of the button based on its state.
+    // @param button The MaterialButton to update.
+    // @param state The state of the button:
+    // 0 - Not downloaded,
+    // 1 - Downloaded,
+    // 2 - Downloading.
     private void setButtonState(MaterialButton button, int state) {
         if (state == 1) {
             button.setIconResource(R.drawable.ic_baseline_play_circle_filled_24);
@@ -293,3 +273,5 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         }
     }
 }
+
+

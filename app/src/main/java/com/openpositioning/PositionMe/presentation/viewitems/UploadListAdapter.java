@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.viewitems;
+﻿package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -14,10 +14,8 @@ import com.openpositioning.PositionMe.presentation.fragment.UploadFragment;
 import java.io.File;
 import java.util.List;
 
-/**
- * Adapter used for displaying local Trajectory file data
- * FINAL VERSION: Correctly parses names by finding the last underscore.
- */
+// Adapter used for displaying local Trajectory file data
+// FINAL VERSION: Correctly parses names by finding the last underscore.
 public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
 
     private final Context context;
@@ -36,22 +34,20 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         return new UploadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_upload_card_view, parent, false), listener);
     }
 
-    /**
-     * Parse filename format: traj_NAME_DATE.txt
-     * Extract name (remove "traj_" prefix) and date.
-     */
+    // Parse filename format: traj_NAME_DATE.txt
+    // Extract name (remove "traj_" prefix) and date.
     @Override
     public void onBindViewHolder(@NonNull UploadViewHolder holder, int position) {
-        // 1. Get filename (e.g. "traj_MyWalk_2026-02-05.txt")
+        // Get filename (e.g. "traj_MyWalk_2026-02-05.txt")
         File currentFile = uploadItems.get(position);
         String fileName = currentFile.getName();
 
-        // 2. Remove ".txt" suffix
+        // Remove ".txt" suffix
         if (fileName.endsWith(".txt")) {
             fileName = fileName.substring(0, fileName.length() - 4);
         }
 
-        // 3. Find last "_" to split name and date
+        // Find last "_" to split name and date
         int lastUnderscoreIndex = fileName.lastIndexOf("_");
 
         if (lastUnderscoreIndex != -1) {
@@ -108,3 +104,4 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         }
     }
 }
+

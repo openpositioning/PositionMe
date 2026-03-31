@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <objectAnimator
+        android:propertyName="scaleX"
+        android:duration="110"
+        android:valueTo="0.97"
+        android:valueType="floatType" />
+    <objectAnimator
+        android:propertyName="scaleY"
+        android:duration="110"
+        android:valueTo="0.97"
+        android:valueType="floatType" />
+</set>

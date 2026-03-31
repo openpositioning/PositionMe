@@ -10,8 +10,10 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="24dp"
-        android:background="@color/md_theme_background">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="20dp"
+        android:background="@color/ios_background">
 
         <!-- Extra-large page title -->
         <TextView
@@ -19,10 +21,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Position Me"
-            android:textSize="36sp"
+            android:textSize="34sp"
             android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
             android:textAlignment="center"
-            android:textColor="@color/md_theme_primary"
+            android:textColor="@color/ios_label"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
@@ -34,9 +37,8 @@
             android:layout_height="wrap_content"
             android:text="@string/fragment_home_slogan"
             android:textSize="14sp"
-            android:textStyle="italic"
             android:textAlignment="center"
-            android:textColor="@color/md_theme_primary"
+            android:textColor="@color/ios_secondary_label"
             app:layout_constraintTop_toBottomOf="@id/pageTitle"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -48,8 +50,11 @@
             android:id="@+id/gnssStatusTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@android:color/holo_red_dark"
-            android:textSize="16sp"
+            android:background="@drawable/status_background"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp"
+            android:textColor="@color/ios_red"
+            android:textSize="13sp"
             android:visibility="gone"
             android:text="GNSS is disabled"
             app:layout_constraintTop_toBottomOf="@id/sloganText"
@@ -58,16 +63,23 @@
             android:layout_marginTop="8dp" />
 
         <!-- Google Map container -->
-        <fragment
-            android:id="@+id/mapFragmentContainer"
-            android:name="com.google.android.gms.maps.SupportMapFragment"
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/homeMapCard"
+            style="@style/Widget.PositionMe.Card"
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_marginTop="20dp"
             app:layout_constraintTop_toBottomOf="@id/gnssStatusTextView"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintDimensionRatio="16:9" />
+            app:layout_constraintDimensionRatio="16:10">
+
+            <androidx.fragment.app.FragmentContainerView
+                android:id="@+id/mapFragmentContainer"
+                android:name="com.google.android.gms.maps.SupportMapFragment"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- 2x2 Button Grid with equal-sized buttons -->
         <androidx.gridlayout.widget.GridLayout
@@ -77,7 +89,7 @@
             android:layout_marginTop="24dp"
             app:columnCount="2"
             app:rowCount="2"
-            app:layout_constraintTop_toBottomOf="@id/mapFragmentContainer"
+            app:layout_constraintTop_toBottomOf="@id/homeMapCard"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintBottom_toTopOf="@id/indoorButton">
@@ -85,88 +97,77 @@
             <!-- Start Recording Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/startStopButton"
-                style="@style/Widget.MaterialComponents.Button"
+                style="@style/Widget.PositionMe.HomeShortcutButton"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_margin="8dp"
-                android:paddingTop="12dp"
                 app:layout_columnWeight="1"
                 app:layout_rowWeight="1"
                 android:text="@string/start_recording"
+                android:textAlignment="center"
                 app:icon="@drawable/ic_baseline_directions_walk_24"
                 app:iconGravity="top"
-                app:iconSize="32dp"
-                app:cornerRadius="16dp"
-                android:backgroundTint="@color/md_theme_primary"
-                android:textColor="@color/md_theme_onPrimary" />
+                app:iconSize="30dp" />
 
             <!-- History Data Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/filesButton"
-                style="@style/Widget.MaterialComponents.Button"
+                style="@style/Widget.PositionMe.HomeShortcutButton"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_margin="8dp"
-                android:paddingTop="12dp"
                 app:layout_columnWeight="1"
                 app:layout_rowWeight="1"
                 android:text="@string/files"
+                android:textAlignment="center"
                 app:icon="@drawable/ic_baseline_folder_24"
                 app:iconGravity="top"
-                app:iconSize="32dp"
-                app:cornerRadius="16dp"
-                android:backgroundTint="@color/md_theme_primary"
-                android:textColor="@color/md_theme_onPrimary" />
+                app:iconSize="30dp" />
 
             <!-- View Sensor Info Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/sensorInfoButton"
-                style="@style/Widget.MaterialComponents.Button"
+                style="@style/Widget.PositionMe.HomeShortcutButton"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_margin="8dp"
-                android:paddingTop="12dp"
-                android:backgroundTint="@color/md_theme_tertiary"
                 android:text="@string/info"
-                android:textColor="@color/md_theme_onTertiary"
-                app:cornerRadius="16dp"
+                android:textAlignment="center"
                 app:icon="@drawable/ic_baseline_info_24"
                 app:iconGravity="top"
-                app:iconSize="32dp"
+                app:iconSize="30dp"
                 app:layout_columnWeight="1"
                 app:layout_rowWeight="1" />
 
             <!-- View Real-Time Measurement Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/measurementButton"
-                style="@style/Widget.MaterialComponents.Button"
+                style="@style/Widget.PositionMe.HomeShortcutButton"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_margin="8dp"
-                android:paddingTop="12dp"
                 app:layout_columnWeight="1"
                 app:layout_rowWeight="1"
                 android:text="@string/measurements"
+                android:textAlignment="center"
                 app:icon="@drawable/ic_baseline_data_array_24"
                 app:iconGravity="top"
-                app:iconSize="32dp"
-                app:cornerRadius="16dp"
-                android:backgroundTint="@color/md_theme_secondary"
-                android:textColor="@color/md_theme_onSecondary" />
+                app:iconSize="30dp" />
         </androidx.gridlayout.widget.GridLayout>
 
         <!-- Grey button for indoor positioning, anchored to the bottom. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/indoorButton"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            style="@style/Widget.PositionMe.HomeShortcutButton.Bottom"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Indoor Positioning \n (In Development)"
-            android:textColor="@color/md_theme_onPrimary"
-            android:backgroundTint="#9E9E9E"
+            android:text="Indoor Positioning\nPreview"
             android:textSize="14sp"
-            android:padding="12dp"
+            android:textAlignment="center"
+            app:icon="@drawable/ic_baseline_building_24"
+            app:iconGravity="textStart"
+            app:iconSize="20dp"
             app:layout_constraintTop_toBottomOf="@id/buttonGrid"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"

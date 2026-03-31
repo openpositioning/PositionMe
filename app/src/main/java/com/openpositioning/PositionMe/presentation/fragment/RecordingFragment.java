@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
 import android.os.Handler;
@@ -12,6 +12,9 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -21,7 +24,10 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.BuildingPolygon;
+import com.openpositioning.PositionMe.utils.GeometryUtils;
 
+import java.util.Locale;
 import java.util.Map;
 
 
@@ -31,7 +37,7 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
     private static final int AXIS_MODE = 1;
 
 
-    private static final float DISTANCE_MULTIPLIER = 1.2f;
+    private static final float DISTANCE_MULTIPLIER = 1.0f;
 
     private static final double ROTATION_FINE_TUNE = 0.0;
 
@@ -45,8 +51,13 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
     private SensorFusion sensorFusion;
     private boolean isRecording = false;
 
+    private BiometricPrompt biometricPrompt;
+    private BiometricPrompt.PromptInfo biometricPromptInfo;
+    private boolean biometricVerified = false;
+
     private Handler uiHandler = new Handler();
     private Runnable updateMapTask;
+    private boolean uiUpdatesRunning = false;
 
     private String selectedBuildingId = null;
     private String selectedVenueName = null;
@@ -55,8 +66,11 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
     private LatLng pdrOrigin = null;
     private float[] pdrStartOffset = null;
     private LatLng currentPdrLocation = null;
+    private LatLng currentDisplayLocation = null;
+    private LatLng lastAbsoluteDistanceSample = null;
     private static final double EARTH_RADIUS = 6378137.0;
     private double totalDistanceMeters = 0.0;
+    private double absoluteDistanceMeters = 0.0;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -74,7 +88,7 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
             selectedBuildingId = buildingId;
             selectedVenueName = venueName;
             if (isRecording && statusTextView != null) {
-                statusTextView.append(" [" + venueName + "]");
+                updateRecordingStatus();
             }
         });
         getChildFragmentManager().beginTransaction()
@@ -97,19 +111,81 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
         }
 
         startStopButton.setOnClickListener(v -> {
-            if (!isRecording) startRecording();
-            else stopRecording();
+            if (!isRecording) {
+                if (biometricVerified) {
+                    startRecording();
+                } else {
+                    authenticateAndStart();
+                }
+            } else {
+                stopRecording();
+            }
         });
+
+        initBiometric();
 
         markerButton.setOnClickListener(v -> {
             if (isRecording) {
-                sensorFusion.addMarker();
-                if (currentPdrLocation != null && trajectoryMapFragment != null) {
-                    trajectoryMapFragment.addMarkerToMap(currentPdrLocation);
+                LatLng markerLocation = currentDisplayLocation != null ? currentDisplayLocation : currentPdrLocation;
+                if (markerLocation != null) {
+                    sensorFusion.addMarkerAt(markerLocation, resolveDisplayAltitudeMeters());
+                    if (trajectoryMapFragment != null) {
+                        trajectoryMapFragment.addMarkerToMap(markerLocation);
+                    }
+                    Toast.makeText(getContext(), "Marker Added", Toast.LENGTH_SHORT).show();
                 }
-                Toast.makeText(getContext(), "Marker Added", Toast.LENGTH_SHORT).show();
             }
         });
+
+        startUiUpdates();
+    }
+
+    private void initBiometric() {
+        BiometricManager biometricManager = BiometricManager.from(requireContext());
+        if (biometricManager.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS) {
+            biometricPrompt = new BiometricPrompt(this, ContextCompat.getMainExecutor(requireContext()),
+                    new BiometricPrompt.AuthenticationCallback() {
+                        @Override
+                        public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+                            super.onAuthenticationError(errorCode, errString);
+                            Log.w("RecordingFragment", "Biometric error: " + errString);
+                            Toast.makeText(getContext(), "Fingerprint auth failed: " + errString, Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                            super.onAuthenticationSucceeded(result);
+                            biometricVerified = true;
+                            Toast.makeText(getContext(), "Fingerprint authentication succeeded", Toast.LENGTH_SHORT).show();
+                            startRecording();
+                        }
+
+                        @Override
+                        public void onAuthenticationFailed() {
+                            super.onAuthenticationFailed();
+                            Log.d("RecordingFragment", "Biometric auth failed.");
+                        }
+                    });
+
+            biometricPromptInfo = new BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("PositionMe Secure Recording")
+                    .setSubtitle("Use fingerprint to authorize trajectory recording")
+                    .setNegativeButtonText("Cancel")
+                    .setDeviceCredentialAllowed(false)
+                    .build();
+        } else {
+            biometricPrompt = null;
+        }
+    }
+
+    private void authenticateAndStart() {
+        if (biometricPrompt != null && biometricPromptInfo != null) {
+            biometricPrompt.authenticate(biometricPromptInfo);
+        } else {
+            // Biometric unavailable, fallback with passwordless confirmation
+            biometricVerified = true;
+            startRecording();
+        }
     }
 
     private void startRecording() {
@@ -121,7 +197,12 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
             id = "Traj_" + System.currentTimeMillis();
         }
 
-        Log.e("RecordingFragment", "Starting Manual PDR recording: " + id);
+        Log.e("RecordingFragment", "Starting recording with dynamic origin policy: " + id);
+        pdrOrigin = resolveRecordingOrigin();
+        if (pdrOrigin != null) {
+            sensorFusion.setStartGNSSLatitude(new float[]{(float) pdrOrigin.latitude, (float) pdrOrigin.longitude});
+        }
+
         sensorFusion.startRecording(id);
 
         if (selectedVenueName != null) sensorFusion.setVenueName(selectedVenueName);
@@ -129,16 +210,15 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
 
         isRecording = true;
         totalDistanceMeters = 0.0;
+        absoluteDistanceMeters = 0.0;
 
-        // 1. Reset underlying PDR
-        sensorFusion.resetPDR();
-
-        // 2. Lock start point (Manual Origin)
-        if (trajectoryMapFragment != null) {
-            pdrOrigin = trajectoryMapFragment.getCameraTarget();
+        // Lock start point (Manual Origin)
+        if (pdrOrigin != null) {
             currentPdrLocation = pdrOrigin;
+            currentDisplayLocation = pdrOrigin;
+            lastAbsoluteDistanceSample = pdrOrigin;
 
-            // 3. Record initial offset
+            // Record initial offset
             Map<SensorTypes, float[]> sensorData = sensorFusion.getSensorValueMap();
             if (sensorData != null) {
                 float[] currentPDR = sensorData.get(SensorTypes.PDR);
@@ -150,11 +230,15 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
             }
         }
 
-        statusTextView.setText("Recording (Mode " + AXIS_MODE + ")");
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.detectCurrentFloorOnce();
+        }
+
+        updateRecordingStatus();
         statusTextView.setBackgroundResource(R.drawable.status_recording);
 
         startStopButton.setText("Stop");
-        startStopButton.setBackgroundColor(getResources().getColor(android.R.color.holo_red_dark));
+        startStopButton.setBackgroundColor(getResources().getColor(R.color.ios_red));
         trajectoryIdInput.setEnabled(false);
         markerButton.setEnabled(true);
 
@@ -162,32 +246,52 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
     }
 
     private void startUiUpdates() {
+        if (uiUpdatesRunning) {
+            return;
+        }
+        uiUpdatesRunning = true;
+
         updateMapTask = new Runnable() {
             @Override
             public void run() {
-                if (isRecording && isAdded()) {
+                if (isAdded()) {
                     Map<SensorTypes, float[]> sensorData = sensorFusion.getSensorValueMap();
 
                     if (sensorData != null) {
                         float orientation = sensorFusion.passOrientation();
-                        float[] pdrMovement = sensorData.get(SensorTypes.PDR);
-                        float[] gnssPos = sensorData.get(SensorTypes.GNSSLATLONG);
 
-                        // 1. Update Blue Dot (Reference only)
+                        // Keep GNSS/WiFi visible in initial screen even before pressing Start.
+                        float[] gnssPos = sensorData.get(SensorTypes.GNSSLATLONG);
                         if (gnssPos != null && gnssPos[0] != 0) {
                             if (trajectoryMapFragment != null) {
                                 trajectoryMapFragment.updateGNSS(new LatLng(gnssPos[0], gnssPos[1]));
                             }
                         }
 
-                        // 2. PDR Trajectory Logic
-                        if (pdrOrigin != null && pdrMovement != null) {
+                        float[] wifiPos = sensorData.get(SensorTypes.WIFI);
+                        if (wifiPos != null && wifiPos[0] != 0 && wifiPos[1] != 0) {
+                            if (trajectoryMapFragment != null) {
+                                trajectoryMapFragment.updateWifi(new LatLng(wifiPos[0], wifiPos[1]));
+                            }
+                        }
 
-                            // A. Calculate raw relative displacement
-                            float startX = (pdrStartOffset != null) ? pdrStartOffset[0] : 0;
-                            float startY = (pdrStartOffset != null) ? pdrStartOffset[1] : 0;
-                            float rawX = pdrMovement[0] - startX;
-                            float rawY = pdrMovement[1] - startY;
+                        if (isRecording) {
+                            float[] pdrMovement = sensorData.get(SensorTypes.PDR);
+                            float[] fusedPos = sensorData.get(SensorTypes.FUSED);
+
+                            LatLng fusedLocation = null;
+                            if (fusedPos != null && fusedPos[0] != 0 && fusedPos[1] != 0) {
+                                fusedLocation = new LatLng(fusedPos[0], fusedPos[1]);
+                            }
+
+                            // PDR Trajectory Logic
+                            if (pdrOrigin != null && pdrMovement != null) {
+
+                                // A. Calculate raw relative displacement
+                                float startX = (pdrStartOffset != null) ? pdrStartOffset[0] : 0;
+                                float startY = (pdrStartOffset != null) ? pdrStartOffset[1] : 0;
+                                float rawX = pdrMovement[0] - startX;
+                                float rawY = pdrMovement[1] - startY;
 
                             // B. [Key] Axis Mapping Correction
                             float mapX = rawX;
@@ -219,22 +323,29 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
 
                             // E. Convert to LatLng and Update
                             LatLng newLocation = calculateLatLngFromMeters(pdrOrigin, (float)rotatedX, (float)rotatedY);
-
-                            if (trajectoryMapFragment != null) {
-                                // Also correct arrow orientation
-                                float correctedOri = orientation;
-                                // Simple handling, if XY swapped, orientation might need -90deg, keep original for now to observe red line
-                                trajectoryMapFragment.updateUserLocation(newLocation, correctedOri);
-                            }
-
                             currentPdrLocation = newLocation;
                             totalDistanceMeters = Math.sqrt(rotatedX*rotatedX + rotatedY*rotatedY);
 
-                            if (statusTextView != null && isAdded()) {
-                                String distStr = totalDistanceMeters < 1000 ?
-                                        String.format("%.1f m", totalDistanceMeters) :
-                                        String.format("%.2f km", totalDistanceMeters / 1000.0);
-                                statusTextView.setText("PDR(M" + AXIS_MODE + ")\nDist: " + distStr);
+                            if (trajectoryMapFragment != null) {
+                                // Keep trajectory direction fully PDR-driven during recording.
+                                LatLng primaryLocation = newLocation;
+                                updateAbsoluteDistance(primaryLocation);
+                                currentDisplayLocation = primaryLocation;
+                                trajectoryMapFragment.updateUserLocation(primaryLocation, orientation);
+                            }
+
+                                if (statusTextView != null && isAdded()) {
+                                    String venueSuffix = selectedVenueName != null ? "\n" + selectedVenueName : "";
+                                    statusTextView.setText("Recording" + buildErrorStatusSuffix() + venueSuffix);
+                                }
+                            } else if (fusedLocation != null && trajectoryMapFragment != null) {
+                                updateAbsoluteDistance(fusedLocation);
+                                currentDisplayLocation = fusedLocation;
+                                trajectoryMapFragment.updateUserLocation(fusedLocation, orientation);
+                                if (statusTextView != null && isAdded()) {
+                                    String venueSuffix = selectedVenueName != null ? "\n" + selectedVenueName : "";
+                                    statusTextView.setText("Recording\nFusion locked" + buildErrorStatusSuffix() + venueSuffix);
+                                }
                             }
                         }
                     }
@@ -257,13 +368,15 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
     private void stopRecording() {
         isRecording = false;
         sensorFusion.stopRecording();
-        uiHandler.removeCallbacks(updateMapTask);
         pdrOrigin = null;
         pdrStartOffset = null;
         currentPdrLocation = null;
+        currentDisplayLocation = null;
+        lastAbsoluteDistanceSample = null;
         totalDistanceMeters = 0.0;
+        absoluteDistanceMeters = 0.0;
         startStopButton.setText("Start");
-        startStopButton.setBackgroundColor(getResources().getColor(R.color.purple_500));
+        startStopButton.setBackgroundColor(getResources().getColor(R.color.ios_blue));
         markerButton.setEnabled(false);
         trajectoryIdInput.setEnabled(true);
         statusTextView.setText("Recording stopped");
@@ -273,10 +386,143 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
         }
     }
 
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (updateMapTask != null) {
+            uiHandler.removeCallbacks(updateMapTask);
+        }
+        uiUpdatesRunning = false;
+    }
+
     @Override public void update(Object[] data) { }
     @Override public void onVenueSelected(String buildingId, String venueName) {
         this.selectedBuildingId = buildingId;
         this.selectedVenueName = venueName;
-        if (isRecording && statusTextView != null) statusTextView.append(" [" + venueName + "]");
+        if (isRecording && statusTextView != null) {
+            updateRecordingStatus();
+        }
+    }
+
+    private LatLng resolveRecordingOrigin() {
+        LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+        boolean indoorBySelection = selectedBuildingId != null && !selectedBuildingId.isEmpty();
+        if (wifiLocation != null && (indoorBySelection || isInsideKnownIndoorBuildings(wifiLocation))) {
+            return wifiLocation;
+        }
+
+        float[] gnssCoords = sensorFusion.getGNSSLatitude(false);
+        LatLng gnssLocation = null;
+        if (gnssCoords[0] != 0 || gnssCoords[1] != 0) {
+            gnssLocation = new LatLng(gnssCoords[0], gnssCoords[1]);
+        }
+
+        if (gnssLocation != null && !indoorBySelection && !isInsideKnownIndoorBuildings(gnssLocation)) {
+            return gnssLocation;
+        }
+
+        if (wifiLocation != null) {
+            return wifiLocation;
+        }
+
+        if (gnssLocation != null) {
+            return gnssLocation;
+        }
+
+        float[] startCoords = sensorFusion.getGNSSLatitude(true);
+        if (startCoords[0] != 0 || startCoords[1] != 0) {
+            return new LatLng(startCoords[0], startCoords[1]);
+        }
+
+        return null;
+    }
+
+    private boolean isInsideKnownIndoorBuildings(@NonNull LatLng point) {
+        return BuildingPolygon.inNucleus(point) || BuildingPolygon.inLibrary(point);
+    }
+
+    private LatLng blendLocations(LatLng primary, LatLng correction, double correctionWeight) {
+        if (primary == null) {
+            return correction;
+        }
+        if (correction == null) {
+            return primary;
+        }
+        double w = Math.max(0.0, Math.min(0.25, correctionWeight));
+        double lat = primary.latitude + w * (correction.latitude - primary.latitude);
+        double lon = primary.longitude + w * (correction.longitude - primary.longitude);
+        return new LatLng(lat, lon);
+    }
+
+    private float resolveDisplayAltitudeMeters() {
+        float estimatedAltitude = sensorFusion.getEstimatedAbsoluteAltitude();
+        if (!Float.isNaN(estimatedAltitude)) {
+            return estimatedAltitude;
+        }
+        return Float.NaN;
+    }
+
+    private String buildErrorStatusSuffix() {
+        return "\nErr  PDR: " + formatLocationError(resolvePdrLocation(), currentDisplayLocation)
+                + "  GNSS: " + formatLocationError(resolveGnssLocation(), currentDisplayLocation)
+                + "  WiFi: " + formatLocationError(resolveWifiLocation(), currentDisplayLocation);
+    }
+
+    private void updateAbsoluteDistance(LatLng currentLocation) {
+        if (currentLocation == null) {
+            return;
+        }
+
+        if (lastAbsoluteDistanceSample != null) {
+            absoluteDistanceMeters += GeometryUtils.distanceBetween(lastAbsoluteDistanceSample, currentLocation);
+        }
+        lastAbsoluteDistanceSample = currentLocation;
+    }
+
+    private String formatDistance(double distanceMeters) {
+        return distanceMeters < 1000
+                ? String.format(Locale.US, "%.1f m", distanceMeters)
+                : String.format(Locale.US, "%.2f km", distanceMeters / 1000.0);
+    }
+
+    private LatLng resolvePdrLocation() {
+        return currentPdrLocation;
+    }
+
+    private LatLng resolveGnssLocation() {
+        float[] gnssCoords = sensorFusion.getGNSSLatitude(false);
+        if ((gnssCoords[0] == 0f && gnssCoords[1] == 0f)) {
+            return null;
+        }
+        return new LatLng(gnssCoords[0], gnssCoords[1]);
+    }
+
+    private LatLng resolveWifiLocation() {
+        return sensorFusion.getLatLngWifiPositioning();
+    }
+
+    private String formatLocationError(LatLng sourceLocation, LatLng referenceLocation) {
+        if (sourceLocation == null || referenceLocation == null) {
+            return "--";
+        }
+
+        double distanceMeters = GeometryUtils.distanceBetween(sourceLocation, referenceLocation);
+        return distanceMeters < 1000
+                ? String.format(Locale.US, "%.1f m", distanceMeters)
+                : String.format(Locale.US, "%.2f km", distanceMeters / 1000.0);
+    }
+
+    private void updateRecordingStatus() {
+        if (statusTextView == null) {
+            return;
+        }
+
+        StringBuilder status = new StringBuilder("Recording");
+        status.append(buildErrorStatusSuffix());
+        if (selectedVenueName != null && !selectedVenueName.isEmpty()) {
+            status.append("\n").append(selectedVenueName);
+        }
+        statusTextView.setText(status.toString());
     }
 }
+

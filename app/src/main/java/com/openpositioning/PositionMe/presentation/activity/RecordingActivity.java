@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.activity;
+﻿package com.openpositioning.PositionMe.presentation.activity;
 
 import android.os.Bundle;
 import android.view.WindowManager;
@@ -12,11 +12,9 @@ import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 
-/**
- * RecordingActivity (Updated)
- * Manages the navigation flow: StartLocation -> Recording -> Correction.
- * Keeps the screen on during the process.
- */
+// RecordingActivity (Updated)
+// Manages the navigation flow: StartLocation -> Recording -> Correction.
+// Keeps the screen on during the process.
 public class RecordingActivity extends AppCompatActivity {
 
     @Override
@@ -33,19 +31,15 @@ public class RecordingActivity extends AppCompatActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
-    /**
-     * Show the StartLocationFragment.
-     */
+    // Show the StartLocationFragment.
     public void showStartLocationScreen() {
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         ft.replace(R.id.mainFragmentContainer, new StartLocationFragment());
         ft.commit();
     }
 
-    /**
-     * Show the RecordingFragment.
-     * Called by StartLocationFragment after location is confirmed.
-     */
+    // Show the RecordingFragment.
+    // Called by StartLocationFragment after location is confirmed.
     public void showRecordingScreen() {
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         ft.replace(R.id.mainFragmentContainer, new RecordingFragment());
@@ -54,10 +48,8 @@ public class RecordingActivity extends AppCompatActivity {
         ft.commit();
     }
 
-    /**
-     * Show the CorrectionFragment.
-     * Should be called by RecordingFragment after recording stops.
-     */
+    // Show the CorrectionFragment.
+    // Should be called by RecordingFragment after recording stops.
     public void showCorrectionScreen() {
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         ft.replace(R.id.mainFragmentContainer, new CorrectionFragment());
@@ -65,11 +57,10 @@ public class RecordingActivity extends AppCompatActivity {
         ft.commit();
     }
 
-    /**
-     * Finish the Activity flow.
-     */
+    // Finish the Activity flow.
     public void finishFlow() {
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         finish();
     }
 }
+

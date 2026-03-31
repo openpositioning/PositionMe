@@ -4,20 +4,21 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="4dp">
+    android:paddingTop="2dp"
+    android:paddingBottom="2dp">
 
     <!-- Material Card -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="15dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="5dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="4dp"
-        app:strokeColor="@color/md_theme_outline"
+        android:layout_marginStart="2dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="2dp"
+        android:layout_marginBottom="4dp"
+        app:cardBackgroundColor="@color/ios_surface"
+        app:cardCornerRadius="22dp"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/ios_separator"
         app:strokeWidth="1dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -26,17 +27,24 @@
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="190dp"
-            android:padding="12dp">
+            android:layout_height="wrap_content"
+            android:minHeight="176dp"
+            android:paddingStart="18dp"
+            android:paddingTop="18dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="18dp">
 
             <!-- Sensor Name -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorNameItem"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
                 android:text="LSM6DSO Acceleration Sensor"
-                android:textColor="@color/md_theme_onSurface"
-                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                android:gravity="center"
+                android:textColor="@color/ios_label"
+                android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
                 android:textStyle="bold"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -47,9 +55,9 @@
                 android:id="@+id/sensorVendorItem"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="18dp"
                 android:text="@string/vendor"
-                android:textColor="@color/md_theme_secondary"
+                android:textColor="@color/ios_secondary_label"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorNameItem" />
@@ -59,9 +67,9 @@
                 android:id="@+id/sensorResolutionItem"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
                 android:text="@string/resolution"
-                android:textColor="@color/md_theme_secondary"
+                android:textColor="@color/ios_secondary_label"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorVendorItem" />
@@ -71,9 +79,9 @@
                 android:id="@+id/sensorPowerItem"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
                 android:text="@string/power"
-                android:textColor="@color/md_theme_secondary"
+                android:textColor="@color/ios_secondary_label"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorResolutionItem" />
@@ -83,10 +91,11 @@
                 android:id="@+id/sensorVersionItem"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
                 android:text="@string/version"
-                android:textColor="@color/md_theme_secondary"
+                android:textColor="@color/ios_secondary_label"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorPowerItem" />
 

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -6,6 +6,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.os.Environment;
 import android.os.Build;
 
@@ -29,12 +30,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 
-/**
- * A simple {@link Fragment} subclass. Displays trajectories that were saved locally.
- * FIXED: Now correctly detects files starting with "traj_"
- *
- * @author Mate Stodulka
- */
+// A simple {@link Fragment} subclass. Displays trajectories that were saved locally.
+// FIXED: Now correctly detects files starting with "traj_"
+// @author Mate Stodulka
 public class UploadFragment extends Fragment {
 
     // UI elements
@@ -117,12 +115,26 @@ public class UploadFragment extends Fragment {
             listAdapter = new UploadListAdapter(getActivity(), localTrajectories, new DownloadClickListener() {
                 @Override
                 public void onPositionClicked(int position) {
+                    File selectedFile = localTrajectories.get(position);
+                    if (!selectedFile.exists()) {
+                        Toast.makeText(getActivity(), "File no longer exists: " + selectedFile.getName(), Toast.LENGTH_LONG).show();
+                        localTrajectories.remove(position);
+                        listAdapter.notifyItemRemoved(position);
+                        listAdapter.notifyItemRangeChanged(position, localTrajectories.size());
+                        if (localTrajectories.isEmpty()) {
+                            uploadList.setVisibility(View.GONE);
+                            emptyNotice.setVisibility(View.VISIBLE);
+                        }
+                        return;
+                    }
+
                     // Read campaign from SharedPreferences, default to empty string
                     String campaign = settings.getString("current_campaign", "");
-                    serverCommunications.uploadLocalTrajectory(localTrajectories.get(position), campaign);
+                    serverCommunications.uploadLocalTrajectory(selectedFile, campaign);
                 }
             });
             uploadList.setAdapter(listAdapter);
         }
     }
 }
+

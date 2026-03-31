@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.viewitems;
+﻿package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.view.View;
 import android.widget.TextView;
@@ -8,12 +8,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 
-/**
- * View holder for BLE device list items.
- *
- * @see BleListAdapter
- * @see com.openpositioning.PositionMe.sensors.BleDevice
- */
+// View holder for BLE device list items.
+// @see BleListAdapter
+// @see com.openpositioning.PositionMe.sensors.BleDevice
 public class BleViewHolder extends RecyclerView.ViewHolder {
 
     TextView macAddress;
@@ -27,3 +24,5 @@ public class BleViewHolder extends RecyclerView.ViewHolder {
         rssi = itemView.findViewById(R.id.bleRssiItem);
     }
 }
+
+

@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="ios_background">#F2F2F7</color>
+    <color name="ios_surface">#FFFFFF</color>
+    <color name="ios_surface_secondary">#F9F9FC</color>
+    <color name="ios_grouped_background">#ECECF3</color>
+    <color name="ios_separator">#D9D9E3</color>
+    <color name="ios_label">#111111</color>
+    <color name="ios_secondary_label">#6E6E73</color>
+    <color name="ios_tertiary_label">#A1A1AA</color>
+    <color name="ios_blue">#0A84FF</color>
+    <color name="ios_blue_soft">#EAF3FF</color>
+    <color name="ios_green">#34C759</color>
+    <color name="ios_red">#FF3B30</color>
+    <color name="ios_orange">#FF9F0A</color>
+
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>

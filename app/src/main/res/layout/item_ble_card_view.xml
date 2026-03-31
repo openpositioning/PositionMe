@@ -3,38 +3,41 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="4dp">
+    android:paddingTop="2dp"
+    android:paddingBottom="2dp">
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="2dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="4dp"
+        android:layout_marginStart="2dp"
+        android:layout_marginEnd="2dp"
+        app:cardBackgroundColor="@color/ios_surface"
+        app:cardCornerRadius="18dp"
+        app:cardElevation="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent"
+        app:strokeColor="@color/ios_separator"
+        app:strokeWidth="1dp">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:padding="12dp">
+            android:paddingStart="16dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="14dp">
 
             <!-- BLE Device Name -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/bleNameItem"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
                 android:layout_marginEnd="8dp"
                 android:text="Unknown Device"
-                android:textColor="@color/md_theme_onSurface"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="@color/ios_label"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 android:textStyle="bold"
                 app:layout_constraintEnd_toStartOf="@+id/bleRssiItem"
                 app:layout_constraintStart_toStartOf="parent"
@@ -45,11 +48,10 @@
                 android:id="@+id/bleMacItem"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
                 android:layout_marginTop="4dp"
                 android:layout_marginEnd="8dp"
                 android:text="00:00:00:00:00:00"
-                android:textColor="@color/md_theme_onSurfaceVariant"
+                android:textColor="@color/ios_secondary_label"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 app:layout_constraintEnd_toStartOf="@+id/bleRssiItem"
                 app:layout_constraintStart_toStartOf="parent"
@@ -60,10 +62,9 @@
                 android:id="@+id/bleRssiItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
                 android:text="-70 dBm"
-                android:textColor="@color/md_theme_onSurface"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="@color/ios_blue"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"

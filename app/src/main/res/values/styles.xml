@@ -1,19 +1,4 @@
 <resources>
-    <!-- Base theme for the app -->
-    <style name="Theme.Material3" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize Material Design 3 properties -->
-        <item name="colorControlNormal">@color/md_theme_light_onPrimary</item>
-        <item name="colorPrimary">@color/md_theme_light_primary</item>
-        <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
-        <item name="colorSecondary">@color/md_theme_light_secondary</item>
-        <item name="colorOnSecondary">@color/md_theme_light_onSecondary</item>
-        <item name="android:windowBackground">@color/md_theme_light_background</item>
-        <item name="android:statusBarColor">@color/md_theme_light_primary</item>
-        <item name="android:navigationBarColor">@color/md_theme_light_surface</item>
-        <item name="windowActionBar">@color/md_theme_light_surface</item>
-        <item name="windowNoTitle">true</item>
-    </style>
-
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="colorControlNormal">@color/md_theme_light_onPrimary</item>
     </style>
@@ -38,10 +23,107 @@
 
     <!-- Outlined Button Style -->
     <style name="Material3.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
-        <item name="android:strokeColor">@color/md_theme_light_primary</item>
+        <item name="strokeColor">@color/md_theme_light_primary</item>
         <item name="android:textColor">@color/md_theme_light_primary</item>
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">16dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.Toolbar" parent="Widget.MaterialComponents.Toolbar">
+        <item name="android:background">@color/ios_background</item>
+        <item name="titleTextColor">@color/ios_label</item>
+        <item name="subtitleTextColor">@color/ios_secondary_label</item>
+        <item name="navigationIconTint">@color/ios_label</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.Card" parent="Widget.MaterialComponents.CardView">
+        <item name="cardBackgroundColor">@color/ios_surface</item>
+        <item name="cardCornerRadius">28dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/ios_separator</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.CompactCard" parent="Widget.MaterialComponents.CardView">
+        <item name="cardBackgroundColor">@color/ios_surface</item>
+        <item name="cardCornerRadius">22dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/ios_separator</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.PrimaryButton" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/ios_blue</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="iconTint">@color/white</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">54dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.SecondaryButton" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/ios_blue_soft</item>
+        <item name="android:textColor">@color/ios_blue</item>
+        <item name="iconTint">@color/ios_blue</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">54dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.NeutralButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="backgroundTint">@color/ios_surface</item>
+        <item name="strokeColor">@color/ios_separator</item>
+        <item name="android:textColor">@color/ios_label</item>
+        <item name="iconTint">@color/ios_label</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">54dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.IconButton" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">@color/ios_blue_soft</item>
+        <item name="iconTint">@color/ios_blue</item>
+        <item name="cornerRadius">18dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.HomeShortcutButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="backgroundTint">@color/ios_surface</item>
+        <item name="strokeColor">@color/ios_separator</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="android:textColor">@color/ios_label</item>
+        <item name="iconTint">@color/ios_blue</item>
+        <item name="rippleColor">@color/ios_blue_soft</item>
+        <item name="cornerRadius">26dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">120dp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="iconPadding">10dp</item>
+        <item name="android:stateListAnimator">@animator/home_shortcut_state_animator</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:paddingTop">18dp</item>
+        <item name="android:paddingBottom">18dp</item>
+    </style>
+
+    <style name="Widget.PositionMe.HomeShortcutButton.Bottom" parent="Widget.PositionMe.HomeShortcutButton">
+        <item name="android:minHeight">60dp</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:paddingTop">14dp</item>
+        <item name="android:paddingBottom">14dp</item>
+    </style>
+
+    <style name="TextAppearance.PositionMe.Display" parent="TextAppearance.Material3.DisplaySmall">
+        <item name="android:textColor">@color/ios_label</item>
+    </style>
+
+    <style name="TextAppearance.PositionMe.Title" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textColor">@color/ios_label</item>
+    </style>
+
+    <style name="TextAppearance.PositionMe.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/ios_secondary_label</item>
     </style>
 
 

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.viewitems;
+﻿package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -12,12 +12,9 @@ import com.openpositioning.PositionMe.sensors.BleDevice;
 
 import java.util.List;
 
-/**
- * Adapter for displaying BLE device data in a RecyclerView.
- *
- * @see BleViewHolder
- * @see com.openpositioning.PositionMe.sensors.BleDevice
- */
+// Adapter for displaying BLE device data in a RecyclerView.
+// @see BleViewHolder
+// @see com.openpositioning.PositionMe.sensors.BleDevice
 public class BleListAdapter extends RecyclerView.Adapter<BleViewHolder> {
 
     Context context;
@@ -63,3 +60,5 @@ public class BleListAdapter extends RecyclerView.Adapter<BleViewHolder> {
         return items.size();
     }
 }
+
+

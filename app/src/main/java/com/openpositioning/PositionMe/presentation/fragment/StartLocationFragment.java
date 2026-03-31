@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+﻿package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -16,7 +16,6 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
@@ -26,20 +25,16 @@ import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.google.android.gms.maps.model.Polygon;
 import android.widget.Toast;
 
-/**
- * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
- * recording starts. This fragment displays a map in which the user can adjust their location to
- * correct the PDR when it is complete.
- *
- * Updated for Assignment 1:
- * - Removed immediate startRecording() call (moved to RecordingFragment).
- * - Ensures start position is passed to SensorFusion before navigation.
- *
- * @author Virginia Cangelosi
- * @see HomeFragment the previous fragment in the nav graph.
- * @see RecordingFragment the next fragment in the nav graph.
- * @see SensorFusion the class containing sensors and recording.
- */
+// A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
+// recording starts. This fragment displays a map in which the user can adjust their location to
+// correct the PDR when it is complete.
+// Updated for Assignment 1:
+// Removed immediate startRecording() call (moved to RecordingFragment).
+// Ensures start position is passed to SensorFusion before navigation.
+// @author Virginia Cangelosi
+// @see HomeFragment the previous fragment in the nav graph.
+// @see RecordingFragment the next fragment in the nav graph.
+// @see SensorFusion the class containing sensors and recording.
 public class StartLocationFragment extends Fragment {
 
     // Button to go to next fragment and save the location
@@ -57,18 +52,14 @@ public class StartLocationFragment extends Fragment {
     // Google map instance
     private GoogleMap googleMap;
 
-    /**
-     * Public Constructor for the class.
-     * Left empty as not required
-     */
+    // Public Constructor for the class.
+    // Left empty as not required
     public StartLocationFragment() {
         // Required empty public constructor
     }
 
-    /**
-     * {@inheritDoc}
-     * The map is loaded and configured so that it displays a draggable marker for the start location
-     */
+    // {@inheritDoc}
+    // The map is loaded and configured so that it displays a draggable marker for the start location
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -93,13 +84,11 @@ public class StartLocationFragment extends Fragment {
 
         if (supportMapFragment != null) {
             supportMapFragment.getMapAsync(new OnMapReadyCallback() {
-                /**
-                 * {@inheritDoc}
-                 * Controls to allow scrolling, tilting, rotating and a compass view of the
-                 * map are enabled. A marker is added to the map with the start position and a marker
-                 * drag listener is generated to detect when the marker has moved to obtain the new
-                 * location.
-                 */
+                // {@inheritDoc}
+                // Controls to allow scrolling, tilting, rotating and a compass view of the
+                // map are enabled. A marker is added to the map with the start position and a marker
+                // drag listener is generated to detect when the marker has moved to obtain the new
+                // location.
                 @Override
                 public void onMapReady(GoogleMap mMap) {
                     googleMap = mMap;
@@ -140,26 +129,10 @@ public class StartLocationFragment extends Fragment {
 
                     // Add a marker at the current GPS location and move the camera
                     position = new LatLng(startPosition[0], startPosition[1]);
-                    Marker startMarker = mMap.addMarker(new MarkerOptions()
+                    mMap.addMarker(new MarkerOptions()
                             .position(position)
-                            .title("Start Position")
-                            .draggable(true));
+                            .title("Start Position"));
                     mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
-
-                    // Drag listener for the marker to update the start position when dragged
-                    mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-                        @Override
-                        public void onMarkerDragStart(Marker marker) {}
-
-                        @Override
-                        public void onMarkerDragEnd(Marker marker) {
-                            startPosition[0] = (float) marker.getPosition().latitude;
-                            startPosition[1] = (float) marker.getPosition().longitude;
-                        }
-
-                        @Override
-                        public void onMarkerDrag(Marker marker) {}
-                    });
                 }
             });
         }
@@ -167,11 +140,9 @@ public class StartLocationFragment extends Fragment {
         return rootView;
     }
 
-    /**
-     * {@inheritDoc}
-     * Button onClick listener enabled to detect when to go to next fragment.
-     * NOTE: Actual recording start is now deferred to RecordingFragment.
-     */
+    // {@inheritDoc}
+    // Button onClick listener enabled to detect when to go to next fragment.
+    // NOTE: Actual recording start is now deferred to RecordingFragment.
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -185,9 +156,8 @@ public class StartLocationFragment extends Fragment {
 
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
-                    // 【Task B Change】: Do NOT start recording here.
-                    // Just set the corrected start location in SensorFusion.
-                    sensorFusion.setStartGNSSLatitude(startPosition);
+                    // Clear manual start so recording can choose WiFi/GNSS dynamically.
+                    sensorFusion.setStartGNSSLatitude(new float[]{0f, 0f});
 
                     // Navigate to the Recording Screen where user will enter ID and click Start
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
@@ -200,3 +170,5 @@ public class StartLocationFragment extends Fragment {
         });
     }
 }
+
+

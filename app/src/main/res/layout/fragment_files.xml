@@ -8,21 +8,17 @@
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:background="@color/ios_background"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="12dp">
 
-        <!-- Upload Card using MaterialCardView -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/uploadCard"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="15dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="5dp"
-            app:cardBackgroundColor="@color/md_theme_light_primary"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="4dp"
-            app:strokeColor="@color/md_theme_light_onPrimary"
+            style="@style/Widget.PositionMe.Card"
+            android:layout_width="0dp"
+            android:layout_height="72dp"
+            android:layout_marginBottom="12dp"
             app:layout_constraintBottom_toTopOf="@id/filesList"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -34,24 +30,22 @@
 
                 <ImageView
                     android:id="@+id/uploadIcon"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
                     android:layout_marginStart="16dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginBottom="8dp"
                     android:src="@drawable/ic_baseline_cloud_upload_24"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:tint="@color/md_theme_light_onPrimary" />
+                    app:tint="@color/ios_blue" />
 
                 <TextView
                     android:id="@+id/uploadTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
+                    android:layout_marginStart="12dp"
                     android:text="@string/uploadTitle"
-                    android:textColor="@color/md_theme_light_onPrimary"
+                    android:textColor="@color/ios_label"
                     android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                     app:layout_constraintStart_toEndOf="@id/uploadIcon"
                     app:layout_constraintTop_toTopOf="parent"
@@ -59,13 +53,12 @@
             </androidx.constraintlayout.widget.ConstraintLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- RecyclerView for Files List -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/filesList"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="0dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
+            android:clipToPadding="false"
+            android:paddingBottom="24dp"
             app:layout_constraintTop_toBottomOf="@id/uploadCard"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
