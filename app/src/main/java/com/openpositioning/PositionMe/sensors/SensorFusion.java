@@ -87,6 +87,8 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
+    // particle filter
+    private ParticleFilter particleFilter;
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
@@ -166,7 +168,16 @@ public class SensorFusion implements SensorEventListener {
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
-        wifiProcessor.registerObserver(wifiPositionManager);
+        wifiProcessor.registerObserver(objects -> {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (!particleFilter.isInitialised()) {
+                    LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();// Get WiFi position for particle filter initialization
+                    if (wifiPosition != null) { // Check if WiFi position is available before initializing particle filter
+                        particleFilter.initialise(wifiPosition, 20f);
+                    }
+                }
+            }, 1000); //1second delay to allow wifi position manager to update with new scan data
+        });
 
         // Initialise BLE scanner and register observer for trajectory recording
         this.bleProcessor = new BleDataProcessor(context);
@@ -177,7 +188,10 @@ public class SensorFusion implements SensorEventListener {
                         .map(o -> (BleDevice) o).collect(Collectors.toList());
                 recorder.addBleFingerprint(bleList);
             }
+
         });
+
+
 
         // Initialise WiFi RTT manager and register as WiFi scan observer
         this.rttManager = new RttManager(appContext, recorder, wifiProcessor);
@@ -186,6 +200,9 @@ public class SensorFusion implements SensorEventListener {
         // Initialise BLE RTT estimator and register on BLE scan updates
         this.bleRttManager = new BleRttManager(recorder);
         bleProcessor.registerObserver(bleRttManager);
+
+        //added particle filter
+        this.particleFilter = new ParticleFilter();
 
         if (!rttManager.isRttSupported()) {
             new Handler(Looper.getMainLooper()).post(() ->
@@ -645,6 +662,13 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+
+            //initialize particle filter automatically on first GNSS fix with accuracy as spread
+            if (!particleFilter.isInitialised()) {
+                    float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
+                    particleFilter.initialise(
+                        new LatLng(location.getLatitude(), location.getLongitude()),accuracy);
+                }
         }
     }
 

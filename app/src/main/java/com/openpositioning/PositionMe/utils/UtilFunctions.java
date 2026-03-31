@@ -52,7 +52,7 @@ public class UtilFunctions {
     }
 
 
-    private static final int  DEGREE_IN_M=111111;
+    private static final int  DEGREE_IN_M=111111; //NOT NEEDED FOR CONVERSION, JUST USED AS A CONSTANT TO CALCULATE NEW COORDINATES
     /**
      * Simple function to calculate the angle between two close points
      * @param pointA Starting point
