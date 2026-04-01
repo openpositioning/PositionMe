@@ -47,7 +47,7 @@
                 android:id="@+id/startTitleText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Choose your start location"
+                android:text="Automatic start detection"
                 android:textAppearance="?attr/textAppearanceTitleMedium"
                 android:textColor="@color/md_theme_onSurface"
                 android:textStyle="bold" />
@@ -57,7 +57,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Drag the marker to the correct place, or tap a building outline and choose the floor before confirming."
+                android:text="The app detects your start position from GNSS and Wi-Fi automatically. Only adjust the marker or floor if the detected start point is clearly wrong, as an inaccurate start can affect the full plotted trajectory."
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="@color/md_theme_onSurfaceVariant"
                 android:lineSpacingExtra="2dp" />
@@ -72,7 +72,7 @@
                 android:paddingTop="8dp"
                 android:paddingEnd="12dp"
                 android:paddingBottom="8dp"
-                android:text="Waiting for GNSS / WiFi start estimate..."
+                android:text="Waiting for automatic GNSS / Wi-Fi start estimate..."
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="@color/md_theme_onSurface" />
 
@@ -103,7 +103,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
-                android:text="Map view"
+                android:text="Map display"
                 android:textAppearance="?attr/textAppearanceLabelLarge"
                 android:textColor="@color/md_theme_onSurface"
                 android:textStyle="bold" />
@@ -114,7 +114,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="0dp"
-                android:text="Vector Preview"
+                android:text="Indoor Preview"
                 android:textAllCaps="false"
                 android:textSize="13sp"
                 app:cornerRadius="14dp" />
@@ -126,7 +126,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:minWidth="0dp"
-                android:text="Actual Map"
+                android:text="Base Map"
                 android:textAllCaps="false"
                 android:textSize="13sp"
                 app:cornerRadius="14dp" />
@@ -162,7 +162,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
-                android:text="Floor"
+                android:text="Start floor"
                 android:textAppearance="?attr/textAppearanceLabelLarge"
                 android:textColor="@color/md_theme_onSurface"
                 android:textStyle="bold" />
@@ -237,7 +237,7 @@
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
-                android:text="Reset"
+                android:text="Retry"
                 android:textAllCaps="false"
                 android:textSize="15sp"
                 app:cornerRadius="16dp" />
@@ -248,7 +248,7 @@
                 android:layout_height="52dp"
                 android:layout_marginStart="12dp"
                 android:layout_weight="1.4"
-                android:text="Use This Location"
+                android:text="Continue"
                 android:textAllCaps="false"
                 android:textSize="16sp"
                 android:textStyle="bold"

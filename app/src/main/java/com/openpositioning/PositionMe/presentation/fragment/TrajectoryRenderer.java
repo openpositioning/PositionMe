@@ -151,6 +151,20 @@ class TrajectoryRenderer {
     }
 
     /**
+     * Clears the currently displayed fused trajectory and starts a fresh one.
+     */
+    void startNewLiveSegment() {
+        if (trajectoryOutline != null) {
+            trajectoryOutline.setPoints(new ArrayList<>());
+        }
+        if (trajectoryMain != null) {
+            trajectoryMain.setPoints(new ArrayList<>());
+        }
+        ensureTrajectoryStyling();
+        applyTrajectoryColor();
+    }
+
+    /**
      * Append one point to the fused/matched trajectory.
      */
     void appendMatchedLocation(@Nullable LatLng oldLocation, @NonNull LatLng matchedLocation) {

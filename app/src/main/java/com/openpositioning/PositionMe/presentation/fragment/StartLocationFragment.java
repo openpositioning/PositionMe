@@ -47,7 +47,12 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Start-location selection fragment.
+ * Start-location fragment.
+ *
+ * Design intent:
+ * - use automatic GNSS / Wi-Fi start detection by default
+ * - allow manual correction only as a fallback when the detected start is clearly wrong
+ * - let the user inspect/select the building and start floor when needed
  *
  * Keeps:
  * - nearby building outline request
@@ -55,11 +60,12 @@ import java.util.Map;
  * - indoor vector preview / actual map overlay
  * - floor switching
  *
- * Adds back:
- * - draggable / tappable start marker
- * - corrected manual start anchor for recording mode
- * - clear reset flow
+ * Supports:
+ * - automatically tracked start marker before confirmation
+ * - optional manual correction of the start anchor
+ * - reset back to automatic detection
  */
+
 public class StartLocationFragment extends Fragment {
 
     private static final String TAG = "StartLocationFragment";
@@ -242,11 +248,11 @@ public class StartLocationFragment extends Fragment {
 
         if (isRecordingMode()) {
             instructionText.setText(
-                    "Drag the start marker to the true start point, tap a building to choose the venue, then choose the floor and confirm."
+                    "The app detects your start position from GNSS and Wi-Fi automatically. Only adjust the marker or floor if the detected start point is clearly wrong, since an inaccurate initial anchor can affect the full plotted trajectory."
             );
         } else {
             instructionText.setText(
-                    "Choose the replay start point on the map, then select the building and floor if needed."
+                    "Review the detected start position and building context before continuing. Adjust the marker or floor only if the displayed start point is clearly incorrect."
             );
         }
     }
@@ -353,6 +359,15 @@ public class StartLocationFragment extends Fragment {
 
     /**
      * Configures the map and initial markers.
+     *
+     * Start-screen policy:
+     * - use the same preferred-start resolver as the live recording pipeline
+     * - restore manual-confirmed anchor when available
+     * - preload previously selected building/floor context if available
+     *
+     * Important:
+     * the marker only stops following live GNSS when there is already a
+     * confirmed manual start anchor.
      */
     private void setupMap() {
         if (mMap == null) {
@@ -367,47 +382,61 @@ public class StartLocationFragment extends Fragment {
         mMap.clear();
 
         float[] gnss = sensorFusion.getGNSSLatitude(false);
-        if (gnss != null && gnss.length >= 2) {
+        LatLng manualAnchor = sensorFusion.getManualStartAnchorLatLng();
+        LatLng preferredAnchor = sensorFusion.resolvePreferredStartAnchor();
+
+        LatLng initialPosition;
+        if (isValidLatLng(preferredAnchor)) {
+            initialPosition = preferredAnchor;
+            startPosition[0] = (float) preferredAnchor.latitude;
+            startPosition[1] = (float) preferredAnchor.longitude;
+        } else if (isValidLatLon(gnss)) {
+            initialPosition = new LatLng(gnss[0], gnss[1]);
             startPosition[0] = gnss[0];
             startPosition[1] = gnss[1];
+        } else {
+            initialPosition = new LatLng(0, 0);
         }
 
-        LatLng manualAnchor = sensorFusion.getManualStartAnchorLatLng();
-        LatLng initialPosition;
-
+        // Only freeze the marker when there is already a confirmed manual anchor.
         if (isValidLatLng(manualAnchor)) {
-            initialPosition = manualAnchor;
-            startPosition[0] = (float) manualAnchor.latitude;
-            startPosition[1] = (float) manualAnchor.longitude;
             followCurrentLocationWithStartMarker = false;
             hasUserAdjustedMarker = true;
         } else if (isValidLatLon(gnss)) {
-            initialPosition = new LatLng(gnss[0], gnss[1]);
             followCurrentLocationWithStartMarker = true;
             hasUserAdjustedMarker = false;
         } else {
-            initialPosition = new LatLng(0, 0);
-            followCurrentLocationWithStartMarker = true;
+            followCurrentLocationWithStartMarker = false;
             hasUserAdjustedMarker = false;
+        }
+
+        // Preload previously chosen building/floor context for recording mode.
+        if (isRecordingMode()) {
+            String preferredBuildingId = sensorFusion.resolvePreferredStartBuildingId();
+            if (preferredBuildingId != null && !preferredBuildingId.isEmpty()) {
+                selectedBuildingId = preferredBuildingId;
+            }
+            currentFloorIndex = Math.max(0, sensorFusion.resolvePreferredStartFloorIndex());
         }
 
         currentLocationMarker = mMap.addMarker(new MarkerOptions()
                 .position(initialPosition)
-                .title("Current Location")
+                .title("Detected Location")
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
                 .zIndex(21f));
 
         startMarker = mMap.addMarker(new MarkerOptions()
                 .position(initialPosition)
-                .title("Start Location")
-                .snippet("Drag or tap the map to adjust this marker")
+                .title("Automatic Start Location")
+                .snippet("Detected automatically from GNSS / Wi-Fi. Adjust only if clearly wrong.")
                 .draggable(true)
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
                 .zIndex(22f));
 
         if (startMarker != null && isValidLatLng(manualAnchor)) {
             styleConfirmedMarker(startMarker);
-            startMarker.setSnippet("Previously confirmed start anchor");
+            startMarker.setTitle("Confirmed Start Location");
+            startMarker.setSnippet("Previously confirmed start anchor for this session");
         }
 
         boolean cameraReady = isValidLatLng(initialPosition);
@@ -425,7 +454,7 @@ public class StartLocationFragment extends Fragment {
     }
 
     /**
-     * Start marker can be moved in both recording and replay mode.
+     * Manual start correction remains available as a fallback in both recording and replay mode.
      */
     private void installStartMarkerInteraction() {
         if (mMap == null) {
@@ -436,7 +465,7 @@ public class StartLocationFragment extends Fragment {
             @Override
             public void onMarkerDragStart(@NonNull Marker marker) {
                 if (startMarker != null && marker.equals(startMarker)) {
-                    updateStatus("Dragging start marker...");
+                    updateStatus("Adjusting start marker...");
                 }
             }
 
@@ -471,8 +500,8 @@ public class StartLocationFragment extends Fragment {
 
         if (startMarker != null) {
             styleEditableMarker(startMarker);
-            startMarker.setTitle("Corrected Start Location");
-            startMarker.setSnippet("Confirm to use this corrected start point");
+            startMarker.setTitle("Manual Start Correction");
+            startMarker.setSnippet("Use this only when the automatic start estimate is clearly incorrect.");
             startMarker.showInfoWindow();
         }
 
@@ -480,13 +509,22 @@ public class StartLocationFragment extends Fragment {
             mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newPosition, Math.max(18.5f, mMap.getCameraPosition().zoom)));
         }
 
-        updateStatus(formatLatLng("Corrected start marker selected", newPosition));
+        updateStatus(formatLatLng("Manual start correction selected", newPosition));
 
         // Refresh nearby building outlines around the corrected point.
         requestRetryCount = 0;
         requestBuildingData();
     }
 
+    /**
+     * Confirms the chosen start marker and carries the selected building/floor
+     * into the recording session.
+     *
+     * Recording policy:
+     * - manual start anchor becomes the authoritative session start
+     * - selected building/floor are stored together with that anchor
+     * - live auto-floor starts disabled and can later be enabled from the map UI
+     */
     private void confirmSelectionAndContinue() {
         if (startMarker == null) {
             Toast.makeText(getContext(), "Start marker is not ready yet.", Toast.LENGTH_SHORT).show();
@@ -507,7 +545,10 @@ public class StartLocationFragment extends Fragment {
         }
 
         if (isRecordingMode()) {
-            Integer selectedFloorToSave = selectedFloorplanBuilding != null ? currentFloorIndex : null;
+            Integer selectedFloorToSave = null;
+            if (selectedFloorplanBuilding != null) {
+                selectedFloorToSave = clampFloorIndexForBuilding(selectedFloorplanBuilding, currentFloorIndex);
+            }
 
             sensorFusion.setManualStartAnchor(
                     chosenLatLng,
@@ -515,10 +556,7 @@ public class StartLocationFragment extends Fragment {
                     selectedBuildingId
             );
 
-            sensorFusion.setStartGNSSLatitude(new float[]{
-                    (float) chosenLatLng.latitude,
-                    (float) chosenLatLng.longitude
-            });
+            sensorFusion.setLiveAutoFloorEnabled(false);
 
             if (startMarker != null) {
                 styleConfirmedMarker(startMarker);
@@ -527,6 +565,7 @@ public class StartLocationFragment extends Fragment {
                 startMarker.showInfoWindow();
             }
 
+            sensorFusion.setRecordingTrajectoryMode(SensorFusion.TRAJECTORY_MODE_PARTICLE_FILTER);
             sensorFusion.startRecording();
             ((RecordingActivity) requireActivity()).showRecordingScreen();
             return;
@@ -534,8 +573,8 @@ public class StartLocationFragment extends Fragment {
 
         if (isReplayMode()) {
             ((ReplayActivity) requireActivity()).onStartLocationChosen(
-                    (float)chosenLatLng.latitude,
-                    (float)chosenLatLng.longitude
+                    (float) chosenLatLng.latitude,
+                    (float) chosenLatLng.longitude
             );
         }
     }
@@ -561,7 +600,7 @@ public class StartLocationFragment extends Fragment {
                 requestRetryCount++;
                 retryHandler.postDelayed(this::requestBuildingDataWhenReady, RETRY_DELAY_MS);
             } else {
-                updateStatus("Waiting for GNSS / WiFi start estimate...");
+                updateStatus("Waiting for automatic GNSS / Wi-Fi start estimate...");
             }
             return;
         }
@@ -627,9 +666,10 @@ public class StartLocationFragment extends Fragment {
                         }
 
                         drawBuildingOutlines(buildings);
+                        restorePreferredBuildingAndFloorSelectionIfAvailable();
 
                         if (buildings == null || buildings.isEmpty()) {
-                            updateStatus("No buildings found nearby. You can still drag the start marker.");
+                            updateStatus("No buildings found nearby. Automatic start detection is still available, and manual correction can be used only if needed.");
                         }
                     }
 
@@ -643,6 +683,87 @@ public class StartLocationFragment extends Fragment {
                     }
                 }
         );
+    }
+
+    /**
+     * Restores previously chosen building/floor context after nearby-building
+     * data has been fetched.
+     *
+     * This is important because building polygons are recreated after each floorplan
+     * request, so the visual selection needs to be rebound to the restored state.
+     */
+    private void restorePreferredBuildingAndFloorSelectionIfAvailable() {
+        String buildingNameToRestore = selectedBuildingId;
+
+        if ((buildingNameToRestore == null || buildingNameToRestore.isEmpty()) && isRecordingMode()) {
+            buildingNameToRestore = sensorFusion.resolvePreferredStartBuildingId();
+        }
+
+        if (buildingNameToRestore == null || buildingNameToRestore.isEmpty()) {
+            return;
+        }
+
+        FloorplanApiClient.BuildingInfo building = floorplanBuildingMap.get(buildingNameToRestore);
+        if (building == null) {
+            return;
+        }
+
+        selectedBuildingId = buildingNameToRestore;
+        selectedFloorplanBuilding = building;
+
+        int restoredFloorIndex = currentFloorIndex;
+        if (isRecordingMode()) {
+            String preferredBuildingId = sensorFusion.resolvePreferredStartBuildingId();
+            if (preferredBuildingId != null && preferredBuildingId.equals(buildingNameToRestore)) {
+                restoredFloorIndex = sensorFusion.resolvePreferredStartFloorIndex();
+            }
+        }
+
+        currentFloorIndex = clampFloorIndexForBuilding(building, restoredFloorIndex);
+
+        Polygon restoredPolygon = findPolygonByBuildingName(buildingNameToRestore);
+
+        if (selectedPolygon != null && selectedPolygon != restoredPolygon) {
+            selectedPolygon.setFillColor(FILL_COLOR_DEFAULT);
+            selectedPolygon.setStrokeColor(STROKE_COLOR_DEFAULT);
+        }
+
+        if (restoredPolygon != null) {
+            restoredPolygon.setFillColor(FILL_COLOR_SELECTED);
+            restoredPolygon.setStrokeColor(STROKE_COLOR_SELECTED);
+            selectedPolygon = restoredPolygon;
+        }
+
+        redrawSelectedBuildingOverlay();
+    }
+
+    /**
+     * Finds the rendered polygon matching a building name.
+     */
+    @Nullable
+    private Polygon findPolygonByBuildingName(@NonNull String buildingName) {
+        for (Polygon polygon : buildingPolygons) {
+            Object tag = polygon.getTag();
+            if (buildingName.equals(tag)) {
+                return polygon;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Clamps a floor index to the valid range of the selected building.
+     */
+    private int clampFloorIndexForBuilding(@Nullable FloorplanApiClient.BuildingInfo building,
+                                           int requestedFloorIndex) {
+        if (building == null
+                || building.getFloorShapesList() == null
+                || building.getFloorShapesList().isEmpty()) {
+            return Math.max(0, requestedFloorIndex);
+        }
+
+        int maxFloor = building.getFloorShapesList().size() - 1;
+        return Math.max(0, Math.min(requestedFloorIndex, maxFloor));
     }
 
     /**
@@ -682,7 +803,14 @@ public class StartLocationFragment extends Fragment {
 
     /**
      * Building selection updates the selected venue/floor context.
-     * It does NOT forcibly move the marker anymore.
+     *
+     * Floor-selection policy:
+     * - keep the current floor if the user re-selects the same building
+     * - otherwise, if this building matches the preferred session building,
+     *   restore the preferred floor
+     * - otherwise fall back to the building default floor
+     *
+     * It still does NOT forcibly move the start marker.
      */
     private void onBuildingSelected(@NonNull String buildingName, @NonNull Polygon polygon) {
         if (selectedPolygon != null) {
@@ -690,13 +818,36 @@ public class StartLocationFragment extends Fragment {
             selectedPolygon.setStrokeColor(STROKE_COLOR_DEFAULT);
         }
 
+        String previousBuildingId = selectedBuildingId;
+        int previousFloorIndex = currentFloorIndex;
+
         selectedPolygon = polygon;
         selectedPolygon.setFillColor(FILL_COLOR_SELECTED);
         selectedPolygon.setStrokeColor(STROKE_COLOR_SELECTED);
 
         selectedBuildingId = buildingName;
         selectedFloorplanBuilding = floorplanBuildingMap.get(buildingName);
-        currentFloorIndex = getDefaultFloorIndex(selectedFloorplanBuilding);
+
+        if (selectedFloorplanBuilding == null) {
+            updateStatus("Selected building data is not available yet.");
+            return;
+        }
+
+        if (buildingName.equals(previousBuildingId)) {
+            currentFloorIndex = clampFloorIndexForBuilding(selectedFloorplanBuilding, previousFloorIndex);
+        } else if (isRecordingMode()) {
+            String preferredBuildingId = sensorFusion.resolvePreferredStartBuildingId();
+            if (preferredBuildingId != null && preferredBuildingId.equals(buildingName)) {
+                currentFloorIndex = clampFloorIndexForBuilding(
+                        selectedFloorplanBuilding,
+                        sensorFusion.resolvePreferredStartFloorIndex()
+                );
+            } else {
+                currentFloorIndex = getDefaultFloorIndex(selectedFloorplanBuilding);
+            }
+        } else {
+            currentFloorIndex = getDefaultFloorIndex(selectedFloorplanBuilding);
+        }
 
         updateFloorLabel();
         redrawSelectedBuildingOverlay();
@@ -807,7 +958,7 @@ public class StartLocationFragment extends Fragment {
     }
 
     /**
-     * Reset back to the current live GNSS position and clear any manual override.
+     * Reset back to the current automatic start estimate and clear any manual override.
      */
     private void resetToCurrentLocation() {
         sensorFusion.clearManualStartAnchor();
@@ -816,15 +967,15 @@ public class StartLocationFragment extends Fragment {
 
         if (startMarker != null) {
             styleEditableMarker(startMarker);
-            startMarker.setTitle("Start Location");
-            startMarker.setSnippet("Following current GNSS position until you adjust it");
+            startMarker.setTitle("Automatic Start Location");
+            startMarker.setSnippet("Following the automatic GNSS / Wi-Fi estimate.");
         }
 
         clearBuildingSelectionAndOverlays();
         updateLiveLocation(true);
         requestRetryCount = 0;
         requestBuildingDataWhenReady();
-        updateStatus("Reset to current location.");
+        updateStatus("Returned to automatic start detection.");
     }
 
     private void startLiveLocationUpdates() {
@@ -837,8 +988,8 @@ public class StartLocationFragment extends Fragment {
     }
 
     /**
-     * Update the current GNSS marker.
-     * If marker-follow mode is on, also move the start marker.
+     * Update the live detected position.
+     * If automatic-follow mode is active, also move the start marker.
      */
     private void updateLiveLocation(boolean animateCamera) {
         float[] gnss = sensorFusion.getGNSSLatitude(false);

@@ -3,7 +3,7 @@ package com.openpositioning.PositionMe.mapmatching;
 import com.google.android.gms.maps.model.LatLng;
 
 /**
- * 表示一次地图匹配后的输出结果。
+ * Represents the output of one map-matching pass.
  */
 public class MapMatchingResult {
 

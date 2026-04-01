@@ -49,19 +49,19 @@
         <EditTextPreference
             app:key="pf_sigma_theta_deg"
             app:title="Heading noise (deg)"
-            app:defaultValue="6.5"
+            app:defaultValue="4.5"
             app:useSimpleSummaryProvider="true" />
 
         <EditTextPreference
             app:key="pf_sigma_wifi"
             app:title="WiFi sigma (m)"
-            app:defaultValue="4.0"
+            app:defaultValue="14.0"
             app:useSimpleSummaryProvider="true" />
 
         <EditTextPreference
             app:key="pf_sigma_gnss"
             app:title="GNSS sigma (m)"
-            app:defaultValue="5.0"
+            app:defaultValue="25.0"
             app:useSimpleSummaryProvider="true" />
 
         <EditTextPreference
@@ -91,7 +91,7 @@
         <EditTextPreference
             app:key="pf_sigma_reg_theta_deg"
             app:title="Resample heading jitter (deg)"
-            app:defaultValue="1.0"
+            app:defaultValue="2.0"
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 

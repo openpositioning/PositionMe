@@ -8,6 +8,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -27,6 +28,12 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import android.util.Log;
+
+import android.graphics.Typeface;
+import android.os.Build;
+import android.text.Layout;
+import android.util.TypedValue;
+import android.graphics.text.LineBreaker;
 
 
 /**
@@ -99,16 +106,20 @@ public class RecordingActivity extends AppCompatActivity {
     /**
      * Shows the per-session recording setup dialog.
      *
-     * This dialog now configures two things before the user enters the normal
-     * start-location flow:
+     * This dialog now configures:
      * 1. the trajectory name to be stored in the recording payload
-     * 2. the trajectory engine for this session:
-     *    - Standard PDR
-     *    - Particle filter fusion
+     * 2. whether the adaptive heading calibrator is enabled for this session
+     *
+     * Important UI clarification:
+     * - the user does NOT choose between PDR and particle fusion here
+     * - the recording screen can still display the standard PDR path for reference
+     * - if particle fusion is enabled elsewhere in the app, it will still be used
+     *   by the live fusion pipeline automatically
      *
      * Design intent:
-     * the choice is session-scoped, so the user can run one recording in normal PDR
-     * and the next one in PF mode without changing the app's persistent settings page.
+     * keep this dialog simple and focused on what the user must set per session,
+     * while explaining clearly what particle fusion does without presenting it as
+     * a confusing mode switch at the start of every recording.
      */
     private void showTrajectorySetupDialog() {
         final int outerPadding = dp(24);
@@ -124,8 +135,8 @@ public class RecordingActivity extends AppCompatActivity {
                         ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView intro = new TextView(this);
-        intro.setText("Set up this recording before selecting the start location.");
-        intro.setTextSize(15f);
+        intro.setText("Set up this recording before starting.");
+        styleDialogParagraph(intro, 15f);
         container.addView(intro);
 
         TextInputLayout nameLayout = new TextInputLayout(this);
@@ -150,77 +161,80 @@ public class RecordingActivity extends AppCompatActivity {
         );
         nameLayout.addView(nameInput, editTextParams);
 
-        TextView modeTitle = new TextView(this);
-        modeTitle.setText("Trajectory engine");
-        modeTitle.setTextSize(16f);
-        LinearLayout.LayoutParams modeTitleParams = new LinearLayout.LayoutParams(
+        TextView fusionTitle = new TextView(this);
+        fusionTitle.setText("Trajectory display and fusion");
+        styleDialogHeading(fusionTitle);
+        LinearLayout.LayoutParams fusionTitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        modeTitleParams.topMargin = sectionSpacing;
-        container.addView(modeTitle, modeTitleParams);
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        fusionTitleParams.topMargin = sectionSpacing;
+        container.addView(fusionTitle, fusionTitleParams);
 
-        TextView modeSubtitle = new TextView(this);
-        modeSubtitle.setText("Choose how the live trajectory is drawn and saved during this session.");
-        modeSubtitle.setTextSize(14f);
-        container.addView(modeSubtitle);
+        TextView fusionDescription = new TextView(this);
+        fusionDescription.setPadding(0, dp(4), 0, 0);
+        styleDialogParagraph(fusionDescription, 14f);
 
-        // Session mode toggle:
-        // OFF -> standard PDR
-        // ON  -> particle filter fusion
-        //
-        // We seed the switch from the current SensorFusion session state so reopening
-        // the dialog during development/testing reflects the latest chosen mode.
-        SwitchMaterial particleFilterSwitch = new SwitchMaterial(this);
-        particleFilterSwitch.setText("Use particle filter fusion");
-        particleFilterSwitch.setChecked(SensorFusion.getInstance().isParticleFilterTrajectoryMode());
-        LinearLayout.LayoutParams switchParams = new LinearLayout.LayoutParams(
+        boolean particleFusionEnabled = SensorFusion.getInstance().isParticleFilterTrajectoryMode();
+        if (particleFusionEnabled) {
+            fusionDescription.setText(
+                    "Particle fusion is currently enabled. During recording, the app may use fused positioning " +
+                            "(for example PDR combined with WiFi/GNSS and map constraints) to improve the main estimated position. " +
+                            "The recording screen can still show the standard PDR trajectory for reference."
+            );
+        } else {
+            fusionDescription.setText(
+                    "The recording screen can show the standard PDR trajectory for reference. " +
+                            "The app uses a particle-filter-based fusion framework integrated with map matching and map constraints to improve indoor trajectory estimation."
+            );
+        }
+        container.addView(fusionDescription);
+
+        TextView noteText = new TextView(this);
+        noteText.setPadding(0, dp(8), 0, 0);
+        styleDialogParagraph(noteText, 13f);
+        noteText.setText(
+                "You do not need to choose the positioning engine here. " +
+                        "This setup only names the recording and configures session-specific heading behaviour."
+        );
+        container.addView(noteText);
+
+        TextView adaptiveHeadingTitle = new TextView(this);
+        adaptiveHeadingTitle.setText("Heading option");
+        styleDialogHeading(adaptiveHeadingTitle);
+        LinearLayout.LayoutParams adaptiveHeadingTitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        switchParams.topMargin = dp(8);
-        container.addView(particleFilterSwitch, switchParams);
-
-        TextView modeDescription = new TextView(this);
-        modeDescription.setTextSize(13f);
-        modeDescription.setPadding(0, dp(4), 0, 0);
-        container.addView(modeDescription);
-
-        // Keep the explanation text in sync with the selected mode so the user
-        // understands that this changes both the live path and the saved trajectory.
-        Runnable updateModeDescription = () -> {
-            if (particleFilterSwitch.isChecked()) {
-                modeDescription.setText(
-                        "Particle filter mode: uses your fused positioning pipeline for the live path and saved trajectory. " +
-                                "This is useful when you want the path to follow WiFi/GNSS-assisted fusion rather than raw PDR only.");
-            } else {
-                modeDescription.setText(
-                        "Standard PDR mode: uses the normal pedestrian dead reckoning path directly for both display and saved trajectory.");
-            }
-        };
-        updateModeDescription.run();
-        particleFilterSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateModeDescription.run());
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        adaptiveHeadingTitleParams.topMargin = sectionSpacing;
+        container.addView(adaptiveHeadingTitle, adaptiveHeadingTitleParams);
 
         SwitchMaterial adaptiveHeadingSwitch = new SwitchMaterial(this);
         adaptiveHeadingSwitch.setText("Use adaptive heading calibrator (QSMFI-style)");
         adaptiveHeadingSwitch.setChecked(SensorFusion.getInstance().isAdaptiveHeadingEnabled());
         LinearLayout.LayoutParams adaptiveHeadingParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        adaptiveHeadingParams.topMargin = dp(12);
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        adaptiveHeadingParams.topMargin = dp(8);
         container.addView(adaptiveHeadingSwitch, adaptiveHeadingParams);
 
         TextView adaptiveHeadingDescription = new TextView(this);
-        adaptiveHeadingDescription.setTextSize(13f);
         adaptiveHeadingDescription.setPadding(0, dp(4), 0, 0);
+        styleDialogParagraph(adaptiveHeadingDescription, 13f);
         container.addView(adaptiveHeadingDescription);
 
         Runnable updateAdaptiveHeadingDescription = () -> {
             if (adaptiveHeadingSwitch.isChecked()) {
                 adaptiveHeadingDescription.setText(
-                        "Adaptive heading mode is session-scoped and is applied before both PDR and particle-filter motion updates. " +
-                                "This keeps the PF prediction, saved path, and live map aligned to the same heading convention.");
+                        "Adaptive heading is applied for this session before motion updates. " +
+                                "This usually gives a more stable heading reference for both live positioning and the saved trajectory."
+                );
             } else {
                 adaptiveHeadingDescription.setText(
-                        "Raw heading mode uses the current rotation-vector heading directly with no adaptive absolute-yaw correction.");
+                        "Raw heading mode uses the current rotation-vector heading directly, " +
+                                "with no adaptive absolute-yaw correction."
+                );
             }
         };
         updateAdaptiveHeadingDescription.run();
@@ -235,15 +249,15 @@ public class RecordingActivity extends AppCompatActivity {
                 .create();
 
         dialog.setOnShowListener(dialogInterface -> {
-            // Keep the user-selected engine mode, but replace the name with an auto-generated one.
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 String name = nameInput.getText() == null ? "" : nameInput.getText().toString().trim();
                 if (name.isEmpty()) {
                     name = generateDefaultTrajectoryName();
                 }
+
                 applyTrajectorySetupAndContinue(
                         name,
-                        particleFilterSwitch.isChecked(),
+                        SensorFusion.getInstance().isParticleFilterTrajectoryMode(),
                         adaptiveHeadingSwitch.isChecked()
                 );
                 dialog.dismiss();
@@ -252,7 +266,7 @@ public class RecordingActivity extends AppCompatActivity {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
                 applyTrajectorySetupAndContinue(
                         generateDefaultTrajectoryName(),
-                        particleFilterSwitch.isChecked(),
+                        SensorFusion.getInstance().isParticleFilterTrajectoryMode(),
                         adaptiveHeadingSwitch.isChecked()
                 );
                 dialog.dismiss();
@@ -260,6 +274,20 @@ public class RecordingActivity extends AppCompatActivity {
         });
 
         dialog.show();
+    }
+
+    private void styleDialogHeading(@NonNull TextView textView) {
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+        textView.setTypeface(Typeface.DEFAULT_BOLD);
+    }
+
+    private void styleDialogParagraph(@NonNull TextView textView, float textSizeSp) {
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);
+        textView.setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
+        }
     }
 
     /**

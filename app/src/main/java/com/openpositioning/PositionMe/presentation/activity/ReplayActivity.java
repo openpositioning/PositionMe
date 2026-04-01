@@ -34,22 +34,22 @@ public class ReplayActivity extends AppCompatActivity {
      * Set to true to force replay from app assets instead of History/download file paths.
      */
     private static final boolean FORCE_REPLAY_ASSET = true;
-//等你验证完以后，如果要恢复原来正常逻辑，把它改成：false
+// After verification, change this back to false to restore the normal logic.
     /**
      * Asset file to replay. Put this file under app/src/main/assets/replay/.
      */
-    //修改验证的 asset里的 json文件
-            //1. 验证在没有楼梯和电梯干扰的平地走廊上，你的系统不会乱跳层，且底图显示稳定
+    // Asset JSON files used for verification.
+    // 1. Verify that the system does not switch floors incorrectly and that the map display remains stable on a flat corridor without stairs or lift interference.
     // private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_same_floor_turns.json";
-            //2. 一个核心功能：“不能穿墙”
+    // 2. One core feature: wall-crossing must be rejected.
     //private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_cross_wall_long_recover.json";
-            //3. false-floor-change (错误换层拒绝)
+    // 3. false-floor-change rejection.
     //private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_false_floor_change_reject.json";
-            //4.1 测试 4 - stairs-up (楼梯上楼验证)
+    // 4.1 Test 4 - stairs-up verification.
     //private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_stairs_up.json";
-            //4.2 测试4 -直线新路径 不行 轨迹有问题 运行不了
+    // 4.2 Test 4 - straight new path; currently unusable because the trajectory data is invalid.
     private static final String FORCED_ASSET_PATH = "replay/traj_2.json";
-            //5. 电梯测试
+    // 5. Lift test.
     //private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_lift_up.json";
 
     private String filePath;

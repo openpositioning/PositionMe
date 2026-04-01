@@ -1,7 +1,7 @@
 package com.openpositioning.PositionMe.mapmatching;
 
 /**
- * 表示相邻两次位置更新之间的运动增量。
+ * Represents the motion delta between two consecutive position updates.
  */
 public class MotionDelta {
 

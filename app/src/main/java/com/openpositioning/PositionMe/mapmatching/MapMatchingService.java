@@ -7,41 +7,41 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 
 /**
- * 3.2 Map Matching 的核心服务类。
+ * Core service class for Map Matching 3.2.
  *
- * 阶段四最小补丁的目标：
- * 1. 保留现有“拒绝错误”的能力（穿墙 / 错误换层）
- * 2. 增加更主动的几何修正，让结果更像“被地图改进过的位置”
+ * Goals of the stage-four minimal patch:
+ * 1. Keep the existing error-rejection behavior (wall crossing / invalid floor changes)
+ * 2. Add more active geometric correction so results look more like positions improved by the map
  *
- * 具体补充：
- * - 穿墙时，不再只会回退到 previous pose；优先投影到撞墙前最后一个合法点
- * - 合法换层时，把切层点轻量锚定到附近 stairs/lift，更像发生在真实 connector 处
+ * Specifically:
+ * - When crossing a wall, do not only fall back to the previous pose; prefer projecting to the last valid point before the wall
+ * - When a floor transition is valid, lightly anchor the transition point to nearby stairs/lift so it looks like it happened at a real connector
  */
 public class MapMatchingService {
-    // 水平位移较小时，更像 lift
-    private static final double MAX_LIFT_HORIZONTAL_DISPLACEMENT_METERS = 1.5;
-    // 楼梯换层允许有一定水平位移，但不能太大；否则多半是飘点/大跳
-    private static final double MAX_STAIRS_HORIZONTAL_DISPLACEMENT_METERS = 4.0;
-    // 位移太小时，不做穿墙检测，避免传感器抖动带来误判
+    // Smaller horizontal displacement looks more like a lift.
+    private static final double MAX_LIFT_HORIZONTAL_DISPLACEMENT_METERS = 1.2;
+    // Stair transitions can include some horizontal displacement, but not too much; otherwise it is likely drift or a large jump.
+    private static final double MAX_STAIRS_HORIZONTAL_DISPLACEMENT_METERS = 3.0;
+    // Skip wall-crossing checks for very small displacement to avoid false positives from sensor jitter.
     private static final double MIN_DISPLACEMENT_FOR_WALL_CHECK_METERS = 0.3;
-    // 明显静止/微动时，直接冻结在上一帧匹配位置，优先于 small-step pass-through
+    // For obvious idle / micro-motion, freeze at the previous matched position before using small-step pass-through.
     private static final double MAX_IDLE_FREEZE_STEP_METERS = 0.08;
-    // 穿墙恢复后，单帧允许的最大“重新贴回”位移，避免轨迹瞬移
-    private static final double MAX_RECOVERY_STEP_METERS = 0.6;
-    // connector 区域附近略放宽，但仍然限制大跳
-    private static final double MAX_RECOVERY_STEP_NEAR_CONNECTOR_METERS = 1.0;
-    // 合法换层时，对 stairs / lift 锚定的最大允许吸附距离
-    private static final double MAX_STAIRS_ANCHOR_METERS = 1.0;
-    private static final double MAX_LIFT_ANCHOR_METERS = 1.0;
-    // 切层成功时，把 XY 直接落到目标楼层 connector 内部，避免落在墙边再被轴向滑动。
-    private static final double MAX_STAIRS_LANDING_METERS = 2.0;
-    private static final double MAX_LIFT_LANDING_METERS = 1.5;
-    // 切层成功后的若干帧内，不要立刻把轨迹重新完全交回普通 wall solver；
-    // 使用一个短暂的平滑释放窗口，把 landing 点自然过渡到后续轨迹。
-    private static final int POST_TRANSITION_RELEASE_FRAMES = 3;
-    private static final double POST_TRANSITION_RELEASE_BLEND_MIN = 0.28;
-    private static final double POST_TRANSITION_RELEASE_BLEND_MAX = 0.72;
-    private static final double POST_TRANSITION_RELEASE_MAX_STEP_METERS = 0.75;
+    // Maximum one-frame reattachment distance after wall recovery to avoid teleport-like jumps.
+    private static final double MAX_RECOVERY_STEP_METERS = 0.3;
+    // Allow slightly more freedom near connector areas, but still limit large jumps.
+    private static final double MAX_RECOVERY_STEP_NEAR_CONNECTOR_METERS = 0.45;
+    // Maximum allowed snap distance when anchoring to stairs / lift during a valid floor transition.
+    private static final double MAX_STAIRS_ANCHOR_METERS = 0.5;
+    private static final double MAX_LIFT_ANCHOR_METERS = 0.4;
+    // After a successful floor transition, place XY directly inside the connector on the target floor to avoid landing next to a wall and being axis-slid again.
+    private static final double MAX_STAIRS_LANDING_METERS = 0.7;
+    private static final double MAX_LIFT_LANDING_METERS = 0.6;
+    // For a few frames after a successful floor transition, do not immediately hand the trajectory back to the normal wall solver;
+    // use a short smooth-release window to transition naturally from the landing point to the following trajectory.
+    private static final int POST_TRANSITION_RELEASE_FRAMES = 1;
+    private static final double POST_TRANSITION_RELEASE_BLEND_MIN = 0.10;
+    private static final double POST_TRANSITION_RELEASE_BLEND_MAX = 0.25;
+    private static final double POST_TRANSITION_RELEASE_MAX_STEP_METERS = 0.25;
     private static final double POST_TRANSITION_RELEASE_COMPLETE_METERS = 0.20;
     private static final double POST_TRANSITION_RELEASE_CANCEL_METERS = 6.0;
     private int consecutiveFreezeCount = 0;
@@ -133,26 +133,26 @@ public class MapMatchingService {
                     "Micro-motion frozen (count=" + consecutiveFreezeCount + ")"
             );
         } else {
-            // escape condition
-//            if (frozen) {
-//                Log.d(TAG, "Freeze escape triggered after " + consecutiveFreezeCount + " frames");
-//            }
+
+
+
+
             consecutiveFreezeCount = 0;
         }
 
-//        if (shouldFreezeIdleMotion(previousPose, currentPose, motionDelta, nearStairs, nearLift, floorTransitionAttempt, input.getVerticalHint())) {
-//            return new MapMatchingResult(
-//                    true,
-//                    false,
-//                    nearStairs,
-//                    nearLift,
-//                    false,
-//                    previousPose.getLatLng(),
-//                    previousPose.getFloor(),
-//                    CorrectionType.NONE,
-//                    "Micro-motion frozen to suppress idle drift."
-//            );
-//        }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         if (transitionLanding != null) {
             startPostTransitionRelease(transitionLanding.landingLatLng, currentPose.getFloor());
@@ -185,12 +185,12 @@ public class MapMatchingService {
                     false,
                     releaseResult.correctedLatLng,
                     currentPose.getFloor(),
-                    CorrectionType.SNAP_TO_VALID_AREA,
+                    releaseResult.crossedWall ? CorrectionType.SNAP_TO_VALID_AREA : CorrectionType.NONE,
                     releaseResult.debugReason
             );
         }
 
-        // 没有任何可用楼层地图时，不做墙体约束。
+        // If no floor map is available, skip wall constraints.
         if (wallCheckFloorShapes == null) {
             return new MapMatchingResult(
                     true,
@@ -205,7 +205,7 @@ public class MapMatchingService {
             );
         }
 
-        // 穿墙检测：楼层切换尝试时优先看 source floor，避免被目标层几何误导。
+        // Wall-crossing check: during a floor-transition attempt, prefer the source floor to avoid being misled by target-floor geometry.
         if (previousPose != null && previousPose.getLatLng() != null) {
             boolean shouldCheckWall = true;
             if (motionDelta != null) {
@@ -275,10 +275,14 @@ public class MapMatchingService {
             );
             if (!samePoint(clampedRecovery, correctedLatLng)) {
                 correctedLatLng = clampedRecovery;
+
+                // This is a soft step limiter, not a hard valid-area snap.
+                // Leave the correction type as-is unless a stronger reason already exists.
                 if (correctionType == CorrectionType.NONE) {
-                    correctionType = CorrectionType.SNAP_TO_VALID_AREA;
+                    correctionType = CorrectionType.NONE;
                 }
-                debugReason = "Large recovery jump limited to avoid instant snap-back.";
+
+                debugReason = "Large correction step limited to avoid jumping ahead of the user.";
             }
         }
 
@@ -415,14 +419,14 @@ public class MapMatchingService {
          * Near connectors or transition areas, prefer projecting to the last valid
          * point before the wall. This is conservative and avoids aggressive XY shaping.
          */
-        if (preferProjection && lastValidPoint != null && !samePoint(lastValidPoint, previousLatLng)) {
-            return new WallRecovery(
-                    lastValidPoint,
-                    CorrectionType.SNAP_TO_VALID_AREA,
-                    "Crossed wall near connector. Projected to the last valid point before wall.",
-                    true
-            );
-        }
+//        if (preferProjection && lastValidPoint != null && !samePoint(lastValidPoint, previousLatLng)) {
+//            return new WallRecovery(
+//                    lastValidPoint,
+//                    CorrectionType.SNAP_TO_VALID_AREA,
+//                    "Crossed wall near connector. Projected to the last valid point before wall.",
+//                    true
+//            );
+//        }
 
         /*
          * Optional axis-only fallback:
@@ -503,7 +507,7 @@ public class MapMatchingService {
                 candidate.longitude - previous.longitude
         );
 
-        double step = 0.00001; // small normalized step (tune this)
+        double step = 0.00001; // Small normalized step size.
 
         for (double offsetDeg : ANGLE_OFFSETS) {
             double angle = baseAngle + Math.toRadians(offsetDeg);
@@ -518,7 +522,7 @@ public class MapMatchingService {
             }
         }
 
-        return previous; // fallback if all directions blocked
+        return previous; // Fallback if all directions are blocked.
     }
     @Nullable
     private LatLng anchorFloorTransition(@NonNull LatLng point,
@@ -659,16 +663,17 @@ public class MapMatchingService {
             return candidateLatLng;
         }
 
-        double stepDistance = motionDelta.getStepDistance();
+        double actualCorrectionDistance = distanceMeters(previousLatLng, candidateLatLng);
+
         double maxAllowedStep = nearConnector
                 ? MAX_RECOVERY_STEP_NEAR_CONNECTOR_METERS
                 : MAX_RECOVERY_STEP_METERS;
 
-        if (stepDistance <= maxAllowedStep) {
+        if (actualCorrectionDistance <= maxAllowedStep) {
             return candidateLatLng;
         }
 
-        double ratio = maxAllowedStep / Math.max(stepDistance, 1e-6);
+        double ratio = maxAllowedStep / Math.max(actualCorrectionDistance, 1e-6);
         double latitude = previousLatLng.latitude
                 + (candidateLatLng.latitude - previousLatLng.latitude) * ratio;
         double longitude = previousLatLng.longitude

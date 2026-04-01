@@ -84,6 +84,7 @@ public class FloorController {
     private void attachListeners() {
         if (autoFloorSwitch != null) {
             autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
+                syncLiveAutoFloorFlag(isChecked);
                 if (isChecked) {
                     startAutoFloor();
                 } else {
@@ -127,14 +128,36 @@ public class FloorController {
         }
     }
 
+    /**
+     * Mirrors the Auto Floor UI state into SensorFusion so the live PF pipeline
+     * knows whether floor transitions are allowed.
+     */
+    private void syncLiveAutoFloorFlag(boolean enabled) {
+        SensorFusion sensorFusion = host.getSensorFusion();
+        if (sensorFusion != null) {
+            sensorFusion.setLiveAutoFloorEnabled(enabled);
+        }
+    }
+
     public void setFloor(int newFloorIndex) {
         applyFloorInternal(newFloorIndex, true);
+    }
+
+    public void displayPfOwnedFloor (int newFloorIndex){
+        applyFloorInternal(newFloorIndex,false);
     }
 
     public void refreshCurrentFloorUi() {
         applyFloorInternal(host.getCurrentFloorIndex(), false);
     }
 
+    /**
+     * Applies a floor to the UI.
+     *
+     * Ownership split:
+     * - confirmFloor=true  -> manual/bootstrap override path, allowed to push into PF
+     * - confirmFloor=false -> PF-owned display path, must NOT push into PF
+     */
     private void applyFloorInternal(int newFloorIndex, boolean confirmFloor) {
         FloorplanApiClient.BuildingInfo selectedFloorplanBuilding = host.getSelectedFloorplanBuilding();
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
@@ -144,12 +167,24 @@ public class FloorController {
 
         int maxFloor = selectedFloorplanBuilding.getFloorShapesList().size() - 1;
         int clampedFloor = Math.max(0, Math.min(newFloorIndex, maxFloor));
+
+        // Always update the displayed/UI floor.
+        host.setCurrentFloorIndex(clampedFloor);
+
         if (confirmFloor) {
-            host.setCurrentFloorIndex(clampedFloor);
             initialFloorResolved = true;
             resetInitialFloorBootstrapState();
             syncAutoFloorAnchor();
+
+            // Only manual/bootstrap floor changes are allowed to push back into PF.
+            if (!host.isReplayModeEnabled()) {
+                SensorFusion sensorFusion = host.getSensorFusion();
+                if (sensorFusion != null) {
+                    sensorFusion.setParticleFilterFloorOverride(clampedFloor);
+                }
+            }
         }
+
         host.refreshSelectedPolygonAppearance();
 
         if (!host.isIndoorMapVisible() && !host.isActualMapVisible()) {
@@ -274,6 +309,8 @@ public class FloorController {
         }
     }
 
+    // Auto-floor is bootstrap-only here.
+    // After startup, authoritative live floor comes from validated map matching / PF.
     public void updateFloorLabel() {
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
         if (floorLabel != null && indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
@@ -282,6 +319,14 @@ public class FloorController {
         host.updateCalibrationUi();
     }
 
+    /**
+     * Starts initial floor bootstrap and enables live PF floor transitions.
+     *
+     * Behaviour:
+     * - bootstrap loop runs only until an initial floor is resolved or timeout hits
+     * - the Auto Floor switch still remains the authoritative permission for
+     *   later live PF floor changes
+     */
     public void startAutoFloor() {
         if (host.isReplayModeEnabled()) {
             if (autoFloorSwitch != null) {
@@ -289,30 +334,46 @@ public class FloorController {
             }
             return;
         }
+
+        syncLiveAutoFloorFlag(true);
+
         if (autoFloorHandler == null) {
             autoFloorHandler = new Handler(Looper.getMainLooper());
         }
 
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
+        stopAutoFloorBootstrap();
         resetInitialFloorBootstrapState();
         autoFloorStartMs = SystemClock.elapsedRealtime();
-
-        // Seed elevation baseline only.
         syncAutoFloorAnchor();
-
-        applyImmediateFloor();
 
         autoFloorTask = new Runnable() {
             @Override
             public void run() {
-                evaluateAutoFloor();
-                if (autoFloorHandler != null) {
-                    autoFloorHandler.postDelayed(this, AUTO_FLOOR_CHECK_INTERVAL_MS);
+                applyImmediateFloor();
+
+                if (!initialFloorResolved
+                        && !shouldForceBootstrapFallback()
+                        && autoFloorHandler != null) {
+                    autoFloorHandler.postDelayed(this, 500L);
                 }
             }
         };
+
         autoFloorHandler.post(autoFloorTask);
+    }
+
+    /**
+     * Stops only the temporary bootstrap polling task.
+     *
+     * This does NOT disable the user's Auto Floor preference.
+     */
+    private void stopAutoFloorBootstrap() {
+        if (autoFloorHandler != null && autoFloorTask != null) {
+            autoFloorHandler.removeCallbacks(autoFloorTask);
+        }
+        lastCandidateFloor = Integer.MIN_VALUE;
+        lastCandidateTime = 0L;
+        resetInitialFloorBootstrapState();
     }
 
     private boolean shouldForceBootstrapFallback() {
@@ -326,58 +387,42 @@ public class FloorController {
         if (host.isReplayModeEnabled()) {
             return;
         }
+
         SensorFusion sensorFusion = host.getSensorFusion();
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
         }
 
-        if (!initialFloorResolved) {
-            Integer bootstrapFloorIndex = resolveInitialWifiBootstrapFloorIndex(sensorFusion, indoorMapManager);
-            if (bootstrapFloorIndex != null) {
-                Log.d(TAG, "Initial floor bootstrap accepted from stable WiFi floor candidate: index=" + bootstrapFloorIndex);
-                setFloor(bootstrapFloorIndex);
-                lastCandidateFloor = bootstrapFloorIndex;
-                lastCandidateTime = SystemClock.elapsedRealtime();
-                return;
-            }
+        if (initialFloorResolved) {
+            return;
+        }
 
-            if (!shouldForceBootstrapFallback()) {
-                return;
-            }
+        Integer bootstrapFloorIndex = resolveInitialWifiBootstrapFloorIndex(sensorFusion, indoorMapManager);
+        if (bootstrapFloorIndex != null) {
+            setFloor(bootstrapFloorIndex);
+            stopAutoFloorBootstrap();
+            return;
+        }
 
-            Log.d(TAG, "Initial floor bootstrap timed out; using current visible floor as fallback baseline.");
+        if (shouldForceBootstrapFallback()) {
             initialFloorResolved = true;
             syncAutoFloorAnchor();
-        }
-
-        Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
-        if (candidateFloorIndex == null) {
-            return;
-        }
-
-        long now = SystemClock.elapsedRealtime();
-        lastCandidateFloor = candidateFloorIndex;
-        lastCandidateTime = now;
-
-        if (candidateFloorIndex == host.getCurrentFloorIndex()) {
-            syncAutoFloorAnchor();
-            return;
-        }
-
-        if (shouldAllowAutoFloorChange(candidateFloorIndex, sensorFusion, indoorMapManager)) {
-            setFloor(candidateFloorIndex);
-            lastCandidateTime = SystemClock.elapsedRealtime();
+            stopAutoFloorBootstrap();
         }
     }
 
+    /**
+     * Fully disables auto-floor behaviour for the current session.
+     *
+     * Use this when:
+     * - the user turns the switch off
+     * - replay mode is entered
+     * - the map is reset
+     */
     public void stopAutoFloor() {
-        if (autoFloorHandler != null && autoFloorTask != null) {
-            autoFloorHandler.removeCallbacks(autoFloorTask);
-        }
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
-        resetInitialFloorBootstrapState();
+        stopAutoFloorBootstrap();
+        syncLiveAutoFloorFlag(false);
     }
 
     public boolean isAutoFloorEnabled() {
@@ -389,62 +434,7 @@ public class FloorController {
     }
 
     public void evaluateAutoFloor() {
-        if (host.isReplayModeEnabled()) {
-            return;
-        }
-        SensorFusion sensorFusion = host.getSensorFusion();
-        IndoorMapManager indoorMapManager = host.getIndoorMapManager();
-        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            return;
-        }
-
-        if (!initialFloorResolved) {
-            Integer bootstrapFloorIndex = resolveInitialWifiBootstrapFloorIndex(sensorFusion, indoorMapManager);
-            if (bootstrapFloorIndex != null) {
-                Log.d(TAG, "Initial floor bootstrap accepted from stable WiFi floor candidate during evaluation: index=" + bootstrapFloorIndex);
-                setFloor(bootstrapFloorIndex);
-                lastCandidateFloor = bootstrapFloorIndex;
-                lastCandidateTime = SystemClock.elapsedRealtime();
-                return;
-            }
-
-            if (!shouldForceBootstrapFallback()) {
-                return;
-            }
-
-            Log.d(TAG, "Initial floor bootstrap timed out during evaluation; using current visible floor as fallback baseline.");
-            initialFloorResolved = true;
-            syncAutoFloorAnchor();
-        }
-
-        Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
-        if (candidateFloorIndex == null) {
-            return;
-        }
-
-        if (candidateFloorIndex == host.getCurrentFloorIndex()) {
-            lastCandidateFloor = candidateFloorIndex;
-            lastCandidateTime = SystemClock.elapsedRealtime();
-            syncAutoFloorAnchor();
-            return;
-        }
-
-        if (!shouldAllowAutoFloorChange(candidateFloorIndex, sensorFusion, indoorMapManager)) {
-            lastCandidateFloor = candidateFloorIndex;
-            lastCandidateTime = SystemClock.elapsedRealtime();
-            return;
-        }
-
-        long now = SystemClock.elapsedRealtime();
-        if (candidateFloorIndex != lastCandidateFloor) {
-            lastCandidateFloor = candidateFloorIndex;
-            lastCandidateTime = now;
-            return;
-        }
-        if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            setFloor(candidateFloorIndex);
-            lastCandidateTime = SystemClock.elapsedRealtime();
-        }
+        applyImmediateFloor();
     }
 
     @Nullable
@@ -482,7 +472,7 @@ public class FloorController {
      */
     @Nullable
     public Integer peekTrackingFloorCandidateIndex() {
-        if (host.isReplayModeEnabled()) {
+        if (host.isReplayModeEnabled() || initialFloorResolved) {
             return null;
         }
 
@@ -492,20 +482,7 @@ public class FloorController {
             return null;
         }
 
-        Integer rawCandidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
-        if (rawCandidateFloorIndex == null) {
-            return null;
-        }
-
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            return initialFloorResolved ? rawCandidateFloorIndex : null;
-        }
-
-        if (shouldAllowAutoFloorChange(rawCandidateFloorIndex, sensorFusion, indoorMapManager)) {
-            return rawCandidateFloorIndex;
-        }
-
-        return null;
+        return resolveInitialWifiBootstrapFloorIndex(sensorFusion, indoorMapManager);
     }
 
     private void resetInitialFloorBootstrapState() {
@@ -514,10 +491,14 @@ public class FloorController {
         pendingInitialWifiSamples = 0;
     }
 
+    /**
+     * Debug string for floor-control state.
+     */
     @NonNull
     public String getAutoFloorDebugSummary() {
         SensorFusion sensorFusion = host.getSensorFusion();
-        return "autoFloor=" + isAutoFloorEnabled()
+        return "autoFloorUi=" + isAutoFloorEnabled()
+                + " livePfAutoFloor=" + (sensorFusion != null && sensorFusion.isLiveAutoFloorEnabled())
                 + " initResolved=" + initialFloorResolved
                 + " currentFloorIndex=" + host.getCurrentFloorIndex()
                 + " candidateFloor=" + lastCandidateFloor

@@ -6,27 +6,27 @@ import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import java.util.List;
 
 /**
- * 提供 3.2 Map Matching 所需的基础几何判断工具。
+ * Provides the core geometric checks required for Map Matching 3.2.
  *
- * 当前版本除了基础的穿墙 / 邻近判断外，还补充了：
- * 1. 沿着一段运动轨迹，找到“撞墙前最后一个合法点”
- * 2. 找到某类 indoor feature（stairs/lift）最近的锚点位置
+ * In addition to basic wall-crossing and proximity checks, this version also adds:
+ * 1. Find the last valid point before hitting a wall along a motion segment
+ * 2. Find the nearest anchor point for an indoor feature type (stairs/lift)
  *
- * 这些工具会被阶段四的最小补丁使用，用来把 map matching 从
- * “只会拒绝错误”推进到“能主动拉回到更合理的位置”。
+ * These utilities are used by the stage-four minimal patch to move map matching
+ * from "only rejecting errors" to "actively pulling the pose back to a more reasonable location."
  */
 public class MapGeometryUtils {
 
-    // 默认邻近阈值（米）
-    // 楼梯邻近阈值可以稍大一点
+    // Default proximity threshold (meters)
+    // Stairs can use a slightly larger threshold.
     private static final double STAIRS_PROXIMITY_THRESHOLD_METERS = 2.2;
 
-    // 电梯邻近阈值相对更紧一些
+    // Lift uses a slightly tighter threshold.
     private static final double LIFT_PROXIMITY_THRESHOLD_METERS = 1.8;
 
     private static final int WALL_PROJECTION_BINARY_SEARCH_ITERATIONS = 20;
     private static final double WALL_PROJECTION_SAFETY_RATIO = 0.98;
-    // 安全内缩值不要太大，否则切层时会出现明显的横向/纵向跳点。
+    // Keep the safe inset small; otherwise floor transitions may introduce obvious lateral jumps.
     private static final double CONNECTOR_SAFE_INSET_METERS = 0.35;
     private static final int CONNECTOR_SAFE_POINT_STEPS = 16;
     private static final double LOCAL_DIRECTION_SEARCH_RADIUS_METERS = 4.0;
@@ -85,7 +85,7 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 判断从 start 到 end 的轨迹是否穿过当前楼层中的 wall。
+     * Checks whether the trajectory from start to end crosses a wall on the current floor.
      */
     public static boolean crossesWall(LatLng start,
                                       LatLng end,
@@ -108,8 +108,8 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 判断当前位置是否靠近楼梯。
-     * 楼梯区域通常范围稍大，因此阈值放宽一些。
+     * Checks whether the current position is near stairs.
+     * Stair areas are usually a bit larger, so the threshold is relaxed.
      */
     public static boolean isNearStairs(LatLng point,
                                        FloorplanApiClient.FloorShapes floorShapes) {
@@ -122,8 +122,8 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 判断当前位置是否靠近电梯。
-     * 电梯区域通常更集中，因此阈值稍微收紧。
+     * Checks whether the current position is near a lift.
+     * Lift areas are usually more compact, so the threshold is slightly tighter.
      */
     public static boolean isNearLift(LatLng point,
                                      FloorplanApiClient.FloorShapes floorShapes) {
@@ -137,9 +137,9 @@ public class MapGeometryUtils {
 
 
     /**
-     * 判断点是否真正位于某类 indoor feature 的面域内部。
+     * Checks whether a point is actually inside an indoor feature area.
      *
-     * 这个判断比 near 更严格，用于楼层切换这种需要强证据的场景。
+     * This is stricter than a near check and is used for floor transitions that need strong evidence.
      */
     public static boolean isInsideIndoorType(LatLng point,
                                              FloorplanApiClient.FloorShapes floorShapes,
@@ -168,7 +168,7 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 更通用的“是否靠近某类 indoor feature”判断。
+     * A more general check for whether a point is near an indoor feature type.
      */
     public static boolean isNearIndoorType(LatLng point,
                                            FloorplanApiClient.FloorShapes floorShapes,
@@ -189,12 +189,12 @@ public class MapGeometryUtils {
             for (List<LatLng> part : parts) {
                 if (part == null || part.isEmpty()) continue;
 
-                // 如果是面/封闭区域，点在里面也算 near
+                // If this is an area / closed region, being inside also counts as near.
                 if (part.size() >= 3 && isPointInPolygon(point, part)) {
                     return true;
                 }
 
-                // 否则判断点到边/线段的最小距离
+                // Otherwise, check the minimum distance from the point to the edge / segment.
                 if (isPointNearPolyline(point, part, thresholdMeters)) {
                     return true;
                 }
@@ -268,9 +268,9 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 当一段轨迹穿墙时，沿着 start->end 的方向找到“撞墙前最后一个合法点”。
+     * When a trajectory crosses a wall, find the last valid point before collision along start->end.
      *
-     * 这比简单回退到 previous pose 更平滑，也更符合阶段四“主动修正”的目标。
+     * This is smoother than simply reverting to the previous pose and better matches the stage-four active-correction goal.
      */
     public static LatLng findFarthestValidPointBeforeWall(LatLng start,
                                                           LatLng end,
@@ -297,16 +297,16 @@ public class MapGeometryUtils {
             }
         }
 
-        // 稍微往 start 方向退一点，避免贴在边界上导致下一帧继续抖动。
+        // Step slightly back toward start to avoid landing on the boundary and oscillating on the next frame.
         double safeRatio = Math.max(0.0, low * WALL_PROJECTION_SAFETY_RATIO);
         return interpolate(start, end, safeRatio);
     }
 
     /**
-     * 寻找 point 到指定 indoorType 最近的“安全内部落点”。
+     * Find the nearest safe interior landing point from point to the specified indoorType.
      *
-     * 与简单质心不同，这个点会尽量靠近用户当前候选点所对应的入口侧，
-     * 但同时向 polygon 内部缩进一小段距离，避免切层后落在边界/墙边。
+     * Unlike a simple centroid, this point stays as close as possible to the entrance side near the current candidate point,
+     * while still moving slightly inside the polygon to avoid landing on the boundary or next to a wall after a floor change.
      */
     public static LatLng findNearestSafeInteriorPointOnIndoorType(LatLng point,
                                                                   FloorplanApiClient.FloorShapes floorShapes,
@@ -344,10 +344,10 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 寻找 point 到指定 indoorType 最近的“内部落点”。
+     * Find the nearest interior landing point from point to the specified indoorType.
      *
-     * 和 findNearestPointOnIndoorType 不同，这里优先返回 polygon 的内部质心，
-     * 适合楼层切换后的落点安置，避免刚切层就落在边界/墙边。
+     * Unlike findNearestPointOnIndoorType, this prefers returning an interior centroid of the polygon,
+     * which is suitable for placing the landing point after a floor transition and avoids landing on the boundary or next to a wall.
      */
     public static LatLng findNearestIndoorTypeCentroid(LatLng point,
                                                        FloorplanApiClient.FloorShapes floorShapes,
@@ -391,9 +391,9 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 寻找 point 到指定 indoorType 最近的锚点。
+     * Find the nearest anchor point from point to the specified indoorType.
      *
-     * 对 stairs/lift 来说，这个点会作为楼层切换时的“更合理位置”。
+     * For stairs/lift, this point acts as a more reasonable position during a floor transition.
      */
     public static LatLng findNearestPointOnIndoorType(LatLng point,
                                                       FloorplanApiClient.FloorShapes floorShapes,
@@ -446,11 +446,11 @@ public class MapGeometryUtils {
     }
 
     // =========================================================
-    // 内部工具方法
+    // Internal helper methods
     // =========================================================
 
     /**
-     * 判断轨迹线段是否与某个 feature 的边界/线段相交。
+     * Checks whether a trajectory segment intersects the boundary / segment of a feature.
      */
     private static boolean intersectsFeature(LatLng start,
                                              LatLng end,
@@ -470,7 +470,7 @@ public class MapGeometryUtils {
                 }
             }
 
-            // 如果是 polygon ring，最后一个点和第一个点也需要闭合判断
+            // For a polygon ring, also check the closing edge between the last and first points.
             if (part.size() >= 3) {
                 LatLng last = part.get(part.size() - 1);
                 LatLng first = part.get(0);
@@ -484,7 +484,7 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 判断一个点是否靠近一条 polyline / polygon 边界。
+     * Checks whether a point is near a polyline / polygon boundary.
      */
     private static boolean isPointNearPolyline(LatLng point,
                                                List<LatLng> polyline,
@@ -501,7 +501,7 @@ public class MapGeometryUtils {
             }
         }
 
-        // 如果像 polygon ring，也检查闭合边
+        // If this behaves like a polygon ring, also check the closing edge.
         if (polyline.size() >= 3) {
             double distance = distancePointToSegmentMeters(
                     point,
@@ -515,8 +515,8 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 点是否在 polygon 内。
-     * 采用简单射线法。
+     * Checks whether a point is inside a polygon.
+     * Uses a simple ray-casting method.
      */
     private static boolean isPointInPolygon(LatLng point, List<LatLng> polygon) {
         if (point == null || polygon == null || polygon.size() < 3) return false;
@@ -541,8 +541,8 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 判断两条线段是否相交。
-     * 这里采用平面近似，对室内小范围足够。
+     * Checks whether two segments intersect.
+     * A planar approximation is used here, which is sufficient for small indoor areas.
      */
     private static boolean segmentsIntersect(LatLng p1, LatLng p2, LatLng q1, LatLng q2) {
         int o1 = orientation(p1, p2, q1);
@@ -552,7 +552,7 @@ public class MapGeometryUtils {
 
         if (o1 != o2 && o3 != o4) return true;
 
-        // 共线特殊情况
+        // Special case: collinear segments
         if (o1 == 0 && onSegment(p1, q1, p2)) return true;
         if (o2 == 0 && onSegment(p1, q2, p2)) return true;
         if (o3 == 0 && onSegment(q1, p1, q2)) return true;
@@ -577,8 +577,8 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 计算点到线段的最短距离（米）。
-     * 使用局部平面近似（经纬度转米），对室内小范围足够。
+     * Computes the shortest distance from a point to a segment (meters).
+     * Uses a local planar approximation (lat/lng converted to meters), which is sufficient for small indoor areas.
      */
     private static double distancePointToSegmentMeters(LatLng p, LatLng a, LatLng b) {
         LatLng nearest = projectPointToSegment(p, a, b);
@@ -792,8 +792,8 @@ public class MapGeometryUtils {
     }
 
     /**
-     * 把经纬度转换为以 reference 为原点的局部米坐标。
-     * 返回 [xMeters, yMeters]
+     * Converts lat/lng to local meter coordinates with reference as the origin.
+     * Returns [xMeters, yMeters]
      */
     private static double[] toLocalMeters(LatLng point, LatLng reference) {
         double latRad = Math.toRadians(reference.latitude);

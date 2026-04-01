@@ -5,14 +5,14 @@ import androidx.annotation.Nullable;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 
 /**
- * 表示一次 map matching 所需的完整输入。
+ * Represents the full input required for one map-matching pass.
  *
- * 这里同时区分：
- * - sourceFloorShapes: 当前“实际所在楼层”用于墙体/楼梯/电梯约束的地图
- * - targetFloorShapes: 候选目标楼层地图（例如 replay 推断出即将上/下到的楼层）
+ * This explicitly distinguishes between:
+ * - sourceFloorShapes: the map of the actual current floor used for wall/stairs/lift constraints
+ * - targetFloorShapes: the candidate target-floor map (for example, a replay-predicted next floor)
  *
- * 这样在发生楼层切换尝试时，就不会错误地拿“目标楼层的楼梯位置”
- * 去给“当前楼层”的切换放行。
+ * This prevents the code from mistakenly using the stairs on the target floor
+ * to approve a transition on the current floor.
  */
 public class MapMatchingInput {
 
@@ -72,7 +72,7 @@ public class MapMatchingInput {
     }
 
     /**
-     * 兼容旧调用：active floor 默认视为 target floor。
+     * Compatibility for old callers: active floor defaults to target floor.
      */
     @Nullable
     public FloorplanApiClient.FloorShapes getActiveFloorShapes() {

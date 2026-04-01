@@ -17,7 +17,6 @@ import com.openpositioning.PositionMe.mapmatching.MapMatchingInput;
 import com.openpositioning.PositionMe.mapmatching.MapMatchingResult;
 import com.openpositioning.PositionMe.mapmatching.MapMatchingService;
 import com.openpositioning.PositionMe.mapmatching.MotionDelta;
-import com.openpositioning.PositionMe.mapmatching.VerticalMotionDetector;
 import com.openpositioning.PositionMe.mapmatching.VerticalTransitionHint;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
@@ -25,14 +24,19 @@ import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * MapMatchingCoordinator
+ *
+ * Cleaned responsibility:
+ * - REPLAY ONLY
+ * - owns replay map matching state
+ * - owns replay floor replay-context interpretation
+ * - does NOT own live WiFi/GNSS correction
+ * - does NOT own live fused trajectory generation
+ *
+ * Live fused pose is now owned by ParticleFilterManager.
+ */
 final class MapMatchingCoordinator {
-
-    private static final double WIFI_MAX_PULL_METERS = 6.0;
-    private static final double GNSS_MAX_PULL_METERS = 10.0;
-    private static final double WIFI_BLEND_RATIO = 0.45;
-    private static final double GNSS_BLEND_RATIO = 0.20;
-    private static final double MAX_OBSERVATION_RESIDUAL_METERS = 25.0;
-
 
     interface Host {
         @Nullable GoogleMap getGoogleMap();
@@ -43,7 +47,6 @@ final class MapMatchingCoordinator {
         boolean isReplayModeEnabled();
         @Nullable SensorFusion getSensorFusion();
         @Nullable Integer getTrackingCandidateFloorIndex();
-        @Nullable Integer getStableFusionFloorIndex();
         int getCurrentFloorIndex();
         void setFloor(int floorIndex);
         boolean isAutoFloorEnabled();
@@ -64,10 +67,10 @@ final class MapMatchingCoordinator {
 
     private final Host host;
     private final MapMatchingService mapMatchingService = new MapMatchingService();
-    private final VerticalMotionDetector verticalMotionDetector = new VerticalMotionDetector();
 
     @Nullable
     private CandidatePose previousMatchedPose;
+
     @Nullable
     private Integer replaySyntheticFloor;
     @Nullable
@@ -80,43 +83,53 @@ final class MapMatchingCoordinator {
     @Nullable
     private Integer replayBaseFloorIndex;
     private boolean replayDisplayFloorInitialized = false;
+
     @NonNull
-    private String latestDebugStatus = "abs:none  src:idle\n"
-            + "floor d/c/m: -/-/-\n"
-            + "vertical: steady Δ0.00m\n"
-            + "correction: NONE\n"
-            + "Waiting for updates";
+    private String latestDebugStatus = defaultDebugStatus();
 
     MapMatchingCoordinator(@NonNull Host host) {
         this.host = host;
     }
 
+    /**
+     * Returns the latest replay debug text.
+     */
     @NonNull
     String getLatestDebugStatus() {
         return latestDebugStatus;
     }
 
+    /**
+     * Called when replay mode toggles.
+     */
     void onReplayModeChanged(boolean enabled) {
         previousMatchedPose = null;
         mapMatchingService.resetTransientState();
-        verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
         latestDebugStatus = defaultDebugStatus();
+
         if (enabled) {
             replayDisplayFloorInitialized = false;
         }
     }
 
+    /**
+     * Called when the selected building changes.
+     *
+     * Replay state is per-building, so this must reset it.
+     */
     void onSelectedBuildingChanged() {
         previousMatchedPose = null;
         mapMatchingService.resetTransientState();
-        verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
         latestDebugStatus = defaultDebugStatus();
     }
 
+    /**
+     * Supplies replay frame context without initial-floor override.
+     */
     void setReplayFrameContext(@Nullable Integer syntheticFloor,
                                @Nullable Double currentElevation,
                                @Nullable Double deltaHeight,
@@ -124,6 +137,9 @@ final class MapMatchingCoordinator {
         setReplayFrameContext(syntheticFloor, currentElevation, deltaHeight, heightChanged, null);
     }
 
+    /**
+     * Supplies replay frame context including optional initial-floor override.
+     */
     void setReplayFrameContext(@Nullable Integer syntheticFloor,
                                @Nullable Double currentElevation,
                                @Nullable Double deltaHeight,
@@ -133,12 +149,15 @@ final class MapMatchingCoordinator {
         replayCurrentElevation = currentElevation;
         replayDeltaHeight = deltaHeight;
         replayHeightChanged = heightChanged;
+
         if (initialFloor != null && (replayInitialFloor == null || !initialFloor.equals(replayInitialFloor))) {
             replayBaseFloorIndex = null;
             replayDisplayFloorInitialized = false;
         }
+
         replayInitialFloor = initialFloor;
         maybeInitializeReplayDisplayFloor();
+
         Log.d(host.getTag(), String.format(Locale.US,
                 "Replay frame context initialFloor=%s syntheticFloor=%s elevation=%s deltaHeight=%s heightChanged=%s",
                 String.valueOf(initialFloor),
@@ -148,54 +167,44 @@ final class MapMatchingCoordinator {
                 String.valueOf(heightChanged)));
     }
 
-    void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+    /**
+     * Updates the replay location.
+     *
+     * Important:
+     * - in live mode this coordinator does nothing meaningful anymore
+     * - in replay mode it performs replay map matching only
+     */
+    void updateUserLocation(@NonNull LatLng newLocation, float orientationDeg) {
         if (host.getGoogleMap() == null) {
             return;
         }
 
-        long timestampMs = SystemClock.elapsedRealtime();
-        boolean replayMode = host.isReplayModeEnabled();
-        LatLng rawLocation = newLocation;
-        host.getTrajectoryRenderer().appendRawObservationPoint(rawLocation);
+        if (!host.isReplayModeEnabled()) {
+            latestDebugStatus = "Replay map matching only\nLive path bypasses coordinator";
+            return;
+        }
 
-        final int candidateFloorIndex = replayMode
-                ? resolveReplayCandidateFloorIndex()
-                : resolveLiveCandidateFloorIndex();
-        final int previousStateFloor = previousMatchedPose != null
+        long timestampMs = SystemClock.elapsedRealtime();
+        LatLng rawLocation = newLocation;
+
+        int candidateFloorIndex = resolveReplayCandidateFloorIndex();
+        int sourceFloorIndex = previousMatchedPose != null
                 ? previousMatchedPose.getFloor()
                 : candidateFloorIndex;
-        final Integer stableFusionFloor = replayMode ? null : host.getStableFusionFloorIndex();
-        final int sourceFloorIndex;
-        if (!replayMode
-                && stableFusionFloor != null
-                && previousMatchedPose != null
-                && stableFusionFloor != previousMatchedPose.getFloor()
-                && candidateFloorIndex == stableFusionFloor) {
-            sourceFloorIndex = stableFusionFloor;
-        } else {
-            sourceFloorIndex = previousStateFloor;
-        }
 
-        final AbsoluteObservationCorrection absoluteCorrection = replayMode
-                ? AbsoluteObservationCorrection.passThrough(rawLocation, "replay_pdr")
-                : applyAbsoluteObservationCorrection(rawLocation, candidateFloorIndex);
-        SensorFusion sensorFusion = host.getSensorFusion();
-        if (!replayMode && sensorFusion != null) {
-            host.getTrajectoryRenderer().updateWifi(sensorFusion.getLatLngWifiPositioning());
-        }
-        LatLng candidateLatLng = absoluteCorrection.getCorrectedLatLng();
         FloorplanApiClient.FloorShapes sourceFloorShapes = getFloorShapesForFloorIndex(sourceFloorIndex);
         FloorplanApiClient.FloorShapes targetFloorShapes = getFloorShapesForFloorIndex(candidateFloorIndex);
+
         CandidatePose currentCandidatePose = new CandidatePose(
-                candidateLatLng,
+                rawLocation,
                 candidateFloorIndex,
                 timestampMs,
-                absoluteCorrection.getPoseSource()
+                "replay_pdr"
         );
 
-        MotionDelta motionDelta = buildMotionDelta(previousMatchedPose, candidateLatLng, orientation);
-        VerticalTransitionHint verticalHint = buildVerticalTransitionHint(timestampMs);
-        logVerticalHintDiagnostics(verticalHint, replayMode, candidateFloorIndex);
+        MotionDelta motionDelta = buildMotionDelta(previousMatchedPose, rawLocation, orientationDeg);
+        VerticalTransitionHint verticalHint = buildReplayVerticalHint();
+
         FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
         String activeBuildingId = selectedBuilding != null
                 ? host.resolveKnownBuildingKey(selectedBuilding, selectedBuilding.getName())
@@ -212,39 +221,18 @@ final class MapMatchingCoordinator {
         );
 
         MapMatchingResult matchingResult = mapMatchingService.match(matchingInput);
+
         LatLng matchedLocation = matchingResult.getCorrectedLatLng() != null
                 ? matchingResult.getCorrectedLatLng()
                 : rawLocation;
+
         int matchedFloor = matchingResult.getCorrectedFloor();
-        int floorForState = replayMode
-                ? resolveReplayDisplayFloor(matchedFloor)
-                : matchedFloor;
+        int displayFloor = resolveReplayDisplayFloor(matchedFloor);
 
         logFeatureValidation(rawLocation, matchingResult);
-        logAbsoluteObservationDiagnostics(rawLocation, absoluteCorrection);
-        Log.d(host.getTestLogTag(), String.format(Locale.US,
-                "raw=(%.6f, %.6f) candidate=(%.6f, %.6f) matched=(%.6f, %.6f) sourceFloor=%d candidateFloor=%d matchedFloor=%d displayFloor=%d autoFloorEnabled=%s candidateSource=%s correction=%s reason=%s",
-                rawLocation.latitude,
-                rawLocation.longitude,
-                candidateLatLng.latitude,
-                candidateLatLng.longitude,
-                matchedLocation.latitude,
-                matchedLocation.longitude,
-                sourceFloorIndex,
-                candidateFloorIndex,
-                matchedFloor,
-                floorForState,
-                String.valueOf(host.isAutoFloorEnabled()),
-                absoluteCorrection.getPoseSource(),
-                matchingResult.getCorrectionType() != null
-                        ? matchingResult.getCorrectionType().name()
-                        : CorrectionType.NONE.name(),
-                matchingResult.getDebugReason()));
 
         latestDebugStatus = buildDebugStatus(
-                absoluteCorrection.getObservationSource(),
-                absoluteCorrection.getPoseSource(),
-                floorForState,
+                displayFloor,
                 candidateFloorIndex,
                 matchedFloor,
                 verticalHint,
@@ -254,40 +242,27 @@ final class MapMatchingCoordinator {
         LatLng oldLocation = host.getCurrentLocation();
         host.setCurrentLocation(matchedLocation);
 
-        boolean rejectedOnlyDueToWeakVerticalEvidence =
-                matchingResult.getCorrectionType() == CorrectionType.INVALID_FLOOR_CHANGE
-                        && matchingResult.getDebugReason() != null
-                        && matchingResult.getDebugReason().toLowerCase(Locale.US)
-                        .contains("no reliable vertical evidence");
-
-        boolean shouldResyncStateFromFusion = !replayMode
-                && stableFusionFloor != null
-                && stableFusionFloor == candidateFloorIndex
-                && candidateFloorIndex != sourceFloorIndex
-                && rejectedOnlyDueToWeakVerticalEvidence;
-
-        if (shouldResyncStateFromFusion) {
-            floorForState = stableFusionFloor;
-        }
-
         previousMatchedPose = new CandidatePose(
                 matchedLocation,
-                floorForState,
+                displayFloor,
                 timestampMs,
-                replayMode ? "replay_map_state" : "map_matched"
+                "replay_map_state"
         );
 
-        if (replayMode) {
-            applyReplayDisplayFloorIfNeeded(floorForState);
-        }
+        applyReplayDisplayFloorIfNeeded(displayFloor);
 
-        boolean shouldFollowCamera = replayMode;
-        float savedZoom = 19f;
-        Context context = host.requireContext();
-        savedZoom = context.getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
+        float savedZoom = host.requireContext()
+                .getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
                 .getFloat("user_selected_zoom", 19f);
 
-        host.getTrajectoryRenderer().updateCurrentPosition(context, matchedLocation, orientation, shouldFollowCamera, savedZoom);
+        host.getTrajectoryRenderer().updateCurrentPosition(
+                host.requireContext(),
+                matchedLocation,
+                orientationDeg,
+                true,
+                savedZoom
+        );
+
         host.getTrajectoryRenderer().appendMatchedLocation(oldLocation, matchedLocation);
 
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
@@ -301,27 +276,36 @@ final class MapMatchingCoordinator {
         }
     }
 
+    /**
+     * Fully resets replay-side map matching state.
+     */
     void resetMapMatchingState() {
         previousMatchedPose = null;
         mapMatchingService.resetTransientState();
-        verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
         latestDebugStatus = defaultDebugStatus();
     }
 
+    /**
+     * Clears replay frame context.
+     */
     private void clearReplayContext(boolean clearBaseFloorState) {
         replaySyntheticFloor = null;
         replayCurrentElevation = null;
         replayDeltaHeight = null;
         replayHeightChanged = false;
         replayInitialFloor = null;
+
         if (clearBaseFloorState) {
             replayBaseFloorIndex = null;
             replayDisplayFloorInitialized = false;
         }
     }
 
+    /**
+     * Returns floor shapes for a given floor index.
+     */
     @Nullable
     private FloorplanApiClient.FloorShapes getFloorShapesForFloorIndex(int floorIndexForMatching) {
         FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
@@ -335,144 +319,22 @@ final class MapMatchingCoordinator {
             maybeInitializeReplayDisplayFloor();
         }
 
-        int safeFloorIndex = Math.max(0, Math.min(floorIndexForMatching, selectedBuilding.getFloorShapesList().size() - 1));
+        int safeFloorIndex = Math.max(
+                0,
+                Math.min(floorIndexForMatching, selectedBuilding.getFloorShapesList().size() - 1)
+        );
+
         return selectedBuilding.getFloorShapesList().get(safeFloorIndex);
     }
 
-    private int resolveLiveCandidateFloorIndex() {
-        Integer trackingCandidateFloorIndex = host.getTrackingCandidateFloorIndex();
-        if (trackingCandidateFloorIndex != null) {
-            return trackingCandidateFloorIndex;
-        }
-
-        Integer fusionFloorIndex = host.getStableFusionFloorIndex();
-        if (fusionFloorIndex != null) {
-            return fusionFloorIndex;
-        }
-
-        if (previousMatchedPose != null) {
-            return previousMatchedPose.getFloor();
-        }
-
-        return host.getCurrentFloorIndex();
-    }
-
-    @NonNull
-    private AbsoluteObservationCorrection applyAbsoluteObservationCorrection(@NonNull LatLng rawLocation,
-                                                                             int candidateFloorIndex) {
-        SensorFusion sensorFusion = host.getSensorFusion();
-        if (sensorFusion == null) {
-            return AbsoluteObservationCorrection.passThrough(rawLocation, "live_pdr");
-        }
-
-        LatLng wifiObservation = sensorFusion.getLatLngWifiPositioning();
-        if (isUsableObservation(wifiObservation)) {
-            double rawDistanceMeters = distanceMeters(rawLocation, wifiObservation);
-            if (rawDistanceMeters <= MAX_OBSERVATION_RESIDUAL_METERS) {
-                double blendRatio = previousMatchedPose == null ? 0.70 : WIFI_BLEND_RATIO;
-                double maxPullMeters = previousMatchedPose == null ? WIFI_MAX_PULL_METERS * 2.0 : WIFI_MAX_PULL_METERS;
-                LatLng blended = blendTowardObservation(rawLocation, wifiObservation, blendRatio, maxPullMeters);
-                return new AbsoluteObservationCorrection(blended, "live_wifi_fused", "wifi", rawDistanceMeters);
-            }
-        }
-
-        if (!isIndoorContextActive()) {
-            LatLng gnssObservation = getGnssObservation(sensorFusion);
-            if (isUsableObservation(gnssObservation)) {
-                double rawDistanceMeters = distanceMeters(rawLocation, gnssObservation);
-                if (rawDistanceMeters <= MAX_OBSERVATION_RESIDUAL_METERS) {
-                    double blendRatio = previousMatchedPose == null ? 0.25 : 0.10;
-                    double maxPullMeters = previousMatchedPose == null ? 4.0 : 2.0;
-                    LatLng blended = blendTowardObservation(rawLocation, gnssObservation, blendRatio, maxPullMeters);
-                    return new AbsoluteObservationCorrection(blended, "live_gnss_fused", "gnss", rawDistanceMeters);
-                }
-            }
-        }
-
-        return AbsoluteObservationCorrection.passThrough(rawLocation, "live_pdr");
-    }
-
-    private void logAbsoluteObservationDiagnostics(@NonNull LatLng rawLocation,
-                                                   @NonNull AbsoluteObservationCorrection correction) {
-        if (!correction.hasExternalObservation()) {
-            Log.d(host.getTestLogTag(), String.format(Locale.US,
-                    "ABSOLUTE_UPDATE source=none raw=(%.6f, %.6f) candidate=(%.6f, %.6f)",
-                    rawLocation.latitude,
-                    rawLocation.longitude,
-                    correction.getCorrectedLatLng().latitude,
-                    correction.getCorrectedLatLng().longitude));
-            return;
-        }
-
-        double appliedShiftMeters = distanceMeters(rawLocation, correction.getCorrectedLatLng());
-        Log.d(host.getTestLogTag(), String.format(Locale.US,
-                "ABSOLUTE_UPDATE source=%s residualMeters=%.2f appliedShiftMeters=%.2f candidate=(%.6f, %.6f)",
-                correction.getObservationSource(),
-                correction.getObservationResidualMeters(),
-                appliedShiftMeters,
-                correction.getCorrectedLatLng().latitude,
-                correction.getCorrectedLatLng().longitude));
-    }
-
-    @Nullable
-    private LatLng getGnssObservation(@NonNull SensorFusion sensorFusion) {
-        float[] gnss = sensorFusion.getGNSSLatitude(false);
-        if (gnss == null || gnss.length < 2) {
-            return null;
-        }
-        if (gnss[0] == 0f && gnss[1] == 0f) {
-            return null;
-        }
-        return new LatLng(gnss[0], gnss[1]);
-    }
-
-    private boolean isUsableObservation(@Nullable LatLng observation) {
-        return observation != null
-                && !Double.isNaN(observation.latitude)
-                && !Double.isNaN(observation.longitude)
-                && !(observation.latitude == 0d && observation.longitude == 0d);
-    }
-
-    @NonNull
-    private LatLng blendTowardObservation(@NonNull LatLng rawLocation,
-                                          @NonNull LatLng observation,
-                                          double blendRatio,
-                                          double maxPullMeters) {
-        LatLng blended = interpolate(rawLocation, observation, blendRatio);
-        double appliedShiftMeters = distanceMeters(rawLocation, blended);
-        if (appliedShiftMeters <= maxPullMeters) {
-            return blended;
-        }
-        double limitedRatio = maxPullMeters / Math.max(appliedShiftMeters, 1e-6d);
-        return interpolate(rawLocation, blended, limitedRatio);
-    }
-
-    @NonNull
-    private LatLng interpolate(@NonNull LatLng from, @NonNull LatLng to, double ratio) {
-        double clampedRatio = Math.max(0d, Math.min(1d, ratio));
-        return new LatLng(
-                from.latitude + (to.latitude - from.latitude) * clampedRatio,
-                from.longitude + (to.longitude - from.longitude) * clampedRatio
-        );
-    }
-
-    private double distanceMeters(@NonNull LatLng from, @NonNull LatLng to) {
-        float[] results = new float[1];
-        Location.distanceBetween(
-                from.latitude,
-                from.longitude,
-                to.latitude,
-                to.longitude,
-                results
-        );
-        return results[0];
-    }
-
+    /**
+     * Builds motion delta between replay frames.
+     */
     @Nullable
     private MotionDelta buildMotionDelta(@Nullable CandidatePose previousPose,
                                          @NonNull LatLng rawLocation,
-                                         float orientation) {
-        if (previousPose == null) {
+                                         float orientationDeg) {
+        if (previousPose == null || previousPose.getLatLng() == null) {
             return null;
         }
 
@@ -487,59 +349,32 @@ final class MapMatchingCoordinator {
 
         double deltaX = rawLocation.longitude - previousPose.getLatLng().longitude;
         double deltaY = rawLocation.latitude - previousPose.getLatLng().latitude;
-        return new MotionDelta(deltaX, deltaY, results[0], orientation);
+
+        return new MotionDelta(deltaX, deltaY, results[0], orientationDeg);
     }
 
-    @Nullable
-    private VerticalTransitionHint buildVerticalTransitionHint(long timestampMs) {
-        if (!host.isReplayModeEnabled()) {
-            SensorFusion sensorFusion = host.getSensorFusion();
-            if (sensorFusion == null) {
-                return null;
-            }
-
-            double elevationMeters = sensorFusion.getElevation();
-            boolean elevatorLikely = sensorFusion.getElevator();
-            verticalMotionDetector.addSample(timestampMs, elevationMeters, elevatorLikely);
-            return verticalMotionDetector.buildHint();
-        }
-        return buildReplayVerticalHint();
-    }
-
-    private void logVerticalHintDiagnostics(@Nullable VerticalTransitionHint verticalHint,
-                                            boolean replayMode,
-                                            int candidateFloorIndex) {
-        if (verticalHint == null) {
-            Log.d(host.getTestLogTag(), String.format(Locale.US,
-                    "VERTICAL_HINT source=%s candidateFloor=%d available=false",
-                    replayMode ? "replay" : "live",
-                    candidateFloorIndex));
-            return;
-        }
-
-        Log.d(host.getTestLogTag(), String.format(Locale.US,
-                "VERTICAL_HINT source=%s candidateFloor=%d available=true elevation=%.2f deltaHeight=%.2f heightChanged=%s",
-                replayMode ? "replay" : "live",
-                candidateFloorIndex,
-                verticalHint.getCurrentElevation(),
-                verticalHint.getDeltaHeight(),
-                String.valueOf(verticalHint.isHeightChanged())));
-    }
-
+    /**
+     * Builds replay vertical hint directly from replay frame context.
+     */
     @Nullable
     private VerticalTransitionHint buildReplayVerticalHint() {
         if (!host.isReplayModeEnabled()) {
             return null;
         }
+
         if (replayCurrentElevation == null && replayDeltaHeight == null && !replayHeightChanged) {
             return null;
         }
 
         double currentElevation = replayCurrentElevation != null ? replayCurrentElevation : 0d;
         double deltaHeight = replayDeltaHeight != null ? replayDeltaHeight : 0d;
+
         return new VerticalTransitionHint(currentElevation, deltaHeight, replayHeightChanged);
     }
 
+    /**
+     * Resolves candidate replay floor from base floor + relative replay floor movement.
+     */
     private int resolveReplayCandidateFloorIndex() {
         Integer baseFloorIndex = resolveReplayBaseFloorIndex();
         if (!host.isReplayModeEnabled() || baseFloorIndex == null || host.getSelectedFloorplanBuilding() == null) {
@@ -561,20 +396,29 @@ final class MapMatchingCoordinator {
             relativeFloorOffset = replaySyntheticFloor;
         }
 
-        int targetPosition = Math.max(0, Math.min(basePosition + relativeFloorOffset, orderedFloorIndices.size() - 1));
+        int targetPosition = Math.max(
+                0,
+                Math.min(basePosition + relativeFloorOffset, orderedFloorIndices.size() - 1)
+        );
+
         return orderedFloorIndices.get(targetPosition);
     }
 
+    /**
+     * Resolves the replay base floor from initial replay metadata.
+     */
     @Nullable
     private Integer resolveReplayBaseFloorIndex() {
         FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
         if (!host.isReplayModeEnabled() || selectedBuilding == null) {
             return null;
         }
+
         if (replayBaseFloorIndex != null) {
             int maxFloor = Math.max(0, selectedBuilding.getFloorShapesList().size() - 1);
             return Math.max(0, Math.min(replayBaseFloorIndex, maxFloor));
         }
+
         if (replayInitialFloor == null) {
             replayBaseFloorIndex = host.getCurrentFloorIndex();
             return replayBaseFloorIndex;
@@ -590,7 +434,9 @@ final class MapMatchingCoordinator {
         }
 
         for (int i = 0; i < selectedBuilding.getFloorShapesList().size(); i++) {
-            String candidateLabel = host.canonicalFloorLabel(selectedBuilding.getFloorShapesList().get(i).getDisplayName());
+            String candidateLabel = host.canonicalFloorLabel(
+                    selectedBuilding.getFloorShapesList().get(i).getDisplayName()
+            );
             if (desiredFloorLabel.equals(candidateLabel)) {
                 replayBaseFloorIndex = i;
                 return replayBaseFloorIndex;
@@ -601,38 +447,52 @@ final class MapMatchingCoordinator {
         return replayBaseFloorIndex;
     }
 
+    /**
+     * True when replay frame context contains usable vertical evidence.
+     */
     private boolean hasReplayVerticalEvidence() {
         if (!host.isReplayModeEnabled()) {
             return false;
         }
+
         if (replaySyntheticFloor != null && replaySyntheticFloor != 0) {
             return true;
         }
+
         if (replayHeightChanged) {
             return true;
         }
+
         if (replayDeltaHeight != null && Math.abs(replayDeltaHeight) >= 1.0d) {
             return true;
         }
-        if (replayCurrentElevation != null && Math.abs(replayCurrentElevation) >= 1.0d) {
-            return true;
-        }
-        return false;
+
+        return replayCurrentElevation != null && Math.abs(replayCurrentElevation) >= 1.0d;
     }
 
+    /**
+     * Initialises the replay display floor the first time replay context becomes available.
+     */
     private void maybeInitializeReplayDisplayFloor() {
         FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
-        if (!host.isReplayModeEnabled() || replayDisplayFloorInitialized || selectedBuilding == null || indoorMapManager == null) {
+
+        if (!host.isReplayModeEnabled()
+                || replayDisplayFloorInitialized
+                || selectedBuilding == null
+                || indoorMapManager == null) {
             return;
         }
+
         Integer baseFloorIndex = resolveReplayBaseFloorIndex();
         if (baseFloorIndex == null) {
             return;
         }
+
         indoorMapManager.setSelectedBuilding(selectedBuilding);
         host.setFloor(baseFloorIndex);
         replayDisplayFloorInitialized = true;
+
         Log.d(host.getTag(), "Initialized replay display floor index=" + baseFloorIndex);
 
         if (previousMatchedPose != null && previousMatchedPose.getFloor() != baseFloorIndex) {
@@ -640,20 +500,25 @@ final class MapMatchingCoordinator {
                     previousMatchedPose.getLatLng(),
                     baseFloorIndex,
                     previousMatchedPose.getTimestampMs(),
-                    "map_matched"
+                    "replay_map_state"
             );
         }
     }
 
+    /**
+     * Resolves the displayed replay floor.
+     */
     private int resolveReplayDisplayFloor(int replayCandidateFloorIndex) {
         FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
-        if (selectedBuilding == null || selectedBuilding.getFloorShapesList() == null
+        if (selectedBuilding == null
+                || selectedBuilding.getFloorShapesList() == null
                 || selectedBuilding.getFloorShapesList().isEmpty()) {
             return replayCandidateFloorIndex;
         }
 
         int maxFloor = Math.max(0, selectedBuilding.getFloorShapesList().size() - 1);
         int clampedFloor = Math.max(0, Math.min(replayCandidateFloorIndex, maxFloor));
+
         if (hasReplayVerticalEvidence()) {
             return clampedFloor;
         }
@@ -666,32 +531,45 @@ final class MapMatchingCoordinator {
         if (baseFloorIndex != null) {
             return Math.max(0, Math.min(baseFloorIndex, maxFloor));
         }
+
         return clampedFloor;
     }
 
+    /**
+     * Applies replay display floor to the map UI if needed.
+     */
     private void applyReplayDisplayFloorIfNeeded(int targetFloorIndex) {
         FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
+
         if (!host.isReplayModeEnabled() || selectedBuilding == null || indoorMapManager == null) {
             return;
         }
 
         int maxFloor = Math.max(0, selectedBuilding.getFloorShapesList().size() - 1);
         int clampedFloor = Math.max(0, Math.min(targetFloorIndex, maxFloor));
+
         if (clampedFloor == host.getCurrentFloorIndex()) {
             return;
         }
+
         indoorMapManager.setSelectedBuilding(selectedBuilding);
         host.setFloor(clampedFloor);
     }
 
+    /**
+     * Classifies replay map matching scenario for logs.
+     */
     @NonNull
     private String classifyMapMatchingScenario(@Nullable MapMatchingResult result) {
         if (result == null) {
             return "UNKNOWN";
         }
 
-        String reason = result.getDebugReason() == null ? "" : result.getDebugReason().toLowerCase(Locale.US);
+        String reason = result.getDebugReason() == null
+                ? ""
+                : result.getDebugReason().toLowerCase(Locale.US);
+
         CorrectionType correctionType = result.getCorrectionType();
 
         if (correctionType == CorrectionType.THROUGH_WALL || result.isCrossedWall()) {
@@ -712,18 +590,27 @@ final class MapMatchingCoordinator {
         return "01_same_floor_accept";
     }
 
+    /**
+     * Logs replay feature validation details.
+     */
     private void logFeatureValidation(@NonNull LatLng rawLocation, @Nullable MapMatchingResult result) {
         if (result == null) {
             return;
         }
 
-        LatLng matched = result.getCorrectedLatLng() != null ? result.getCorrectedLatLng() : rawLocation;
+        LatLng matched = result.getCorrectedLatLng() != null
+                ? result.getCorrectedLatLng()
+                : rawLocation;
+
         String scenario = classifyMapMatchingScenario(result);
+
         Log.d(host.getTestLogTag(), String.format(Locale.US,
                 "SCENARIO=%s raw=(%.6f, %.6f) matched=(%.6f, %.6f) matchedFloor=%d crossedWall=%s nearStairs=%s nearLift=%s floorAllowed=%s correction=%s reason=%s",
                 scenario,
-                rawLocation.latitude, rawLocation.longitude,
-                matched.latitude, matched.longitude,
+                rawLocation.latitude,
+                rawLocation.longitude,
+                matched.latitude,
+                matched.longitude,
                 result.getCorrectedFloor(),
                 String.valueOf(result.isCrossedWall()),
                 String.valueOf(result.isNearStairs()),
@@ -733,25 +620,22 @@ final class MapMatchingCoordinator {
                 result.getDebugReason()));
     }
 
-    private boolean isIndoorContextActive() {
-        return host.getSelectedFloorplanBuilding() != null
-                && host.getIndoorMapManager() != null;
-    }
-
-
+    /**
+     * Default replay debug state.
+     */
     @NonNull
-    private String defaultDebugStatus() {
-        return "abs:none  src:idle\n"
+    private static String defaultDebugStatus() {
+        return "Replay MM: idle\n"
                 + "floor d/c/m: -/-/-\n"
-                + "vertical: steady Δ0.00m\n"
-                + "correction: NONE\n"
-                + "Waiting for updates";
+                + "vertical: steady\n"
+                + "correction: NONE";
     }
 
+    /**
+     * Builds replay debug text for the fragment debug box.
+     */
     @NonNull
-    private String buildDebugStatus(@Nullable String absoluteSource,
-                                    @Nullable String poseSource,
-                                    int displayFloorIndex,
+    private String buildDebugStatus(int displayFloorIndex,
                                     int candidateFloorIndex,
                                     int matchedFloor,
                                     @Nullable VerticalTransitionHint verticalHint,
@@ -760,15 +644,18 @@ final class MapMatchingCoordinator {
                 ? result.getCorrectionType().name()
                 : CorrectionType.NONE.name();
 
-        String wifiSource = absoluteSource == null ? "none" : absoluteSource;
+        String verticalSummary = verticalHint == null
+                ? "steady"
+                : String.format(Locale.US, "Δh=%.2f changed=%s",
+                verticalHint.getDeltaHeight(),
+                String.valueOf(verticalHint.isHeightChanged()));
 
         return String.format(
                 Locale.US,
-                "WiFi src: %s\n" +
-                        "MM: %s\n" +
+                "Replay MM: %s\n" +
                         "wall=%s stairs=%s lift=%s allow=%s\n" +
-                        "floor d/pf/mm: %d/%d/%d",
-                wifiSource,
+                        "floor d/c/m: %d/%d/%d\n" +
+                        "vertical: %s",
                 correctionName,
                 String.valueOf(result.isCrossedWall()),
                 String.valueOf(result.isNearStairs()),
@@ -776,54 +663,8 @@ final class MapMatchingCoordinator {
                 String.valueOf(result.isFloorChangeAllowed()),
                 displayFloorIndex,
                 candidateFloorIndex,
-                matchedFloor
+                matchedFloor,
+                verticalSummary
         );
-    }
-    private static final class AbsoluteObservationCorrection {
-        @NonNull
-        private final LatLng correctedLatLng;
-        @NonNull
-        private final String poseSource;
-        @Nullable
-        private final String observationSource;
-        private final double observationResidualMeters;
-
-        private AbsoluteObservationCorrection(@NonNull LatLng correctedLatLng,
-                                              @NonNull String poseSource,
-                                              @Nullable String observationSource,
-                                              double observationResidualMeters) {
-            this.correctedLatLng = correctedLatLng;
-            this.poseSource = poseSource;
-            this.observationSource = observationSource;
-            this.observationResidualMeters = observationResidualMeters;
-        }
-
-        @NonNull
-        static AbsoluteObservationCorrection passThrough(@NonNull LatLng latLng, @NonNull String poseSource) {
-            return new AbsoluteObservationCorrection(latLng, poseSource, null, 0d);
-        }
-
-        @NonNull
-        LatLng getCorrectedLatLng() {
-            return correctedLatLng;
-        }
-
-        @NonNull
-        String getPoseSource() {
-            return poseSource;
-        }
-
-        boolean hasExternalObservation() {
-            return observationSource != null;
-        }
-
-        @Nullable
-        String getObservationSource() {
-            return observationSource;
-        }
-
-        double getObservationResidualMeters() {
-            return observationResidualMeters;
-        }
     }
 }

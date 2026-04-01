@@ -22,6 +22,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import com.openpositioning.PositionMe.fusion.FusedPose;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -92,14 +93,6 @@ public class TrajectoryMapFragment extends Fragment {
     private final List<GroundOverlay> realMapOverlays = new ArrayList<>();
     private String calibrationTargetBuildingKey = "";
 
-    // Auto-floor helper state
-    private Handler autoFloorHandler;
-    private Runnable autoFloorTask;
-    private int lastCandidateFloor = Integer.MIN_VALUE;
-    private long lastCandidateTime = 0L;
-    private int latestCandidateLogicalFloor = Integer.MIN_VALUE;
-    private long lastAutoFloorLogTime = 0L;
-
     // UI references
     private Spinner switchMapSpinner;
     private SwitchMaterial gnssSwitch;
@@ -145,10 +138,7 @@ public class TrajectoryMapFragment extends Fragment {
     private TextView debugHeading;
     private TextView debugAdaptedHeading;
     private TextView debugCosSin;
-
-    private Integer lastFusionFloorIndex = null;
-    private int fusionFloorStableCount = 0;
-    private static final int MIN_FUSION_FLOOR_STABLE_FRAMES = 3;
+    private String currentTrajectoryPlotSource = "Waiting";
 
     // Controller / coordinator
     private final FloorController floorController = new FloorController(new FloorController.Host() {
@@ -256,16 +246,10 @@ public class TrajectoryMapFragment extends Fragment {
                     return sensorFusion;
                 }
 
-                @Nullable
                 @Override
                 public Integer getTrackingCandidateFloorIndex() {
+                    // Bootstrap-only candidate from FloorController.
                     return floorController.peekTrackingFloorCandidateIndex();
-                }
-
-                @Nullable
-                @Override
-                public Integer getStableFusionFloorIndex() {
-                    return TrajectoryMapFragment.this.getStableFusionFloorIndex();
                 }
 
                 @Override
@@ -442,6 +426,10 @@ public class TrajectoryMapFragment extends Fragment {
                 gMap = googleMap;
                 initMapSettings(gMap);
 
+                if (!replayModeEnabled) {
+                    showRecordingDefaultViewport();
+                }
+
                 if (hasPendingCameraMove && pendingCameraPosition != null) {
                     float savedZoom = getSavedMapZoom();
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, savedZoom));
@@ -496,46 +484,6 @@ public class TrajectoryMapFragment extends Fragment {
             });
         }
         applyTrajectoryColorButtonState();
-
-        if (autoFloorSwitch != null) {
-            autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-                if (isChecked) {
-                    startAutoFloor();
-                } else {
-                    stopAutoFloor();
-                }
-            });
-        }
-
-        if (floorUpButton != null) {
-            floorUpButton.setOnClickListener(v -> {
-                if (isAutoFloorEnabled()) {
-                    Log.d(TAG, "AUTO_FLOOR ignored manual floor-up because AutoFloor owns display floor.");
-                    return;
-                }
-                if (selectedFloorplanBuilding != null) {
-                    int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, true);
-                    if (nextFloorIndex != currentFloorIndex) {
-                        setFloor(nextFloorIndex);
-                    }
-                }
-            });
-        }
-
-        if (floorDownButton != null) {
-            floorDownButton.setOnClickListener(v -> {
-                if (isAutoFloorEnabled()) {
-                    Log.d(TAG, "AUTO_FLOOR ignored manual floor-down because AutoFloor owns display floor.");
-                    return;
-                }
-                if (selectedFloorplanBuilding != null) {
-                    int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, false);
-                    if (nextFloorIndex != currentFloorIndex) {
-                        setFloor(nextFloorIndex);
-                    }
-                }
-            });
-        }
 
         if (btnFindIndoorMap != null) {
             btnFindIndoorMap.setOnClickListener(v -> {
@@ -604,36 +552,94 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     // Public API used by RecordingFragment / ReplayFragment
+    /**
+     * Updates the map with either:
+     * - replay map-matched location (replay mode), or
+     * - already-fused live PF location (live mode)
+     *
+     * Important live policy:
+     * this fragment is UI-only in live mode.
+     * It must NOT re-run live map matching or absolute observation blending.
+     */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientationDeg) {
-        mapMatchingCoordinator.updateUserLocation(newLocation, orientationDeg);
+        if (replayModeEnabled) {
+            mapMatchingCoordinator.updateUserLocation(newLocation, orientationDeg);
+        } else {
+            updateLiveFusedLocationOnly(newLocation, orientationDeg);
+        }
         refreshDebugStatusText();
     }
 
-    public void updateFusionFloorTracking(@Nullable Integer fusionFloorIndex) {
-        if (fusionFloorIndex == null) {
-            fusionFloorStableCount = 0;
-            lastFusionFloorIndex = null;
+    /**
+     * Renders the already-fused live pose without applying any additional correction.
+     *
+     * This is the key separation:
+     * - ParticleFilterManager owns live fusion + live map validity
+     * - TrajectoryMapFragment only draws the final live fused pose
+     */
+    private void updateLiveFusedLocationOnly(@NonNull LatLng newLocation, float orientationDeg) {
+        if (gMap == null) {
             return;
         }
 
-        if (fusionFloorIndex.equals(lastFusionFloorIndex)) {
-            fusionFloorStableCount++;
-        } else {
-            lastFusionFloorIndex = fusionFloorIndex;
-            fusionFloorStableCount = 1;
+        LatLng displayLocation = newLocation;
+        float displayOrientationDeg = orientationDeg;
+
+        // Prefer the latest PF-owned fused pose if available.
+        if (sensorFusion != null) {
+            FusedPose fusedPose = sensorFusion.getLatestFusedPose();
+            if (fusedPose != null) {
+                if (fusedPose.getLatLng() != null) {
+                    displayLocation = fusedPose.getLatLng();
+                }
+                displayOrientationDeg = (float) Math.toDegrees(fusedPose.getHeadingRad());
+
+                // Live display floor now follows the PF-owned fused floor.
+                if (fusedPose.getFloor() != currentFloorIndex) {
+                    displayPfOwnedFloor(fusedPose.getFloor());
+                }
+            }
+        }
+
+        LatLng oldLocation = currentLocation;
+        currentLocation = displayLocation;
+
+        trajectoryRenderer.updateCurrentPosition(
+                requireContext(),
+                displayLocation,
+                displayOrientationDeg,
+                false,
+                getSavedMapZoom()
+        );
+
+        /*
+         * When the PF commits a new floor, do NOT connect the new point to the
+         * previous floor's trajectory polyline.
+         *
+         * Instead, start a fresh live trajectory segment so the path is visually
+         * broken across floors.
+         */
+        boolean floorChanged = false;
+        if (sensorFusion != null && sensorFusion.getParticleFilterManager() != null) {
+            floorChanged = sensorFusion.getParticleFilterManager().consumeFloorChangedFlag();
+        }
+
+        if (floorChanged) {
+            trajectoryRenderer.startNewLiveSegment();
+            oldLocation = null; // prevent drawing a connecting line across floors
+        }
+
+        trajectoryRenderer.appendMatchedLocation(oldLocation, displayLocation);
+
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(displayLocation);
+        }
+
+        maybeFetchNearbyBuildingsOnFirstLocation();
+        if (!hasAutoSelectedIndoorMap && !lastFetchedBuildings.isEmpty()) {
+            maybeAutoSelectIndoorMap(lastFetchedBuildings);
         }
     }
-
-    @Nullable
-    public Integer getStableFusionFloorIndex() {
-        if (lastFusionFloorIndex == null) {
-            return null;
-        }
-        return fusionFloorStableCount >= MIN_FUSION_FLOOR_STABLE_FRAMES
-                ? lastFusionFloorIndex
-                : null;
-    }
-
     public void setReplayModeEnabled(boolean enabled) {
         if (replayModeEnabled == enabled) {
             syncReplayUiState();
@@ -644,10 +650,15 @@ public class TrajectoryMapFragment extends Fragment {
         mapMatchingCoordinator.onReplayModeChanged(enabled);
 
         if (enabled) {
-            stopAutoFloor();
+            floorController.stopAutoFloor();
         }
 
         syncReplayUiState();
+        refreshDebugStatusText();
+    }
+
+    public void setCurrentTrajectoryPlotSource(@NonNull String source) {
+        currentTrajectoryPlotSource = source;
         refreshDebugStatusText();
     }
 
@@ -682,6 +693,18 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    public void showRecordingDefaultViewport() {
+        LatLngBounds nucleusBounds = new LatLngBounds(
+                BuildingPolygon.NUCLEUS_SW,
+                BuildingPolygon.NUCLEUS_NE
+        );
+
+        if (gMap != null) {
+            int paddingPx = (int) (48 * requireContext().getResources().getDisplayMetrics().density);
+            gMap.moveCamera(CameraUpdateFactory.newLatLngBounds(nucleusBounds, paddingPx));
+        }
+    }
+
     public LatLng getCurrentLocation() {
         return currentLocation;
     }
@@ -706,30 +729,6 @@ public class TrajectoryMapFragment extends Fragment {
         trajectoryRenderer.clearWifi();
     }
 
-    public void updateDisplayedFloor(int logicalFloor) {
-        if (selectedFloorplanBuilding == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            return;
-        }
-        if (isAutoFloorEnabled()) {
-            Log.d(TAG, String.format(Locale.US,
-                    "AUTO_FLOOR ignored external display-floor update logical=%d current=%d because FloorController owns display floor",
-                    logicalFloor,
-                    currentFloorIndex));
-            return;
-        }
-        if (!floorController.hasReliableInitialFloorFix()) {
-            Log.d(TAG, String.format(Locale.US,
-                    "AUTO_FLOOR ignored external display-floor update logical=%d current=%d because initial floor is not confirmed yet",
-                    logicalFloor,
-                    currentFloorIndex));
-            return;
-        }
-        int targetFloorIndex = indoorMapManager.logicalFloorToIndex(logicalFloor);
-        if (targetFloorIndex != currentFloorIndex) {
-            setFloor(targetFloorIndex);
-        }
-    }
-
     public boolean isAutoFloorEnabled() {
         return autoFloorSwitch != null && autoFloorSwitch.isChecked();
     }
@@ -742,21 +741,28 @@ public class TrajectoryMapFragment extends Fragment {
         return showWifiSwitch != null && showWifiSwitch.isChecked();
     }
 
+    /**
+     * Updates the heading debug text shown on screen.
+     *
+     * - Displays the raw heading value.
+     * - Converts the heading into the app's adapted heading convention.
+     * - Displays the cosine and sine of the adapted heading for quick checking.
+     */
     public void updateDebugInfo(float headingValue) {
+        float adaptedHeading = (float) (Math.PI/2 - headingValue);
         if (debugHeading != null) {
             debugHeading.setText(String.format(Locale.US, "Heading: %.3f", headingValue));
         }
         if (debugAdaptedHeading != null) {
-            debugAdaptedHeading.setText(String.format(Locale.US, "Adapted: %.3f", headingValue));
+            debugAdaptedHeading.setText(String.format(Locale.US, "Adapted Heading: %.3f", adaptedHeading));
         }
         if (debugCosSin != null) {
             debugCosSin.setText(String.format(Locale.US, "cos=%.3f sin=%.3f",
-                    Math.cos(headingValue), Math.sin(headingValue)));
+                    Math.cos(adaptedHeading), Math.sin(adaptedHeading)));
         }
     }
 
     public void clearMapAndReset() {
-        stopAutoFloor();
 
         if (autoFloorSwitch != null) {
             autoFloorSwitch.setChecked(false);
@@ -766,9 +772,6 @@ public class TrajectoryMapFragment extends Fragment {
         trajectoryRenderer.clearAll();
 
         currentLocation = null;
-        latestCandidateLogicalFloor = Integer.MIN_VALUE;
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
 
         for (Polygon p : floorplanPolygons) {
             p.remove();
@@ -1101,6 +1104,17 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Updates the displayed map floor from the PF-owned fused pose.
+     *
+     * Important:
+     * this is UI-only and must not push floor back into PF.
+     */
+    private void displayPfOwnedFloor(int newFloorIndex) {
+        floorController.displayPfOwnedFloor(newFloorIndex);
+        refreshDebugStatusText();
+    }
+
     // Floor helpers
     private void setFloor(int newFloorIndex) {
         floorController.setFloor(newFloorIndex);
@@ -1177,112 +1191,6 @@ public class TrajectoryMapFragment extends Fragment {
         updateAutoFloorAvailability();
     }
 
-    private int getCurrentVisibleLogicalFloor() {
-        if (selectedFloorplanBuilding == null) {
-            return 0;
-        }
-        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
-            return indoorMapManager.indexToLogicalFloor(currentFloorIndex);
-        }
-        return currentFloorIndex;
-    }
-
-    private int resolveCandidateLogicalFloor() {
-        Integer candidateIndex = floorController.peekTrackingFloorCandidateIndex();
-        if (candidateIndex != null) {
-            if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
-                return indoorMapManager.indexToLogicalFloor(candidateIndex);
-            }
-            return candidateIndex;
-        }
-        return getCurrentVisibleLogicalFloor();
-    }
-
-    private String describeCandidateFloorSource() {
-        return "FloorControllerTracking";
-    }
-
-    private void startAutoFloor() {
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
-        latestCandidateLogicalFloor = Integer.MIN_VALUE;
-        floorController.startAutoFloor();
-        Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR delegated start visibleLogical=%d building=%s",
-                getCurrentVisibleLogicalFloor(),
-                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null"));
-    }
-
-    private void applyImmediateFloor() {
-        floorController.applyImmediateFloor();
-        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            Log.d(TAG, "AUTO_FLOOR applyImmediate skipped: map not ready");
-            return;
-        }
-        int candidateFloor = resolveCandidateLogicalFloor();
-        latestCandidateLogicalFloor = candidateFloor;
-        lastCandidateFloor = candidateFloor;
-        lastCandidateTime = SystemClock.elapsedRealtime();
-        logAutoFloorState("applyImmediate", candidateFloor, describeCandidateFloorSource());
-    }
-
-    private void stopAutoFloor() {
-        floorController.stopAutoFloor();
-        Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR delegated stop visibleLogical=%d lastCandidate=%d latestCandidate=%d",
-                getCurrentVisibleLogicalFloor(), lastCandidateFloor, latestCandidateLogicalFloor));
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
-        latestCandidateLogicalFloor = Integer.MIN_VALUE;
-    }
-
-    private void evaluateAutoFloor() {
-        floorController.evaluateAutoFloor();
-        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            Log.d(TAG, "AUTO_FLOOR evaluate skipped: map not ready");
-            return;
-        }
-
-        int candidateFloor = resolveCandidateLogicalFloor();
-        String source = describeCandidateFloorSource();
-        latestCandidateLogicalFloor = candidateFloor;
-
-        long now = SystemClock.elapsedRealtime();
-        if (candidateFloor != lastCandidateFloor) {
-            logAutoFloorState("candidate_changed", candidateFloor, source);
-            lastCandidateFloor = candidateFloor;
-            lastCandidateTime = now;
-            return;
-        }
-
-        if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            logAutoFloorState("candidate_stable", candidateFloor, source);
-            lastCandidateTime = now;
-        } else {
-            logAutoFloorState("candidate_waiting", candidateFloor, source);
-        }
-    }
-
-    private void logAutoFloorState(@NonNull String phase, int candidateFloor, @NonNull String source) {
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastAutoFloorLogTime < 0L) {
-            return;
-        }
-        lastAutoFloorLogTime = now;
-
-        Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR phase=%s source=%s candidate=%d visible=%d latestCandidate=%d lastCandidate=%d elapsedSinceCandidate=%d building=%s indoorVisible=%s",
-                phase,
-                source,
-                candidateFloor,
-                getCurrentVisibleLogicalFloor(),
-                latestCandidateLogicalFloor,
-                lastCandidateFloor,
-                lastCandidateTime == 0 ? -1 : (now - lastCandidateTime),
-                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null",
-                String.valueOf(indoorMapVisible)));
-    }
-
     // UI helpers
     private void initMapControlsToggle() {
         if (btnToggleMapControls != null && mapControlContent != null) {
@@ -1323,36 +1231,63 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        String engine = (sensorFusion != null && sensorFusion.isParticleFilterTrajectoryMode())
-                ? "PF"
-                : "PDR";
-
         String pfSummary = sensorFusion != null
                 ? sensorFusion.getParticleFilterDebugSummary()
-                : "Particles: unavailable";
+                : "PF: unavailable";
 
-        String mapMatchingSummary = mapMatchingCoordinator.getLatestDebugStatus();
+        String autoFloorSummary = floorController != null
+                ? floorController.getAutoFloorDebugSummary()
+                : "autoFloor: unavailable";
+
+        String modeSummary = replayModeEnabled
+                ? mapMatchingCoordinator.getLatestDebugStatus()
+                : "Live MM owner: ParticleFilterManager\nFragment role: UI-only renderer";
 
         int wifiFloor = sensorFusion != null ? sensorFusion.getWifiFloor() : -1;
         boolean wifiAvailable = sensorFusion != null && sensorFusion.getLatLngWifiPositioning() != null;
 
         debugStatusText.setText(String.format(
                 Locale.US,
-                "Engine: %s\n" +
+                "Trajectory: %s\n" +
+                        "Mode: %s\n" +
                         "Display floor: %d\n" +
                         "WiFi: %s | floor: %d\n" +
                         "%s\n" +
+                        "%s\n" +
                         "%s",
-                engine,
+                currentTrajectoryPlotSource,
+                replayModeEnabled ? "Replay" : "Live",
                 currentFloorIndex,
                 wifiAvailable ? "yes" : "no",
                 wifiFloor,
                 pfSummary,
-                mapMatchingSummary
+                autoFloorSummary,
+                modeSummary
         ));
     }
 
     public void refreshLiveDebugBox() {
+        refreshDebugStatusText();
+    }
+
+    public void updateRawPdrObservation(@NonNull LatLng rawPdrLocation) {
+        trajectoryRenderer.appendRawObservationPoint(rawPdrLocation);
+    }
+
+    /**
+     * Clears only replay trajectory/render state without destroying
+     * the selected building, indoor map, replay mode, or floor UI state.
+     *
+     * This is used when replay scrubs/jumps and needs to rebuild the path.
+     */
+    public void clearReplayTrajectoryOnly() {
+        mapMatchingCoordinator.resetMapMatchingState();
+        trajectoryRenderer.clearAll();
+        currentLocation = null;
+
+        trajectoryRenderer.clearGnss();
+        trajectoryRenderer.clearWifi();
+
         refreshDebugStatusText();
     }
 

@@ -46,21 +46,17 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Fragment responsible for managing the recording process of trajectory data.
+ * RecordingFragment
  *
- * <p>The RecordingFragment serves as the interface for users to initiate, monitor,
- * and complete trajectory recording. It integrates sensor fusion data to track user
- * movement and updates a map view in real time. Additionally, it provides UI controls
- * to cancel, stop, and monitor recording progress.
+ * Live-trajectory policy in this cleaned version:
+ * - RED trajectory = PF fused pose only
+ * - BLUE trajectory = raw PDR only
+ * - No fallback from PF red trajectory to standard PDR
  *
- * <p>Features:
- * <ul>
- *     <li>Starts and stops trajectory recording.</li>
- *     <li>Displays real-time sensor data such as elevation and distance traveled.</li>
- *     <li>Provides UI controls to cancel or complete recording.</li>
- *     <li>Uses {@link TrajectoryMapFragment} to visualize recorded paths.</li>
- *     <li>Manages GNSS tracking and error display.</li>
- * </ul>
+ * Important:
+ * - raw PDR is still updated every refresh cycle for reference
+ * - PF fused pose is the only pose passed into TrajectoryMapFragment.updateUserLocation(...)
+ * - therefore map matching / map constraints / wall-stairs-lift debug are tied to the red trajectory
  */
 public class RecordingFragment extends Fragment {
 
@@ -90,7 +86,6 @@ public class RecordingFragment extends Fragment {
 
     // Child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
-    private boolean initialCameraPositionSet = false;
 
     // TCP streaming to desktop GUI
     private TcpClient tcpClient;
@@ -98,13 +93,25 @@ public class RecordingFragment extends Fragment {
     private final Handler tcpHandler = new Handler(Looper.getMainLooper());
     private boolean tcpStreamingEnabled = false;
 
-    // Autonomous initial map anchoring
+    // Autonomous initial map anchoring for raw PDR reference path
     private static final long INITIAL_ANCHOR_STABLE_DURATION_MS = 1000L;
     private static final int INITIAL_ANCHOR_REQUIRED_SAMPLES = 3;
     private static final double INITIAL_ANCHOR_MAX_JUMP_METRES = 8.0;
     private static final float LIVE_DRAW_MIN_PDR_DELTA_METERS = 0.03f;
     private static final long LIVE_DRAW_STATIONARY_HOLD_MS = 800L;
     private long lastLiveMovementUptimeMs = 0L;
+
+    private static final long PF_UI_STEP_INTERVAL_MS = 120L;
+    private static final float PF_UI_MIN_PDR_DELTA_METERS = 0.05f;
+    private static final double PF_UI_MIN_HEADING_DELTA_RAD = Math.toRadians(4.0);
+
+    private long lastPfUiStepElapsedMs = 0L;
+    private float lastPfUiStepPdrX = 0f;
+    private float lastPfUiStepPdrY = 0f;
+    private double lastPfUiStepHeadingRad = 0.0;
+    private boolean pfUiStepInitialised = false;
+    private static final long NO_STEP_FLOOR_EVAL_INTERVAL_MS = 800L;
+    private long lastNoStepFloorEvalElapsedMs = 0L;
 
     private enum InitialAnchorSource {
         WIFI,
@@ -117,7 +124,6 @@ public class RecordingFragment extends Fragment {
     private InitialAnchorSource pendingInitialAnchorSource = null;
     private long pendingInitialAnchorSinceMs = 0L;
     private int pendingInitialAnchorSamples = 0;
-
 
     // Test point handling
     private int testPointIndex = 0;
@@ -160,7 +166,6 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Child fragment containing the trajectory map.
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
 
@@ -172,8 +177,7 @@ public class RecordingFragment extends Fragment {
                     .commitNow();
         }
 
-        // Try to seed the initial location immediately. If not available yet,
-        // updateUIandPosition() will keep retrying.
+        // Try to seed the initial raw-PDR anchor immediately.
         seedInitialMapLocation();
 
         // UI references
@@ -191,12 +195,10 @@ public class RecordingFragment extends Fragment {
             testPointButton.setOnClickListener(v -> onAddTestPoint());
         }
 
-        // Default UI state
         gnssError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
-        // Stop / complete recording
         completeButton.setOnClickListener(v -> {
             if (autoStop != null) {
                 autoStop.cancel();
@@ -255,7 +257,6 @@ public class RecordingFragment extends Fragment {
                     .show();
         });
 
-        // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
             AlertDialog dialog = new AlertDialog.Builder(requireActivity())
                     .setTitle("Confirm Cancel")
@@ -281,6 +282,9 @@ public class RecordingFragment extends Fragment {
 
         blinkingRecordingIcon();
         startTcpStreaming();
+
+        pfUiStepInitialised = false;
+        lastPfUiStepElapsedMs = 0L;
 
         if (settings.getBoolean("split_trajectory", false)) {
             long limit = settings.getInt("split_duration", 30) * 60000L;
@@ -309,6 +313,7 @@ public class RecordingFragment extends Fragment {
 
     /**
      * Add a numbered test point marker at the current displayed trajectory position.
+     * This uses the current displayed location (red PF trajectory), not raw PDR.
      */
     private void onAddTestPoint() {
         if (trajectoryMapFragment == null) {
@@ -359,24 +364,12 @@ public class RecordingFragment extends Fragment {
     }
 
     /**
-     * Refreshes the recording UI and updates the live map.
-     *
-     * Initialisation behaviour:
-     * - keep waiting until WiFi or GNSS provides the first usable absolute fix
-     * - use that fix as the autonomous session anchor
-     *
-     * Tracking behaviour after initialisation:
-     * - PDR remains the primary motion source
-     * - PF mode can replace the displayed trajectory with fused output
-     * - WiFi and GNSS remain overlays / references
-     *
-     * Note:
-     * distance is intentionally accumulated from raw PDR increments, because
-     * fused absolute corrections may introduce jumps that would distort the
-     * travelled-distance metric.
+     * Refreshes UI and updates:
+     * - blue raw-PDR reference path
+     * - red PF fused trajectory only
+     * - WiFi/GNSS overlays
      */
     private void updateUIandPosition() {
-        // Keep retrying until the first autonomous WiFi/GNSS fix arrives.
         if (!initialMapLocationSeeded) {
             seedInitialMapLocation();
         }
@@ -386,13 +379,14 @@ public class RecordingFragment extends Fragment {
             return;
         }
 
-        boolean shouldAdvanceLiveTrajectory = shouldUpdateLiveTrajectory(pdrValues);
+        maybeStepParticleFilterForLiveUi();
 
-        // Capture previous raw PDR values before updating them.
+//        boolean shouldAdvanceLiveTrajectory = shouldUpdateLiveTrajectory(pdrValues);
+
         float prevX = previousPosX;
         float prevY = previousPosY;
 
-        // Distance accumulation from raw PDR only.
+        // Distance uses raw PDR increments only.
         distance += Math.sqrt(
                 Math.pow(pdrValues[0] - prevX, 2) +
                         Math.pow(pdrValues[1] - prevY, 2)
@@ -401,36 +395,24 @@ public class RecordingFragment extends Fragment {
                 getString(R.string.meter, String.format(Locale.UK, "%.2f", distance))
         );
 
+        // Blue raw-PDR path
+        if (autonomousInitialLocation != null) {
+            LatLng rawPdrLocation = UtilFunctions.calculateNewPos(autonomousInitialLocation, pdrValues);
+            trajectoryMapFragment.updateRawPdrObservation(rawPdrLocation);
+        }
+
         // Elevation display
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(
                 getString(R.string.elevation, String.format(Locale.UK, "%.1f", elevationVal))
         );
 
-        // Main trajectory display mode
-        if (sensorFusion.isParticleFilterTrajectoryMode()) {
-            Log.d(TAG, String.format(
-                    Locale.UK,
-                    "LIVE_MODE=PF pdr=(%.3f, %.3f) dist=%.3f elev=%.2f advance=%s",
-                    pdrValues[0],
-                    pdrValues[1],
-                    distance,
-                    elevationVal,
-                    String.valueOf(shouldAdvanceLiveTrajectory)
-            ));
-            updateLiveMapWithParticleFilter(pdrValues, shouldAdvanceLiveTrajectory);
-        } else {
-            Log.d(TAG, String.format(
-                    Locale.UK,
-                    "LIVE_MODE=PDR pdr=(%.3f, %.3f) dist=%.3f elev=%.2f advance=%s",
-                    pdrValues[0],
-                    pdrValues[1],
-                    distance,
-                    elevationVal,
-                    String.valueOf(shouldAdvanceLiveTrajectory)
-            ));
-            updateLiveMapWithStandardPdr(pdrValues, shouldAdvanceLiveTrajectory);
-        }
+        //Let PF evaluate lift/floor transitions even if user is not moving
+        maybeEvaluateNoStepFloorChange();
+
+        // Red main trajectory = PF fused only
+        trajectoryMapFragment.setCurrentTrajectoryPlotSource("PF fused");
+        updateLiveMapWithParticleFilterOnly();
 
         // WiFi overlay
         LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
@@ -440,7 +422,7 @@ public class RecordingFragment extends Fragment {
             trajectoryMapFragment.clearWifi();
         }
 
-        // GNSS overlay and GNSS error display
+        // GNSS overlay + error against current displayed red trajectory
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment.isGnssEnabled()) {
             LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
@@ -464,121 +446,114 @@ public class RecordingFragment extends Fragment {
             trajectoryMapFragment.clearGNSS();
         }
 
-        // Refresh live debug box
         trajectoryMapFragment.refreshLiveDebugBox();
 
-        // Update raw PDR history once, at the end of the cycle.
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
 
-    /**
-     * Updates the map using standard PDR.
-     *
-     * The local PDR path is anchored to the first valid autonomous WiFi/GNSS fix
-     * captured at the start of recording.
-     */
-    private void updateLiveMapWithStandardPdr(@Nullable float[] pdrValues,
-                                              boolean shouldAdvanceLiveTrajectory) {
-        if (trajectoryMapFragment == null || pdrValues == null) {
+    private void maybeEvaluateNoStepFloorChange() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastNoStepFloorEvalElapsedMs < NO_STEP_FLOOR_EVAL_INTERVAL_MS) {
             return;
         }
 
-        if (autonomousInitialLocation == null) {
-            Log.d(TAG, "PDR_BRANCH waiting for autonomous initial location");
+        lastNoStepFloorEvalElapsedMs = now;
+        sensorFusion.evaluateParticleFilterFloorChangeWithoutStep();
+    }
+
+    private void maybeStepParticleFilterForLiveUi() {
+        if (sensorFusion == null || !sensorFusion.isParticleFilterTrajectoryMode()) {
             return;
         }
 
-        LatLng currentPdrLocation = UtilFunctions.calculateNewPos(autonomousInitialLocation, pdrValues);
-
-        Log.d(TAG, String.format(
-                Locale.UK,
-                "PDR_BRANCH using anchored PDR lat=%.6f lon=%.6f headingDeg=%.2f advance=%s",
-                currentPdrLocation.latitude,
-                currentPdrLocation.longitude,
-                Math.toDegrees(sensorFusion.passOrientation()),
-                String.valueOf(shouldAdvanceLiveTrajectory)
-        ));
-
-        if (shouldAdvanceLiveTrajectory || !initialCameraPositionSet) {
-            trajectoryMapFragment.updateUserLocation(
-                    currentPdrLocation,
-                    (float) Math.toDegrees(sensorFusion.passOrientation())
-            );
-        } else {
-            Log.d(TAG, "PDR_BRANCH stationary -> skipping live trajectory update");
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastPfUiStepElapsedMs < PF_UI_STEP_INTERVAL_MS) {
+            return;
         }
 
-        trajectoryMapFragment.updateDebugInfo(sensorFusion.passOrientation());
-
-        if (!initialCameraPositionSet) {
-            trajectoryMapFragment.setInitialCameraPosition(currentPdrLocation);
-            initialCameraPositionSet = true;
-            Log.d(TAG, "PDR_BRANCH initial camera position set from anchored PDR");
+        float[] pdr = sensorFusion.getLatestPdrMovement();
+        if (pdr == null || pdr.length < 2) {
+            return;
         }
+
+        double headingRad = sensorFusion.getSelectedHeadingRad();
+
+        if (!pfUiStepInitialised) {
+            pfUiStepInitialised = true;
+            lastPfUiStepElapsedMs = now;
+            lastPfUiStepPdrX = pdr[0];
+            lastPfUiStepPdrY = pdr[1];
+            lastPfUiStepHeadingRad = headingRad;
+            return;
+        }
+
+        float dx = pdr[0] - lastPfUiStepPdrX;
+        float dy = pdr[1] - lastPfUiStepPdrY;
+        double deltaPdrMeters = Math.hypot(dx, dy);
+        double deltaHeadingRad = Math.abs(wrapAngle(headingRad - lastPfUiStepHeadingRad));
+
+        if (deltaPdrMeters < PF_UI_MIN_PDR_DELTA_METERS
+                && deltaHeadingRad < PF_UI_MIN_HEADING_DELTA_RAD) {
+            return;
+        }
+
+        lastPfUiStepElapsedMs = now;
+        lastPfUiStepPdrX = pdr[0];
+        lastPfUiStepPdrY = pdr[1];
+        lastPfUiStepHeadingRad = headingRad;
+
+//        sensorFusion.stepParticleFilter();
+    }
+
+    private double wrapAngle(double angle) {
+        while (angle > Math.PI) angle -= 2.0 * Math.PI;
+        while (angle < -Math.PI) angle += 2.0 * Math.PI;
+        return angle;
     }
 
     /**
-     * Updates the map using the latest fused PF estimate.
+     * Updates the map using PF fused pose only.
      *
-     * If PF is enabled, the fused pose is always preferred.
-     * If fused pose is still unavailable, fall back to standard PDR
-     * so the user still sees a trajectory immediately.
+     * Important:
+     * - no fallback to standard PDR
+     * - always publishes the latest fused pose to the map fragment
+     * - duplicate fused points are naturally suppressed by the renderer
+     * - this allows floor changes / wall recovery / stationary corrections
+     *   to still appear in live UI when needed
      */
-    private void updateLiveMapWithParticleFilter(@Nullable float[] pdrValues,
-                                                 boolean shouldAdvanceLiveTrajectory) {
+    private void updateLiveMapWithParticleFilterOnly() {
         if (trajectoryMapFragment == null) {
             return;
         }
 
         FusedPose fusedPose = sensorFusion.getLatestFusedPose();
 
-        if (fusedPose == null) {
-            Log.d(TAG, "PF fused pose not ready yet; falling back to standard PDR view.");
-            updateLiveMapWithStandardPdr(pdrValues, shouldAdvanceLiveTrajectory);
+        if (fusedPose == null || fusedPose.getLatLng() == null) {
+            trajectoryMapFragment.setCurrentTrajectoryPlotSource("PF waiting");
+            Log.d(TAG, "PF fused pose not ready yet; skip red trajectory update until PF is ready.");
             return;
         }
 
-        Log.d(TAG,
-                "PF branch using fused pose: " + fusedPose.getLatLng()
-                        + ", floor=" + fusedPose.getFloor()
-                        + ", confidence=" + fusedPose.getConfidence()
-                        + ", advance=" + shouldAdvanceLiveTrajectory);
-
         if (!sensorFusion.shouldDrawLatestParticleFilterPose()) {
+            trajectoryMapFragment.setCurrentTrajectoryPlotSource("PF waiting");
             Log.d(TAG, "PF draw skipped: no meaningful PF pose available");
             return;
         }
 
-        trajectoryMapFragment.updateFusionFloorTracking(fusedPose.getFloor());
+        trajectoryMapFragment.setCurrentTrajectoryPlotSource("PF fused");
 
-        if (shouldAdvanceLiveTrajectory || !initialCameraPositionSet) {
-            trajectoryMapFragment.updateUserLocation(
-                    fusedPose.getLatLng(),
-                    (float) Math.toDegrees(fusedPose.getHeadingRad())
-            );
-        } else {
-            Log.d(TAG, "PF_BRANCH stationary -> skipping live trajectory update");
-        }
+        Log.d(TAG,
+                "PF branch using fused pose: " + fusedPose.getLatLng()
+                        + ", floor=" + fusedPose.getFloor()
+                        + ", confidence=" + fusedPose.getConfidence());
 
-        // Let map matching / floor controller own final display-floor decisions.
-        if (!trajectoryMapFragment.isAutoFloorEnabled()) {
-            Log.d(TAG, String.format(Locale.UK,
-                    "PF_BRANCH not forcing display floor=%d; map-matching flow owns floor confirmation",
-                    fusedPose.getFloor()));
-        } else {
-            Log.d(TAG, String.format(Locale.UK,
-                    "PF_BRANCH AutoFloor enabled; not forcing display floor=%d here",
-                    fusedPose.getFloor()));
-        }
+        trajectoryMapFragment.updateUserLocation(
+                fusedPose.getLatLng(),
+                (float) Math.toDegrees(fusedPose.getHeadingRad())
+        );
 
         trajectoryMapFragment.updateDebugInfo((float) fusedPose.getHeadingRad());
-
-        if (!initialCameraPositionSet) {
-            trajectoryMapFragment.setInitialCameraPosition(fusedPose.getLatLng());
-            initialCameraPositionSet = true;
-            Log.d(TAG, "PF_BRANCH initial camera position set from fused pose");
-        }
     }
 
     /**
@@ -594,14 +569,13 @@ public class RecordingFragment extends Fragment {
     }
 
     /**
-     * Starts TCP streaming of live JSON packets to the desktop Python GUI.
+     * Starts TCP streaming of live JSON packets to the desktop GUI.
      */
     private void startTcpStreaming() {
         if (tcpStreamingEnabled) {
             return;
         }
 
-        // Replace with your PC IP address on the same network.
         String serverIp = "172.20.10.3";
         int serverPort = 6000;
 
@@ -628,22 +602,27 @@ public class RecordingFragment extends Fragment {
     }
 
     /**
-     * Seeds the session using the first valid autonomous absolute fix.
+     * Seeds the raw-PDR anchor for live display.
      *
-     * Required behaviour:
-     * - never use a user-selected marker as the initial position
-     * - wait for live WiFi or GNSS positioning
-     * - lock a stable usable fix as the recording anchor
+     * Priority:
+     * 1. user-confirmed manual start anchor
+     * 2. stored session start anchor
+     * 3. WiFi
+     * 4. GNSS
+     *
+     * Important:
+     * this anchor is for the blue raw-PDR reference path only.
+     * The red fused trajectory is still owned by the PF pipeline.
      */
     private void seedInitialMapLocation() {
         if (trajectoryMapFragment == null || initialMapLocationSeeded) {
             return;
         }
 
-        LatLng initialFix = resolveAutonomousInitialLocation();
+        LatLng initialFix = sensorFusion.resolvePreferredStartAnchor();
 
         if (initialFix == null) {
-            Log.d(TAG, "Waiting for initial autonomous GNSS/WiFi position before seeding map.");
+            Log.d(TAG, "Waiting for initial preferred start anchor before seeding raw PDR path.");
             return;
         }
 
@@ -657,17 +636,46 @@ public class RecordingFragment extends Fragment {
 
         sensorFusion.writeInitialMetadata();
 
-        trajectoryMapFragment.setInitialCameraPosition(initialFix);
-        initialCameraPositionSet = true;
-
-        trajectoryMapFragment.updateUserLocation(
-                initialFix,
-                (float) Math.toDegrees(sensorFusion.passOrientation())
-        );
+        trajectoryMapFragment.setCurrentTrajectoryPlotSource("PF waiting");
+        tryShowInitialFusedPose();
 
         Log.d(TAG,
-                "STEP3_ANCHOR locked autonomous initial map location at "
+                "Live raw-PDR anchor seeded at "
                         + initialFix.latitude + ", " + initialFix.longitude);
+    }
+
+    /**
+     * Tries to show the initial PF fused pose immediately, before the user starts moving.
+     *
+     * This does not change your live update flow.
+     * It only forces one PF initialisation attempt after the start anchor is known.
+     */
+    private void tryShowInitialFusedPose() {
+        if (trajectoryMapFragment == null) {
+            return;
+        }
+
+        sensorFusion.initialiseParticleFilterIfNeeded();
+
+        FusedPose fusedPose = sensorFusion.getLatestFusedPose();
+        if (fusedPose == null || fusedPose.getLatLng() == null) {
+            return;
+        }
+
+        trajectoryMapFragment.setCurrentTrajectoryPlotSource("PF fused");
+
+        trajectoryMapFragment.updateUserLocation(
+                fusedPose.getLatLng(),
+                (float) Math.toDegrees(fusedPose.getHeadingRad())
+        );
+
+        trajectoryMapFragment.updateDebugInfo((float) fusedPose.getHeadingRad());
+        trajectoryMapFragment.refreshLiveDebugBox();
+
+        Log.d(TAG,
+                "Initial PF fused pose shown before movement: "
+                        + fusedPose.getLatLng()
+                        + ", floor=" + fusedPose.getFloor());
     }
 
     /**
@@ -685,14 +693,12 @@ public class RecordingFragment extends Fragment {
         LatLng candidateLatLng = null;
         InitialAnchorSource candidateSource = null;
 
-        // Prefer GNSS first
         if (gnssLatLng != null
                 && gnssLatLng.length >= 2
                 && !(Math.abs(gnssLatLng[0]) < 1e-6 && Math.abs(gnssLatLng[1]) < 1e-6)) {
             candidateLatLng = new LatLng(gnssLatLng[0], gnssLatLng[1]);
             candidateSource = InitialAnchorSource.GNSS;
         } else {
-            // Fallback to WiFi only if GNSS is not ready
             LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
             if (isValidLatLng(wifiLatLng)) {
                 candidateLatLng = wifiLatLng;
@@ -756,10 +762,6 @@ public class RecordingFragment extends Fragment {
         pendingInitialAnchorSamples = 0;
     }
 
-    /**
-     * Returns true only when the LatLng contains a meaningful absolute position.
-     * In this codebase, (0,0) is treated as "not initialised yet".
-     */
     private boolean isValidLatLng(@Nullable LatLng latLng) {
         if (latLng == null) {
             return false;
@@ -787,8 +789,6 @@ public class RecordingFragment extends Fragment {
             return true;
         }
 
-        // Allow a short grace window after the most recent real movement so the
-        // display can settle, but then freeze while stationary.
         return (now - lastLiveMovementUptimeMs) <= LIVE_DRAW_STATIONARY_HOLD_MS;
     }
 
@@ -803,8 +803,6 @@ public class RecordingFragment extends Fragment {
             }
 
             tcpPacketSender.sendLatestPacket();
-
-            // 5 Hz
             tcpHandler.postDelayed(this, 200);
         }
     };
@@ -828,6 +826,8 @@ public class RecordingFragment extends Fragment {
         super.onDestroyView();
         stopTcpStreaming();
         refreshDataHandler.removeCallbacks(refreshDataTask);
+        pfUiStepInitialised = false;
+        lastPfUiStepElapsedMs = 0L;
     }
 
     /**

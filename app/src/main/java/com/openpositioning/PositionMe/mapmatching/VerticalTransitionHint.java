@@ -1,7 +1,7 @@
 package com.openpositioning.PositionMe.mapmatching;
 
 /**
- * 表示由高度/气压估计得到的楼层变化提示。
+ * Represents a floor-change hint estimated from height / barometer data.
  */
 public class VerticalTransitionHint {
 

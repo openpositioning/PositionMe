@@ -316,6 +316,19 @@ public class SensorFusion implements SensorEventListener {
         this.latestParticleFilterPose = fusedPose;
     }
 
+    /**
+     * Lets the PF evaluate lift / floor-change transitions even when there is no
+     * walking step, such as while standing in a lift.
+     */
+    public void evaluateParticleFilterFloorChangeWithoutStep() {
+        if (particleFilterManager == null || !isParticleFilterTrajectoryMode()) {
+            return;
+        }
+
+        particleFilterManager.evaluateFloorChangeWithoutStep();
+        latestParticleFilterPose = particleFilterManager.getLatestFusedPose();
+    }
+
 
     // SensorEventListener
     @Override
@@ -418,22 +431,28 @@ public class SensorFusion implements SensorEventListener {
         }
     }
 
-    // Recording lifecycle
     /**
      * Starts trajectory recording and foreground collection.
+     *
+     * Start-anchor policy:
+     * - use the preferred session start anchor if already known
+     * - use the preferred session building if already known
+     *
+     * This keeps StartLocationFragment, RecordingFragment, and PF initialisation
+     * aligned to one source of truth.
      */
     public void startRecording() {
-        // If the user corrected the start point in StartLocationFragment,
-        // use that corrected anchor as the recording/session start.
-        if (manualStartAnchorLatLng != null) {
+        LatLng preferredStart = resolvePreferredStartAnchor();
+        if (preferredStart != null) {
             setStartGNSSLatitude(new float[]{
-                    (float) manualStartAnchorLatLng.latitude,
-                    (float) manualStartAnchorLatLng.longitude
+                    (float) preferredStart.latitude,
+                    (float) preferredStart.longitude
             });
+        }
 
-            if (manualStartAnchorBuildingId != null && !manualStartAnchorBuildingId.isEmpty()) {
-                setSelectedBuildingId(manualStartAnchorBuildingId);
-            }
+        String preferredBuildingId = resolvePreferredStartBuildingId();
+        if (preferredBuildingId != null && !preferredBuildingId.isEmpty()) {
+            setSelectedBuildingId(preferredBuildingId);
         }
 
         recorder.startRecording(pdrProcessing);
@@ -444,25 +463,20 @@ public class SensorFusion implements SensorEventListener {
         if (adaptiveQsmfiHeadingCalibrator != null) {
             adaptiveQsmfiHeadingCalibrator.reset();
         }
-
-        if (isParticleFilterTrajectoryMode()) {
-            resetParticleFilterForRecording();
-        }
-
-        stopWirelessCollectors();
-
-        if (appContext != null) {
-            SensorCollectionService.start(appContext);
-        }
     }
 
     /**
-     * Stops trajectory recording and foreground collection.
+     * Stops trajectory recording and resets session-scoped live PF state.
+     *
+     * Important:
+     * auto-floor preference is reset here so a fresh session does not accidentally
+     * inherit the previous session's live floor switching state.
      */
     public void stopRecording() {
         recorder.stopRecording();
 
         latestParticleFilterPose = null;
+        liveAutoFloorEnabled = false;
 
         if (particleFilterManager != null) {
             particleFilterManager.reset();
@@ -482,6 +496,15 @@ public class SensorFusion implements SensorEventListener {
     @Nullable
     private String manualStartAnchorBuildingId = null;
 
+    /** True when live PF floor changes are allowed for this session. */
+    private boolean liveAutoFloorEnabled = false;
+
+    /**
+     * Stores the user-confirmed manual start anchor.
+     *
+     * This also mirrors the chosen start position into the session start anchor
+     * immediately so both raw-PDR and PF init can read the same location.
+     */
     public void setManualStartAnchor(@NonNull LatLng latLng,
                                      @Nullable Integer floorIndex,
                                      @Nullable String buildingId) {
@@ -489,11 +512,15 @@ public class SensorFusion implements SensorEventListener {
         this.manualStartAnchorFloorIndex = floorIndex;
         this.manualStartAnchorBuildingId = buildingId;
 
+        setStartGNSSLatitude(new float[]{
+                (float) latLng.latitude,
+                (float) latLng.longitude
+        });
+
         if (buildingId != null && !buildingId.isEmpty()) {
             setSelectedBuildingId(buildingId);
         }
     }
-
     @Nullable
     public LatLng getManualStartAnchorLatLng() {
         return manualStartAnchorLatLng;
@@ -513,6 +540,94 @@ public class SensorFusion implements SensorEventListener {
         manualStartAnchorLatLng = null;
         manualStartAnchorFloorIndex = null;
         manualStartAnchorBuildingId = null;
+    }
+
+    /**
+     * Returns whether live PF floor transitions are allowed in this session.
+     *
+     * This is controlled by the Auto Floor switch in the map fragment.
+     */
+    public boolean isLiveAutoFloorEnabled() {
+        return liveAutoFloorEnabled;
+    }
+
+    /**
+     * Enables or disables live PF floor transitions for this session.
+     */
+    public void setLiveAutoFloorEnabled(boolean enabled) {
+        this.liveAutoFloorEnabled = enabled;
+    }
+
+    /**
+     * Resolves the preferred session start floor index.
+     *
+     * Priority:
+     * 1. user-confirmed manual floor
+     * 2. WiFi floor if WiFi positioning exists
+     * 3. ground/default floor 0
+     */
+    public int resolvePreferredStartFloorIndex() {
+        if (manualStartAnchorFloorIndex != null) {
+            return manualStartAnchorFloorIndex;
+        }
+
+        LatLng wifiLatLng = getLatLngWifiPositioning();
+        if (wifiLatLng != null
+                && !(Math.abs(wifiLatLng.latitude) < 1e-6 && Math.abs(wifiLatLng.longitude) < 1e-6)) {
+            return getWifiFloor();
+        }
+
+        return 0;
+    }
+
+    /**
+     * Resolves the preferred session building id.
+     *
+     * Priority:
+     * 1. manual start building
+     * 2. currently selected building id
+     */
+    @Nullable
+    public String resolvePreferredStartBuildingId() {
+        if (manualStartAnchorBuildingId != null && !manualStartAnchorBuildingId.isEmpty()) {
+            return manualStartAnchorBuildingId;
+        }
+
+        String selectedBuildingId = getSelectedBuildingId();
+        if (selectedBuildingId != null && !selectedBuildingId.isEmpty()) {
+            return selectedBuildingId;
+        }
+
+        return null;
+    }
+
+    /**
+     * Pushes a UI/manual floor choice into the live PF state.
+     *
+     * This is important when the user changes floor manually, because otherwise
+     * the UI floor and PF floor can diverge and the next fused update will snap
+     * the display back.
+     */
+    public void setParticleFilterFloorOverride(int floorIndex) {
+        if (particleFilterManager != null) {
+            particleFilterManager.forceActiveFloor(floorIndex);
+            latestParticleFilterPose = particleFilterManager.getLatestFusedPose();
+        }
+    }
+
+    /**
+     * Initialises the particle filter once a valid start anchor exists,
+     * then refreshes the cached latest fused pose.
+     *
+     * This is used so the red fused arrow can appear before the first step.
+     */
+    public void initialiseParticleFilterIfNeeded() {
+        if (particleFilterManager == null) {
+            return;
+        }
+
+        particleFilterManager.initialiseIfNeeded();
+        latestParticleFilterPose = particleFilterManager.getLatestFusedPose();
     }
 
     /**
@@ -646,6 +761,11 @@ public class SensorFusion implements SensorEventListener {
         return latLong;
     }
 
+    @Nullable
+    public ParticleFilterManager getParticleFilterManager() {
+        return particleFilterManager;
+    }
+
     public boolean isUseAdaptiveQsmfiHeading() {
         return useAdaptiveQsmfiHeading;
     }
@@ -737,8 +857,12 @@ public class SensorFusion implements SensorEventListener {
         return state.elevator;
     }
 
+    /**
+     * Returns true only when PF mode is active and a fused PF pose exists.
+     */
     public boolean shouldDrawLatestParticleFilterPose() {
-        return particleFilterManager != null
+        return isParticleFilterTrajectoryMode()
+                && particleFilterManager != null
                 && particleFilterManager.getLatestFusedPose() != null;
     }
 
@@ -757,22 +881,9 @@ public class SensorFusion implements SensorEventListener {
         return wifiPositionManager != null ? wifiPositionManager.getWifiFloor() : 0;
     }
 
-
-    @Nullable
-    private Integer manualStartAnchorFloor;
-
-
-    @Nullable
-    public Integer getManualStartAnchorFloor() {
-        return manualStartAnchorFloor;
-    }
-
-
-
     public boolean hasManualStartAnchor() {
         return manualStartAnchorLatLng != null;
     }
-
 
     /**
      * Resolve the session start anchor in priority order:

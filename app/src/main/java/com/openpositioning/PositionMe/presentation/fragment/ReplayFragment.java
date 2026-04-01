@@ -65,8 +65,8 @@ public class ReplayFragment extends Fragment {
     private int currentIndex = 0;
     private boolean isPlaying = false;
 
-    // 方案 B：Replay 启动时允许用户手动指定“绝对起始楼层”。
-    // 当原始 JSON 没有 initialFloor 时，就不再被默认 G 层带偏。
+    // Option B: allow the user to manually specify the absolute start floor when Replay starts.
+    // This avoids defaulting to floor G when the original JSON does not contain initialFloor.
     @Nullable
     private Integer manualInitialFloorOverride = null;
     private boolean hasPromptedReplayStartFloor = false;
@@ -404,23 +404,27 @@ public class ReplayFragment extends Fragment {
 
 
     /**
-     * Update the map with the user location and GNSS location (if available) for the given index.
-     * Clears the map and redraws up to the given index.
+     * Updates replay map state for the requested frame index.
      *
-     * @param newIndex
+     * Replay policy:
+     * - replay frame context is always pushed first
+     * - replay location is then updated second
+     * - on jumps/scrubs, only replay trajectory state is cleared
+     *   (do not wipe selected building / indoor overlay / replay mode)
      */
     private void updateMapForIndex(int newIndex) {
-        if (newIndex < 0 || newIndex >= replayData.size()) return;
+        if (newIndex < 0 || newIndex >= replayData.size() || trajectoryMapFragment == null) {
+            return;
+        }
 
-        // Detect if user is playing sequentially (lastIndex + 1)
-        // or is skipping around (backwards, or jump forward)
         boolean isSequentialForward = (newIndex == lastIndex + 1);
 
         if (!isSequentialForward) {
-            // Clear everything and redraw up to newIndex
-            trajectoryMapFragment.clearMapAndReset();
+            trajectoryMapFragment.clearReplayTrajectoryOnly();
+
             for (int i = 0; i <= newIndex; i++) {
                 TrajParser.ReplayPoint p = replayData.get(i);
+
                 trajectoryMapFragment.setReplayFrameContext(
                         p.syntheticFloor,
                         p.currentElevation,
@@ -428,14 +432,18 @@ public class ReplayFragment extends Fragment {
                         p.heightChanged,
                         resolveReplayInitialFloor(p)
                 );
+
                 trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+
                 if (p.gnssLocation != null) {
                     trajectoryMapFragment.updateGNSS(p.gnssLocation);
+                } else {
+                    trajectoryMapFragment.clearGNSS();
                 }
             }
         } else {
-            // Normal sequential forward step: add just the new point
             TrajParser.ReplayPoint p = replayData.get(newIndex);
+
             trajectoryMapFragment.setReplayFrameContext(
                     p.syntheticFloor,
                     p.currentElevation,
@@ -443,9 +451,13 @@ public class ReplayFragment extends Fragment {
                     p.heightChanged,
                     resolveReplayInitialFloor(p)
             );
+
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
+            } else {
+                trajectoryMapFragment.clearGNSS();
             }
         }
 

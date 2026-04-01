@@ -1,11 +1,6 @@
 package com.openpositioning.PositionMe.fusion;
 
-/**
- * Container for absolute observations used to update the particle filter.
- *
- * <p>For the first Android integration phase, this includes:
- * Wi-Fi local position, Wi-Fi floor, and GNSS local position.</p>
- */
+/** class to store wifi and gnss observation data */
 public class ParticleFilterObservation {
 
     private final Double wifiX;
