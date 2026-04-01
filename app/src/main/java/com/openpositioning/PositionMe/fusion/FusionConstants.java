@@ -42,4 +42,6 @@ public final class FusionConstants {
     public static final float NOISE_STD_DEV_BIAS = 0.1f;
     public static final float MEASUREMENT_NOISE = 0.25f;
     public static final float DELTA_T = 0.25f;
+    public static final double BIAS_UNCERTAINTY_INITIAL = 0.1;
+    public static final double GYROSCOPE_UNCERTAINTY_INITIAL = Math.PI;
 }

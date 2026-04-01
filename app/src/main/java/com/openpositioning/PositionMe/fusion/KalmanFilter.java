@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.fusion;
 
+import static com.openpositioning.PositionMe.fusion.FusionConstants.BIAS_UNCERTAINTY_INITIAL;
 import static com.openpositioning.PositionMe.fusion.FusionConstants.DELTA_T;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.GYROSCOPE_UNCERTAINTY_INITIAL;
 import static com.openpositioning.PositionMe.fusion.FusionConstants.MEASUREMENT_NOISE;
 import static com.openpositioning.PositionMe.fusion.FusionConstants.NOISE_STD_DEV_BIAS;
 import static com.openpositioning.PositionMe.fusion.FusionConstants.NOISE_STD_DEV_PREDICTION;
@@ -49,10 +51,10 @@ public class KalmanFilter {
         noiseMatrix =
                 new SimpleMatrix(
                         new double[][] {
-                            new double[] {noiseStdDevPrediction * NOISE_STD_DEV_PREDICTION, 0},
-                            new double[] {0, NOISE_STD_DEV_BIAS * NOISE_STD_DEV_BIAS}
+                            new double[] {noiseStdDevPrediction * noiseStdDevPrediction, 0},
+                            new double[] {0, noiseStdDevBias * noiseStdDevBias}
                         });
-        measurementVariance = new SimpleMatrix(new double[][] {new double[] {MEASUREMENT_NOISE}});
+        measurementVariance = new SimpleMatrix(new double[][] {new double[] {noiseMeasurement}});
         Log.d(TAG, "Kalman filter created");
     }
 
@@ -99,27 +101,22 @@ public class KalmanFilter {
      */
     public void predict(float angularVelocity) {
         // Initialise last timestamp if required
-
         SimpleMatrix gyroMatrix = new SimpleMatrix(new float[][] {new float[] {angularVelocity}});
 
         // Equation 2
         prediction = (transformation.mult(prediction)).plus(timeMatrix.mult(gyroMatrix));
-
-        //        float[] predictedOrientation = extractRow(prediction, 0);
-        //        float[] predicatedBias = extractRow(prediction, 1);
-
         if (covariance == null) {
-            //            covariance =
-            //                    computeCovariance(
-            //                            new SimpleMatrix(new float[][] {predictedOrientation}),
-            //                            new SimpleMatrix(new float[][] {predicatedBias}));
             // Initialise covariance of rotation such that the initial uncertainly of PI (180
-            // degree) and low gyroscop bias
+            // degree) and low gyroscope bias
             covariance =
                     new SimpleMatrix(
                             new double[][] {
-                                new double[] {Math.PI * Math.PI, 0},
-                                new double[] {0, 0.01}
+                                new double[] {
+                                    GYROSCOPE_UNCERTAINTY_INITIAL * GYROSCOPE_UNCERTAINTY_INITIAL, 0
+                                },
+                                new double[] {
+                                    0, BIAS_UNCERTAINTY_INITIAL * BIAS_UNCERTAINTY_INITIAL
+                                }
                             });
         }
 
