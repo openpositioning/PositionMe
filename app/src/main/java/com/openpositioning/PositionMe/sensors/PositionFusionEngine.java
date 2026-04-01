@@ -46,8 +46,8 @@ public class PositionFusionEngine {
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
-    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.3;
-    private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(7.0);
+    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.15;
+    private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(5.0);
     private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(170.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
     private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.30;
@@ -62,9 +62,9 @@ public class PositionFusionEngine {
     private static final boolean ENABLE_WALL_SLIDE = true;
     private static final double WALL_STOP_MARGIN_RATIO = 0.02;
     private static final double MAX_WALL_SLIDE_M = 0.60;
-    private static final double WALL_PENALTY_HIT_INCREMENT = 1;
+    private static final double WALL_PENALTY_HIT_INCREMENT = .5;
     private static final double WALL_PENALTY_DECAY_ON_FREE_MOVE = 0.65;
-    private static final double WALL_PENALTY_STRENGTH = 0.35;
+    private static final double WALL_PENALTY_STRENGTH = 0.2;
     private static final double WALL_PENALTY_SCORE_MAX = 8.0;
     private static final double FIX_WALL_CROSS_PROB_GNSS = 0.35;
     private static final double FIX_WALL_CROSS_PROB_WIFI = 0.60;
