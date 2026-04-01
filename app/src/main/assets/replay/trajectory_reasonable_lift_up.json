@@ -1,0 +1,1261 @@
+{
+  "androidVersion": "synthetic-test-data",
+  "trajectoryVersion": "replay_v2_reasonable",
+  "trajectoryId": "trajectory_reasonable_lift_up",
+  "startTimestamp": 0,
+  "notes": "Approach a lift, remain nearly stationary horizontally while height rises to the next floor, then continue walking. Expected result: lift floor change allowed.",
+  "imuData": [
+    {
+      "relativeTimestamp": "0",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "700",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1400",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2100",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "2800",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "3500",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "4200",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "4900",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "5600",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "6300",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "7000",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "7700",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "8400",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.422618,
+        "w": 0.906308
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "9100",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.422618,
+        "w": 0.906308
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "9800",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.422618,
+        "w": 0.906308
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "10500",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.422618,
+        "w": 0.906308
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "11200",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.422618,
+        "w": 0.906308
+      },
+      "stepCount": 16
+    },
+    {
+      "relativeTimestamp": "11900",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.422618,
+        "w": 0.906308
+      },
+      "stepCount": 17
+    },
+    {
+      "relativeTimestamp": "13100",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.382683,
+        "w": 0.92388
+      },
+      "stepCount": 18
+    },
+    {
+      "relativeTimestamp": "14300",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.382683,
+        "w": 0.92388
+      },
+      "stepCount": 19
+    },
+    {
+      "relativeTimestamp": "15500",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.382683,
+        "w": 0.92388
+      },
+      "stepCount": 20
+    },
+    {
+      "relativeTimestamp": "16700",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.382683,
+        "w": 0.92388
+      },
+      "stepCount": 21
+    },
+    {
+      "relativeTimestamp": "17900",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.382683,
+        "w": 0.92388
+      },
+      "stepCount": 22
+    },
+    {
+      "relativeTimestamp": "19100",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.382683,
+        "w": 0.92388
+      },
+      "stepCount": 23
+    },
+    {
+      "relativeTimestamp": "19800",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 24
+    },
+    {
+      "relativeTimestamp": "20500",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 25
+    },
+    {
+      "relativeTimestamp": "21200",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 26
+    },
+    {
+      "relativeTimestamp": "21900",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 27
+    },
+    {
+      "relativeTimestamp": "22600",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 28
+    },
+    {
+      "relativeTimestamp": "23300",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 29
+    },
+    {
+      "relativeTimestamp": "24000",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 30
+    },
+    {
+      "relativeTimestamp": "24700",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 31
+    },
+    {
+      "relativeTimestamp": "25400",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 32
+    },
+    {
+      "relativeTimestamp": "26100",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.707107,
+        "w": 0.707107
+      },
+      "stepCount": 33
+    },
+    {
+      "relativeTimestamp": "26800",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 34
+    },
+    {
+      "relativeTimestamp": "27500",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 35
+    },
+    {
+      "relativeTimestamp": "28200",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 36
+    },
+    {
+      "relativeTimestamp": "28900",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 37
+    },
+    {
+      "relativeTimestamp": "29600",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 38
+    },
+    {
+      "relativeTimestamp": "30300",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.173648,
+        "w": -0.984808
+      },
+      "stepCount": 39
+    },
+    {
+      "relativeTimestamp": "31000",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.173648,
+        "w": -0.984808
+      },
+      "stepCount": 40
+    },
+    {
+      "relativeTimestamp": "31700",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.173648,
+        "w": -0.984808
+      },
+      "stepCount": 41
+    },
+    {
+      "relativeTimestamp": "32400",
+      "acc": {
+        "x": 0.0,
+        "y": 0.1,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.01
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.173648,
+        "w": -0.984808
+      },
+      "stepCount": 42
+    }
+  ],
+  "pdrData": [
+    {
+      "relativeTimestamp": "0",
+      "x": 0.0,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "700",
+      "x": 1.2,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "1400",
+      "x": 2.4,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "2100",
+      "x": 3.6,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "2800",
+      "x": 4.8,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "3500",
+      "x": 6.0,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "4200",
+      "x": 7.2,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "4900",
+      "x": 8.4,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "5600",
+      "x": 9.6,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "6300",
+      "x": 10.8,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "7000",
+      "x": 12.0,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "7700",
+      "x": 13.2,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "8400",
+      "x": 13.8,
+      "y": 0.5,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "9100",
+      "x": 14.4,
+      "y": 1.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "9800",
+      "x": 15.0,
+      "y": 1.5,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "10500",
+      "x": 15.6,
+      "y": 2.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "11200",
+      "x": 16.2,
+      "y": 2.5,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "11900",
+      "x": 16.8,
+      "y": 3.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "13100",
+      "x": 16.95,
+      "y": 3.1,
+      "currentElevation": 0.5,
+      "deltaHeight": 0.5,
+      "heightChanged": true,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "14300",
+      "x": 17.1,
+      "y": 3.2,
+      "currentElevation": 1.0,
+      "deltaHeight": 0.5,
+      "heightChanged": true,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "15500",
+      "x": 17.25,
+      "y": 3.3,
+      "currentElevation": 1.6,
+      "deltaHeight": 0.6,
+      "heightChanged": true,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "16700",
+      "x": 17.4,
+      "y": 3.4,
+      "currentElevation": 2.2,
+      "deltaHeight": 0.6,
+      "heightChanged": true,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "17900",
+      "x": 17.55,
+      "y": 3.5,
+      "currentElevation": 2.8,
+      "deltaHeight": 0.6,
+      "heightChanged": true,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "19100",
+      "x": 17.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.5,
+      "heightChanged": true,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "19800",
+      "x": 18.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "20500",
+      "x": 19.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "21200",
+      "x": 20.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "21900",
+      "x": 21.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "22600",
+      "x": 22.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "23300",
+      "x": 23.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "24000",
+      "x": 24.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "24700",
+      "x": 25.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "25400",
+      "x": 26.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "26100",
+      "x": 27.7,
+      "y": 3.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "26800",
+      "x": 27.7,
+      "y": 4.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "27500",
+      "x": 27.7,
+      "y": 5.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "28200",
+      "x": 27.7,
+      "y": 6.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "28900",
+      "x": 27.7,
+      "y": 7.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "29600",
+      "x": 27.7,
+      "y": 8.6,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "30300",
+      "x": 26.9,
+      "y": 8.9,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "31000",
+      "x": 26.1,
+      "y": 9.2,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "31700",
+      "x": 25.3,
+      "y": 9.5,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "32400",
+      "x": 24.5,
+      "y": 9.8,
+      "currentElevation": 3.3,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    }
+  ],
+  "gnssData": [],
+  "magnetometerData": [],
+  "initialFloor": 2
+}

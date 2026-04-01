@@ -2,20 +2,38 @@ package com.openpositioning.PositionMe.presentation.activity;
 
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentTransaction;
 
+import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
+import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
-import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
-import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
-import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import android.util.Log;
+
+import android.graphics.Typeface;
+import android.os.Build;
+import android.text.Layout;
+import android.util.TypedValue;
+import android.graphics.text.LineBreaker;
 
 
 /**
@@ -52,7 +70,7 @@ public class RecordingActivity extends AppCompatActivity {
 
         if (savedInstanceState == null) {
             // Show trajectory name input dialog before proceeding to start location
-            showTrajectoryNameDialog();
+            showTrajectorySetupDialog();
         }
 
         // Keep screen on
@@ -86,42 +104,235 @@ public class RecordingActivity extends AppCompatActivity {
     }
 
     /**
-     * Shows an AlertDialog prompting the user to enter a trajectory name.
-     * The name is stored in SensorFusion as trajectory_id and later written to the protobuf.
-     * After input, proceeds to StartLocationFragment.
+     * Shows the per-session recording setup dialog.
+     *
+     * This dialog now configures:
+     * 1. the trajectory name to be stored in the recording payload
+     * 2. whether the adaptive heading calibrator is enabled for this session
+     *
+     * Important UI clarification:
+     * - the user does NOT choose between PDR and particle fusion here
+     * - the recording screen can still display the standard PDR path for reference
+     * - if particle fusion is enabled elsewhere in the app, it will still be used
+     *   by the live fusion pipeline automatically
+     *
+     * Design intent:
+     * keep this dialog simple and focused on what the user must set per session,
+     * while explaining clearly what particle fusion does without presenting it as
+     * a confusing mode switch at the start of every recording.
      */
-    private void showTrajectoryNameDialog() {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setHint("e.g. Nucleus_Walk_01");
-        input.setPadding(48, 24, 48, 24);
+    private void showTrajectorySetupDialog() {
+        final int outerPadding = dp(24);
+        final int sectionSpacing = dp(16);
 
-        new AlertDialog.Builder(this)
-                .setTitle("Trajectory Name")
-                .setMessage("Enter a name for this recording session:")
-                .setView(input)
+        ScrollView scrollView = new ScrollView(this);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(outerPadding, outerPadding, outerPadding, outerPadding / 2);
+        scrollView.addView(container,
+                new ScrollView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView intro = new TextView(this);
+        intro.setText("Set up this recording before starting.");
+        styleDialogParagraph(intro, 15f);
+        container.addView(intro);
+
+        TextInputLayout nameLayout = new TextInputLayout(this);
+        nameLayout.setHint("Trajectory name");
+
+        LinearLayout.LayoutParams nameLayoutParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        nameLayoutParams.topMargin = sectionSpacing;
+        container.addView(nameLayout, nameLayoutParams);
+
+        TextInputEditText nameInput = new TextInputEditText(this);
+        nameInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        nameInput.setHint("e.g. Nucleus_Walk_01");
+        nameInput.setSingleLine(true);
+        nameInput.setText(generateDefaultTrajectoryName());
+
+        LinearLayout.LayoutParams editTextParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        nameLayout.addView(nameInput, editTextParams);
+
+        TextView fusionTitle = new TextView(this);
+        fusionTitle.setText("Trajectory display and fusion");
+        styleDialogHeading(fusionTitle);
+        LinearLayout.LayoutParams fusionTitleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        fusionTitleParams.topMargin = sectionSpacing;
+        container.addView(fusionTitle, fusionTitleParams);
+
+        TextView fusionDescription = new TextView(this);
+        fusionDescription.setPadding(0, dp(4), 0, 0);
+        styleDialogParagraph(fusionDescription, 14f);
+
+        boolean particleFusionEnabled = SensorFusion.getInstance().isParticleFilterTrajectoryMode();
+        if (particleFusionEnabled) {
+            fusionDescription.setText(
+                    "Particle fusion is currently enabled. During recording, the app may use fused positioning " +
+                            "(for example PDR combined with WiFi/GNSS and map constraints) to improve the main estimated position. " +
+                            "The recording screen can still show the standard PDR trajectory for reference."
+            );
+        } else {
+            fusionDescription.setText(
+                    "The recording screen can show the standard PDR trajectory for reference. " +
+                            "The app uses a particle-filter-based fusion framework integrated with map matching and map constraints to improve indoor trajectory estimation."
+            );
+        }
+        container.addView(fusionDescription);
+
+        TextView noteText = new TextView(this);
+        noteText.setPadding(0, dp(8), 0, 0);
+        styleDialogParagraph(noteText, 13f);
+        noteText.setText(
+                "You do not need to choose the positioning engine here. " +
+                        "This setup only names the recording and configures session-specific heading behaviour."
+        );
+        container.addView(noteText);
+
+        TextView adaptiveHeadingTitle = new TextView(this);
+        adaptiveHeadingTitle.setText("Heading option");
+        styleDialogHeading(adaptiveHeadingTitle);
+        LinearLayout.LayoutParams adaptiveHeadingTitleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        adaptiveHeadingTitleParams.topMargin = sectionSpacing;
+        container.addView(adaptiveHeadingTitle, adaptiveHeadingTitleParams);
+
+        SwitchMaterial adaptiveHeadingSwitch = new SwitchMaterial(this);
+        adaptiveHeadingSwitch.setText("Use adaptive heading calibrator (QSMFI-style)");
+        adaptiveHeadingSwitch.setChecked(SensorFusion.getInstance().isAdaptiveHeadingEnabled());
+        LinearLayout.LayoutParams adaptiveHeadingParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        adaptiveHeadingParams.topMargin = dp(8);
+        container.addView(adaptiveHeadingSwitch, adaptiveHeadingParams);
+
+        TextView adaptiveHeadingDescription = new TextView(this);
+        adaptiveHeadingDescription.setPadding(0, dp(4), 0, 0);
+        styleDialogParagraph(adaptiveHeadingDescription, 13f);
+        container.addView(adaptiveHeadingDescription);
+
+        Runnable updateAdaptiveHeadingDescription = () -> {
+            if (adaptiveHeadingSwitch.isChecked()) {
+                adaptiveHeadingDescription.setText(
+                        "Adaptive heading is applied for this session before motion updates. " +
+                                "This usually gives a more stable heading reference for both live positioning and the saved trajectory."
+                );
+            } else {
+                adaptiveHeadingDescription.setText(
+                        "Raw heading mode uses the current rotation-vector heading directly, " +
+                                "with no adaptive absolute-yaw correction."
+                );
+            }
+        };
+        updateAdaptiveHeadingDescription.run();
+        adaptiveHeadingSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateAdaptiveHeadingDescription.run());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("New Recording")
+                .setView(scrollView)
                 .setCancelable(false)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    String name = input.getText().toString().trim();
-                    if (name.isEmpty()) {
-                        // Default name based on timestamp
-                        name = "traj_" + System.currentTimeMillis();
-                    }
-                    SensorFusion.getInstance().setTrajectoryId(name);
-                    showStartLocationScreen();
-                })
-                .setNegativeButton("Skip", (dialog, which) -> {
-                    // Use default name
-                    SensorFusion.getInstance().setTrajectoryId(
-                            "traj_" + System.currentTimeMillis());
-                    showStartLocationScreen();
-                })
-                .show();
+                .setPositiveButton("Continue", null)
+                .setNegativeButton("Use Auto Name", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String name = nameInput.getText() == null ? "" : nameInput.getText().toString().trim();
+                if (name.isEmpty()) {
+                    name = generateDefaultTrajectoryName();
+                }
+
+                applyTrajectorySetupAndContinue(
+                        name,
+                        SensorFusion.getInstance().isParticleFilterTrajectoryMode(),
+                        adaptiveHeadingSwitch.isChecked()
+                );
+                dialog.dismiss();
+            });
+
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                applyTrajectorySetupAndContinue(
+                        generateDefaultTrajectoryName(),
+                        SensorFusion.getInstance().isParticleFilterTrajectoryMode(),
+                        adaptiveHeadingSwitch.isChecked()
+                );
+                dialog.dismiss();
+            });
+        });
+
+        dialog.show();
+    }
+
+    private void styleDialogHeading(@NonNull TextView textView) {
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+        textView.setTypeface(Typeface.DEFAULT_BOLD);
+    }
+
+    private void styleDialogParagraph(@NonNull TextView textView, float textSizeSp) {
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);
+        textView.setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
+        }
     }
 
     /**
-     * Show the StartLocationFragment (beginning of flow).
+     * Commits the session choices from the setup dialog into SensorFusion,
+     * then continues into the normal start-location flow.
+     *
+     * This is the bridge between the UI choice and the downstream runtime behaviour:
+     * - RecordingFragment will render the selected trajectory mode
+     * - SensorEventHandler will save the selected trajectory mode
      */
+    private static final String TAG = "RecordingActivity";
+    private void applyTrajectorySetupAndContinue(String trajectoryName,
+                                                 boolean useParticleFilter,
+                                                 boolean useAdaptiveHeading) {
+        SensorFusion sensorFusion = SensorFusion.getInstance();
+        sensorFusion.setTrajectoryId(trajectoryName);
+        sensorFusion.setRecordingTrajectoryMode(
+                useParticleFilter
+                        ? SensorFusion.TRAJECTORY_MODE_PARTICLE_FILTER
+                        : SensorFusion.TRAJECTORY_MODE_PDR
+        );
+        sensorFusion.setUseAdaptiveQsmfiHeading(useAdaptiveHeading);
+
+        Log.d(TAG, "New recording setup:"
+                + " name=" + trajectoryName
+                + ", mode=" + (useParticleFilter ? "PARTICLE_FILTER" : "STANDARD_PDR")
+                + ", adaptiveHeading=" + useAdaptiveHeading);
+
+        showStartLocationScreen();
+    }
+
+    /**
+     * Generates a simple timestamp-based fallback name for the recording.
+     *
+     * Using a deterministic auto-name avoids empty trajectory IDs and makes quick
+     * field testing easier when the user does not want to type a custom name.
+     */
+    private String generateDefaultTrajectoryName() {
+        return "traj_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(new Date());
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
     public void showStartLocationScreen() {
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         ft.replace(R.id.mainFragmentContainer, new StartLocationFragment());

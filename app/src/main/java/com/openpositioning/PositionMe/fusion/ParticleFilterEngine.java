@@ -1,0 +1,719 @@
+package com.openpositioning.PositionMe.fusion;
+
+import android.util.Log;
+import androidx.annotation.Nullable;
+
+import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+import com.openpositioning.PositionMe.mapmatching.MapGeometryUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+/**
+ * Particle filter engine for live indoor positioning.
+ *
+ * This class maintains the particle cloud and performs the main particle filter cycle:
+ * 1. initialise particles around a start pose
+ * 2. predict particle motion from step distance and heading change
+ * 3. update particle weights using WiFi / GNSS observations
+ * 4. apply wall-based map constraints
+ * 5. estimate the fused pose from the weighted particles
+ *
+ * Main responsibilities:
+ * - store and update the active particle set
+ * - model motion uncertainty with Gaussian noise
+ * - score particles against absolute observations
+ * - reduce invalid wall-crossing particles
+ * - resample and regularise particles when the cloud degenerates
+ * - provide simple debug statistics such as N_eff and wall-invalid ratio
+ *
+ * Notes:
+ * - positions are stored in local x/y coordinates
+ * - heading is stored in radians
+ * - floor is stored as a discrete hypothesis per particle
+ * - map constraints are used as discrete checks, not as a continuous wall-distance field
+ */
+public class ParticleFilterEngine {
+
+    private static final String TAG = "ParticleFilterEngine";
+
+    // Minimum movement before wall check is applied.
+    private static final double MIN_STEP_FOR_WALL_CHECK_METERS = 0.03;
+    // Threshold to determine particle alive
+    private static final double ALIVE_WEIGHT_EPS = 1e-6;
+
+    // Active particle cloud.
+    private final List<Particle> particles = new ArrayList<>();
+
+    // Random source for motion noise and resampling jitter.
+    private final Random rng = new Random();
+
+    // Tunable filter parameters
+    private final int particleCount;
+    private final double sigmaStep;
+    private final double sigmaTheta;
+    private final double sigmaWifi;
+    private final double sigmaGnss;
+    private final double initPosStd;
+    private final double initHeadingStd;
+    private final double resampleRatio;
+    private final double sigmaRegPos;
+    private final double sigmaRegTheta;
+
+    /** Effective sample size after the latest update step. */
+    private double lastNeff = 0.0;
+
+    /** Whether the last update triggered resampling. */
+    private boolean lastResampled = false;
+    /** Number of particles that crossed a wall during the latest update. */
+    private int lastWallInvalidCount = 0;
+
+    /** Fraction of particles that crossed a wall during the latest update. */
+    private double lastWallInvalidRatio = 0.0;
+
+    // Load all particle filter settings from config.
+    public ParticleFilterEngine(ParticleFilterConfig cfg) {
+        this.particleCount = cfg.particleCount;
+        this.sigmaStep = cfg.sigmaStep;
+        this.sigmaTheta = cfg.sigmaThetaRad;
+        this.sigmaWifi = cfg.sigmaWifi;
+        this.sigmaGnss = cfg.sigmaGnss;
+        this.initPosStd = cfg.initPosStd;
+        this.initHeadingStd = cfg.initHeadingStdRad;
+        this.resampleRatio = cfg.resampleRatio;
+        this.sigmaRegPos = cfg.sigmaRegPos;
+        this.sigmaRegTheta = cfg.sigmaRegThetaRad;
+    }
+
+    /**
+     * Initialises the particle cloud around a starting pose hypothesis.
+     *
+     * <p>All particles begin on the same floor, but position and heading are
+     * spread using Gaussian noise to represent initial uncertainty.
+     *
+     * @param x initial x coordinate in local frame
+     * @param y initial y coordinate in local frame
+     * @param theta initial heading in radians
+     * @param floor initial floor estimate
+     */
+    public void initialise(double x, double y, double theta, int floor) {
+        // Reset old particles before creating a new cloud.
+        particles.clear();
+        // Create spread particles around the given start position and heading.
+        for (int i = 0; i < particleCount; i++) {
+            // add some Gaussian noise for particle variability
+            double px = x + rng.nextGaussian() * initPosStd;
+            double py = y + rng.nextGaussian() * initPosStd;
+            double pt = wrapAngle(theta + rng.nextGaussian() * initHeadingStd);
+            particles.add(new Particle(px, py, pt, floor, 1.0 / particleCount));
+        }
+        lastNeff = particleCount;
+        lastResampled = false;
+        lastWallInvalidCount = 0;
+        lastWallInvalidRatio = 0.0;
+        Log.d(TAG, "PF engine initialised"
+                        + " | particleCount=" + particleCount
+                        + ", initPosStd=" + initPosStd
+                        + ", initHeadingStdDeg=" + Math.toDegrees(initHeadingStd));
+    }
+
+    /** @return true once particles have been created */
+    public boolean isInitialised() {
+        return !particles.isEmpty();
+    }
+
+    /**
+     * Forces every particle to use the same floor hypothesis.
+     *
+     * <p>This is used after a validated live floor transition. The cloud remains
+     * motion-driven in x/y, but the authoritative floor owner stays in the manager.
+     */
+    public void setAllParticlesFloor(int floor) {
+        for (Particle particle : particles) {
+            particle.floor = floor;
+            particle.prevFloor = floor;
+        }
+    }
+
+
+    /**
+     * Motion prediction step.
+     *
+     * <p>This propagates each particle forward according to:
+     * - a distance increment deltaS
+     * - a heading increment deltaTheta
+     *
+     * <p>Noise is added independently to translation and heading to represent
+     * uncertainty in the motion model.
+     *
+     * @param deltaS motion increment in meters
+     * @param deltaTheta heading increment in radians
+     */
+    public void predict(double deltaS, double deltaTheta, @Nullable ConstraintContext constraintContext) {
+        for (Particle particle : particles) {
+            // Save previous state for later wall checks.
+            particle.prevX = particle.x;
+            particle.prevY = particle.y;
+            particle.prevFloor = particle.floor;
+
+            // Add noise to distance and heading.
+            double ds = deltaS + rng.nextGaussian() * sigmaStep;
+            double dTheta = deltaTheta + rng.nextGaussian() * sigmaTheta;
+
+            // Update heading
+            particle.theta = wrapAngle(particle.theta + dTheta);
+
+            // Change angle so zero rad is east
+            double motionHeading = (Math.PI / 2.0) - particle.theta;
+
+            // Move particle in local Cartesian frame.
+            particle.x += ds * Math.cos(motionHeading);
+            particle.y += ds * Math.sin(motionHeading);
+
+            // Only apply wall logic if map constraint data is available
+            if (constraintContext != null && constraintContext.isUsable()) {
+                // Ignore very small motion to avoid false wall detections from jitter.
+                double moved = Math.hypot(
+                        particle.x - particle.prevX,
+                        particle.y - particle.prevY
+                );
+
+                if (moved >= MIN_STEP_FOR_WALL_CHECK_METERS) {
+                    // Convert previous and current local points back to map coordinates.
+                    LatLng prevLatLng = constraintContext.coordinateConverter.localToLatLng(
+                            particle.prevX,
+                            particle.prevY
+                    );
+                    LatLng currentLatLng = constraintContext.coordinateConverter.localToLatLng(
+                            particle.x,
+                            particle.y
+                    );
+
+                    // check if cross wall
+                    boolean crossesWall = MapGeometryUtils.crossesWall(prevLatLng, currentLatLng, constraintContext.sourceFloorShapes);
+
+                    // If the predicted path crosses a wall, push the particle back to a valid area.
+                    if (crossesWall) {
+                        // Snap near the last valid point before the wall.
+                        LatLng lastValid = MapGeometryUtils.findFarthestValidPointBeforeWall(prevLatLng, currentLatLng,constraintContext.sourceFloorShapes);
+
+                        if (lastValid != null) {
+                            // Get local coordinates of the last valid point.
+                            double[] p = constraintContext.coordinateConverter.latLngToLocal(lastValid);
+                            // randomly choose between snap back to valid pposition or move particles near previous position to maintain particle diversity
+                            if (rng.nextDouble() < 0.5) {
+                                // Move particle near the last valid point.
+                                particle.x = p[0] + rng.nextGaussian() * 0.3;
+                                particle.y = p[1] + rng.nextGaussian() * 0.3;
+                            } else {
+                                // Move particle back near its previous position.
+                                particle.x = particle.prevX + rng.nextGaussian() * 0.015;
+                                particle.y = particle.prevY + rng.nextGaussian() * 0.015;
+                            }
+                        } else {
+                            // Fall back to the previous position.
+                            particle.x = particle.prevX;
+                            particle.y = particle.prevY;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Backward-compatible update path with no map constraints.
+     */
+    public void update(ParticleFilterObservation observation) {
+        update(observation, null);
+    }
+
+    /**
+     * Updates particle weights using available observations and map constraints.
+     *
+     * This step checks how well each particle matches:
+     * - Wi-Fi position
+     * - Wi-Fi floor
+     * - GNSS position
+     * - wall constraint validity
+     *
+     * Particles that better match the observations get higher weights.
+     * Particles that cross walls are penalised, and particles inside walls are rejected.
+     * After weighting, the weights are normalised and the filter may resample if needed.
+     */
+    public void update(ParticleFilterObservation observation,
+                       @Nullable ConstraintContext constraintContext) {
+        // Do nothing if the particle cloud has not been initialised.
+        if (particles.isEmpty()) {
+            return;
+        }
+        // Sum of all particle weights before normalisation.
+        double weightSum = 0.0;
+        // Count how many particles crossed a wall in this update.
+        int wallInvalidCount = 0;
+
+        for (Particle particle : particles) {
+            // Start from neutral weight, then multiply by each observation likelihood.
+            double w = 1.0;
+
+            // Apply Wi-Fi position likelihood if Wi-Fi observation is available.
+            if (observation.getWifiX() != null && observation.getWifiY() != null) {
+                double dx = particle.x - observation.getWifiX();
+                double dy = particle.y - observation.getWifiY();
+                // Higher weight if particle is closer to Wi-Fi observation.
+                w *= gaussian2D(dx, dy, sigmaWifi);
+                // Apply an extra penalty if particle floor disagrees with Wi-Fi floor.
+                if (observation.getWifiFloor() != null && particle.floor != observation.getWifiFloor()) {
+                    w *= 0.50;
+                }
+            }
+
+            // Apply GNSS position likelihood if GNSS observation is available.
+            if (observation.getGnssX() != null && observation.getGnssY() != null) {
+                double dx = particle.x - observation.getGnssX();
+                double dy = particle.y - observation.getGnssY();
+                // Higher weight if particle is closer to GNSS observation.
+                w *= gaussian2D(dx, dy, sigmaGnss);
+            }
+
+            // Apply map-based wall penalties if map constraint data is available.
+            if (constraintContext != null && constraintContext.isUsable()) {
+                // Convert current and previous local positions to LatLng for wall checks.
+                LatLng currentLatLng = constraintContext.coordinateConverter.localToLatLng(
+                        particle.x,
+                        particle.y
+                );
+
+                LatLng prevLatLng = constraintContext.coordinateConverter.localToLatLng(
+                        particle.prevX,
+                        particle.prevY
+                );
+
+                // Penalise particles whose motion path crossed a wall.
+                if (MapGeometryUtils.crossesWall(prevLatLng, currentLatLng, constraintContext.sourceFloorShapes)) {
+                    wallInvalidCount++;
+                    w *= constraintContext.wallCrossPenalty;
+                }
+
+                // Completely reject particles that end up inside a wall.
+                if (MapGeometryUtils.isInsideWall(currentLatLng, constraintContext.sourceFloorShapes)) {
+                    w = 0.0;
+                }
+            }
+            // Save the final weight for this particle.
+            particle.weight = w;
+            // Total weight accumulation
+            weightSum += w;
+        }
+        // Normalise weights so that all particle weights sum to 1.
+        normaliseWeights(weightSum);
+        // Store wall-crossing statistics for debug use.
+        lastWallInvalidCount = wallInvalidCount;
+        lastWallInvalidRatio = particleCount > 0 ? (double) wallInvalidCount / (double) particleCount : 0.0;
+        // Compute effective sample size after the update.
+        lastNeff = effectiveSampleSize();
+        lastResampled = false;
+        // Resample if the particle set has become too degenerate.
+        if (lastNeff < particleCount * resampleRatio) {
+            systematicResample();
+            regularizeParticles();
+            lastResampled = true;
+        }
+    }
+
+    /**
+     * Computes the fused pose from the current weighted particle cloud.
+     *
+     * This method combines all particle states into one final estimate:
+     * - x and y are computed as weighted average position
+     * - heading is computed as weighted circular mean
+     * - floor is computed as weighted average and rounded
+     *
+     * The result is then converted from local coordinates back to LatLng,
+     * and a simple confidence value is produced from the effective sample size.
+     *
+     * @param converter converts local x/y into LatLng
+     * @return fused pose estimate, or null if no particles exist
+     */
+    public FusedPose estimate(CoordinateConverter converter) {
+        // Return nothing if the particle cloud is empty.
+        if (particles.isEmpty()) {
+            return null;
+        }
+        // Accumulators for weighted position, floor, and heading.
+        double x = 0.0;
+        double y = 0.0;
+        double weightedFloor = 0.0;
+        double sinSum = 0.0;
+        double cosSum = 0.0;
+
+        for (Particle particle : particles) {
+            // Weighted average of particle position.
+            x += particle.x * particle.weight;
+            y += particle.y * particle.weight;
+            // Weighted average of floor hypothesis.
+            weightedFloor += particle.floor * particle.weight;
+            // Circular averaging for heading.
+            sinSum += Math.sin(particle.theta) * particle.weight;
+            cosSum += Math.cos(particle.theta) * particle.weight;
+        }
+        // Final heading from weighted sine and cosine sums.
+        double theta = Math.atan2(sinSum, cosSum);
+        // Final floor from weighted floor estimate.
+        int floor = (int) Math.round(weightedFloor);
+
+        // Use effective sample size as a simple confidence value.
+        float confidence = (float) Math.min(1.0, lastNeff / particleCount);
+
+        // Build and return the fused pose result.
+        return new FusedPose(
+                x,
+                y,
+                theta,
+                floor,
+                converter.localToLatLng(x, y),
+                confidence
+        );
+    }
+
+    /**
+     * Computes effective sample size.
+     *
+     * <p>A lower value means more degeneracy, i.e. fewer particles dominate
+     * the total weight distribution.
+     */
+    public double effectiveSampleSize() {
+        double sumSquares = 0.0;
+        for (Particle particle : particles) {
+            sumSquares += particle.weight * particle.weight;
+        }
+        return 1.0 / Math.max(sumSquares, 1e-12);
+    }
+
+    /**
+     * Rejuvenates weak particles around a recovery anchor.
+     *
+     * This is used when the particle cloud becomes unreliable or too many particles
+     * become invalid. The weakest particles are replaced with new candidates near
+     * a trusted anchor position.
+     *
+     * Recovery behaviour:
+     * - only a fraction of the cloud is replaced
+     * - new particles are biased mostly forward along the current heading
+     * - invalid candidates that cross walls or land inside walls are rejected
+     * - if no valid candidate is found, the particle falls back to the anchor
+     *
+     * After rejuvenation, all particle weights are reset uniformly.
+     *
+     * @param anchorX trusted anchor x position in local frame
+     * @param anchorY trusted anchor y position in local frame
+     * @param headingRad heading used to bias new particles forward
+     * @param floor floor assigned to respawned particles
+     * @param respawnFraction fraction of particles to replace
+     * @param positionStdMeters position spread for respawned particles
+     * @param headingStdRad heading spread for respawned particles
+     * @param constraintContext optional map constraint data for validity checks
+     * @return true if at least one particle was successfully recovered
+     */
+    public boolean rejuvenateParticles(double anchorX,
+                                       double anchorY,
+                                       double headingRad,
+                                       int floor,
+                                       double respawnFraction,
+                                       double positionStdMeters,
+                                       double headingStdRad,
+                                       @Nullable ConstraintContext constraintContext) {
+
+        // Do nothing if the particle cloud is empty.
+        if (particles.isEmpty()) {
+            return false;
+        }
+
+        // Clamp respawn fraction to a safe range.
+        double clampedFraction = Math.max(0.05, Math.min(0.90, respawnFraction));
+        int respawnCount = Math.max(1, (int) Math.round(particleCount * clampedFraction));
+
+        // Replace weakest particles first.
+        particles.sort((a, b) -> Double.compare(a.weight, b.weight));
+
+        int recoveredCount = 0;
+
+        for (int i = 0; i < respawnCount && i < particles.size(); i++) {
+            Particle particle = particles.get(i);
+
+            boolean placed = false;
+            for (int attempt = 0; attempt < 20; attempt++) {
+                // Sample a new heading around the recovery heading.
+                double sampledTheta = wrapAngle(headingRad + rng.nextGaussian() * headingStdRad);
+
+                // Spawn mostly in front of the anchor, with a small sideways spread.
+                double forwardMeters = Math.max(0.05, (rng.nextGaussian()) * positionStdMeters);
+                double lateralMeters = rng.nextGaussian() * positionStdMeters * 0.35;
+
+                double motionHeading = (Math.PI / 2.0) - sampledTheta;
+
+                // Build a candidate respawn position.
+                double candidateX = anchorX
+                        + forwardMeters * Math.cos(motionHeading)
+                        - lateralMeters * Math.sin(motionHeading);
+
+                double candidateY = anchorY
+                        + forwardMeters * Math.sin(motionHeading)
+                        + lateralMeters * Math.cos(motionHeading);
+
+                // Reject the candidate if it is map-invalid.
+                if (!isValidRecoveryCandidate(anchorX, anchorY, candidateX, candidateY, constraintContext)) {
+                    continue;
+                }
+
+                // Accept the candidate and reset particle state.
+                particle.prevX = anchorX;
+                particle.prevY = anchorY;
+                particle.prevFloor = floor;
+                particle.x = candidateX;
+                particle.y = candidateY;
+                particle.theta = sampledTheta;
+                particle.floor = floor;
+                particle.weight = 1.0 / particleCount;
+                placed = true;
+                recoveredCount++;
+                break;
+            }
+
+            if (!placed) {
+                // Conservative fallback: respawn exactly at the anchor with new heading.
+                particle.prevX = anchorX;
+                particle.prevY = anchorY;
+                particle.prevFloor = floor;
+                particle.x = anchorX;
+                particle.y = anchorY;
+                particle.theta = headingRad;
+                particle.floor = floor;
+                particle.weight = 1.0 / particleCount;
+            }
+        }
+
+        // Reset the whole cloud to uniform weights after rejuvenation.
+        double uniformWeight = 1.0 / particleCount;
+        for (Particle particle : particles) {
+            particle.weight = uniformWeight;
+        }
+        // Reset simple filter status values
+        lastNeff = particleCount;
+        lastResampled = false;
+
+        Log.d(TAG,
+                "PF rejuvenation complete"
+                        + " | respawnCount=" + respawnCount
+                        + ", recoveredCount=" + recoveredCount
+                        + ", anchorX=" + anchorX
+                        + ", anchorY=" + anchorY
+                        + ", floor=" + floor
+                        + ", headingDeg=" + Math.toDegrees(headingRad));
+
+        return recoveredCount > 0;
+    }
+
+    /**
+     * Checks whether a recovery candidate is valid.
+     *
+     * A candidate is valid if:
+     * - map constraints are unavailable, or
+     * - the path from anchor to candidate does not cross a wall, and
+     * - the candidate does not end inside a wall
+     *
+     * @param anchorX anchor x in local frame
+     * @param anchorY anchor y in local frame
+     * @param candidateX candidate x in local frame
+     * @param candidateY candidate y in local frame
+     * @param constraintContext optional map constraint data
+     * @return true if the candidate is valid for recovery
+     */
+    private boolean isValidRecoveryCandidate(double anchorX,
+                                             double anchorY,
+                                             double candidateX,
+                                             double candidateY,
+                                             @Nullable ConstraintContext constraintContext) {
+        // If no usable map constraints exist, accept the candidate.
+        if (constraintContext == null || !constraintContext.isUsable()) {
+            return true;
+        }
+        // Convert anchor and candidate positions to LatLng for wall checks.
+        LatLng anchorLatLng = constraintContext.coordinateConverter.localToLatLng(anchorX, anchorY);
+        LatLng candidateLatLng = constraintContext.coordinateConverter.localToLatLng(candidateX, candidateY);
+        // Reject candidates whose path crosses a wall.
+        if (MapGeometryUtils.crossesWall(
+                anchorLatLng,
+                candidateLatLng,
+                constraintContext.sourceFloorShapes
+        )) {
+            return false;
+        }
+        // Reject candidates that land inside a wall.
+        return !MapGeometryUtils.isInsideWall(
+                candidateLatLng,
+                constraintContext.sourceFloorShapes
+        );
+    }
+
+    /**
+     * Gaussian likelihood in local 2D position space.
+     *
+     * <p>This is used for Wi-Fi and GNSS weighting.
+     */
+    private double gaussian2D(double dx, double dy, double sigma) {
+        double d2 = dx * dx + dy * dy;
+        double s2 = sigma * sigma;
+
+        if (s2 < 1e-12) {
+            return 1.0;
+        }
+
+        return Math.exp(-0.5 * d2 / s2);
+    }
+
+    /**
+     * Normalises particle weights so they sum to 1.
+     *
+     * <p>If all weights collapse numerically, recover by assigning uniform
+     * weights instead of producing NaNs.
+     */
+    private void normaliseWeights(double weightSum) {
+        if (weightSum < 1e-12) {
+            double uniformWeight = 1.0 / particleCount;
+            for (Particle particle : particles) {
+                particle.weight = uniformWeight;
+            }
+            return;
+        }
+
+        for (Particle particle : particles) {
+            particle.weight /= weightSum;
+        }
+    }
+
+    /**
+     * Adds a small amount of random jitter after resampling.
+     *
+     * <p>This prevents the particle set from collapsing into too many exact
+     * copies of the same hypothesis.
+     */
+    private void regularizeParticles() {
+        for (Particle particle : particles) {
+            particle.x += rng.nextGaussian() * sigmaRegPos;
+            particle.y += rng.nextGaussian() * sigmaRegPos;
+            particle.theta = wrapAngle(particle.theta + rng.nextGaussian() * sigmaRegTheta);
+        }
+    }
+
+    /**
+     * Systematic resampling.
+     *
+     * <p>This produces a new particle set according to the current weights,
+     * then resets all copied particles to equal weight.
+     */
+    private void systematicResample() {
+        List<Particle> resampled = new ArrayList<>(particleCount);
+        double[] cdf = new double[particleCount];
+
+        cdf[0] = particles.get(0).weight;
+        for (int i = 1; i < particleCount; i++) {
+            cdf[i] = cdf[i - 1] + particles.get(i).weight;
+        }
+
+        double step = 1.0 / particleCount;
+        double u0 = rng.nextDouble() * step;
+        int cdfIndex = 0;
+
+        for (int i = 0; i < particleCount; i++) {
+            double threshold = u0 + i * step;
+
+            while (cdfIndex < particleCount - 1 && cdf[cdfIndex] < threshold) {
+                cdfIndex++;
+            }
+
+            Particle copy = particles.get(cdfIndex).copy();
+            copy.weight = 1.0 / particleCount;
+            resampled.add(copy);
+        }
+
+        particles.clear();
+        particles.addAll(resampled);
+    }
+
+    /** Wraps angle to [-pi, pi]. */
+    private double wrapAngle(double angle) {
+        while (angle > Math.PI) {
+            angle -= 2.0 * Math.PI;
+        }
+        while (angle < -Math.PI) {
+            angle += 2.0 * Math.PI;
+        }
+        return angle;
+    }
+
+
+    /**
+     * Lightweight container for discrete map-constraint data.
+     */
+    public static final class ConstraintContext {
+        final CoordinateConverter coordinateConverter;
+        final FloorplanApiClient.FloorShapes sourceFloorShapes;
+        final double wallCrossPenalty;
+
+        public ConstraintContext(CoordinateConverter coordinateConverter,
+                                 FloorplanApiClient.FloorShapes sourceFloorShapes,
+                                 double wallCrossPenalty) {
+            this.coordinateConverter = coordinateConverter;
+            this.sourceFloorShapes = sourceFloorShapes;
+            this.wallCrossPenalty = wallCrossPenalty;
+        }
+
+        boolean isUsable() {
+            return coordinateConverter != null
+                    && sourceFloorShapes != null
+                    && wallCrossPenalty >= 0.0;
+        }
+    }
+
+    // ----- Getter function ------//
+    /**
+     * Returns the effective sample size from the last update.
+     */
+    public double getLastNeff() {
+        return lastNeff;
+    }
+    /**
+     * Returns the fraction of particles that crossed a wall in the last update.
+     */
+    public double getLastWallInvalidRatio() {
+        return lastWallInvalidRatio;
+    }
+    /**
+     * Returns the configured total number of particles.
+     */
+    public int getParticleCount() {
+        return particleCount;
+    }
+    /**
+     * Counts how many particles still alive.
+     */
+    public int getAliveParticleCount() {
+        int alive = 0;
+        for (Particle particle : particles) {
+            if (particle.weight > ALIVE_WEIGHT_EPS) {
+                alive++;
+            }
+        }
+        return alive;
+    }
+    /**
+     * Counts how many particles are effectively dead.
+     */
+    public int getDeadParticleCount() {
+        return Math.max(0, particles.size() - getAliveParticleCount());
+    }
+
+}

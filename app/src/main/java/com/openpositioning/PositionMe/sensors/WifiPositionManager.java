@@ -51,7 +51,7 @@ public class WifiPositionManager implements Observer {
     public void update(Object[] wifiList) {
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
         recorder.addWifiFingerprint(this.wifiList);
-        createWifiPositioningRequest();
+        createWifiPositionRequestCallback();
     }
 
     /**
@@ -72,7 +72,11 @@ public class WifiPositionManager implements Observer {
     }
 
     /**
-     * Creates a WiFi positioning request using the Volley callback pattern.
+     * Creates a Wi-Fi positioning request using the Volley callback pattern.
+     *
+     * <p>The latest Wi-Fi position and floor are stored internally by {@link WiFiPositioning}
+     * when the request succeeds. This method primarily exists so that the request path used
+     * during live positioning is explicit and easier to maintain.</p>
      */
     private void createWifiPositionRequestCallback() {
         try {
@@ -80,21 +84,24 @@ public class WifiPositionManager implements Observer {
             for (Wifi data : this.wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+
+            JSONObject wifiFingerprint = new JSONObject();
+            wifiFingerprint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
+            this.wiFiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
+                    Log.d("WifiPositionManager",
+                            "Wi-Fi location updated: " + wifiLocation + ", floor=" + floor);
                 }
 
                 @Override
                 public void onError(String message) {
-                    // Handle the error response
+                    Log.e("WifiPositionManager", "Wi-Fi positioning failed: " + message);
                 }
             });
         } catch (JSONException e) {
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
+            Log.e("WifiPositionManager", "Error creating Wi-Fi positioning request", e);
         }
     }
 

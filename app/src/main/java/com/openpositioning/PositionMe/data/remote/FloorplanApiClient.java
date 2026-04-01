@@ -192,6 +192,9 @@ public class FloorplanApiClient {
      */
     public void requestFloorplan(double lat, double lon, List<String> macs,
                                   FloorplanCallback callback) {
+        Log.d(TAG, "userKey length = " + (BuildConfig.OPENPOSITIONING_API_KEY == null ? -1 : BuildConfig.OPENPOSITIONING_API_KEY.length()));
+        Log.d(TAG, "masterKey = " + BuildConfig.OPENPOSITIONING_MASTER_KEY);
+
         String url = BASE_URL + userKey + "?key=" + masterKey;
 
         // Build JSON request body
@@ -233,12 +236,14 @@ public class FloorplanApiClient {
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful() || responseBody == null) {
-                        String error = responseBody != null
-                                ? responseBody.string() : "Unknown error";
-                        Log.e(TAG, "Floorplan request error: "
-                                + response.code() + " " + error);
+                        String error = responseBody != null ? responseBody.string() : "Unknown error";
+                        String allow = response.header("Allow");
+                        Log.e(TAG, "Floorplan request error: code=" + response.code()
+                                + ", allow=" + allow
+                                + ", body=" + error);
                         postToMainThread(() ->
-                                callback.onFailure("Server error: " + response.code()));
+                                callback.onFailure("Server error: " + response.code()
+                                        + (allow != null ? " allow=" + allow : "")));
                         return;
                     }
 

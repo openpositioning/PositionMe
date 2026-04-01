@@ -31,6 +31,70 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory
+        app:title="Particle Filter">
+
+        <EditTextPreference
+            app:key="pf_particle_count"
+            app:title="Particle count"
+            app:defaultValue="300"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_sigma_step"
+            app:title="Step noise (m)"
+            app:defaultValue="0.3"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_sigma_theta_deg"
+            app:title="Heading noise (deg)"
+            app:defaultValue="4.5"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_sigma_wifi"
+            app:title="WiFi sigma (m)"
+            app:defaultValue="14.0"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_sigma_gnss"
+            app:title="GNSS sigma (m)"
+            app:defaultValue="25.0"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_init_pos_std"
+            app:title="Initial position spread (m)"
+            app:defaultValue="1.0"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_init_heading_deg"
+            app:title="Initial heading spread (deg)"
+            app:defaultValue="10"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_resample_ratio"
+            app:title="Resample threshold ratio"
+            app:defaultValue="0.5"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_sigma_reg_pos"
+            app:title="Resample position jitter (m)"
+            app:defaultValue="0.03"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="pf_sigma_reg_theta_deg"
+            app:title="Resample heading jitter (deg)"
+            app:defaultValue="2.0"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="@string/user_header"
         app:icon="@drawable/ic_baseline_directions_walk_24">
 
