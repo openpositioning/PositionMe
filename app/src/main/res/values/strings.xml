@@ -49,6 +49,9 @@
     <string name="buildingSelectionInstructions">Tap a building outline to select your venue, then adjust the marker</string>
     <string name="buildingSelected">Selected: %1$s</string>
     <string name="noBuildingsFound">No buildings found nearby. Drag the marker to your start position.</string>
+    <string name="auto_init_waiting">Waiting for a reliable GNSS/WiFi fix to initialise your start position...</string>
+    <string name="auto_init_ready">Auto start position is ready. Press Start to begin recording.</string>
+    <string name="auto_init_ready_with_building">Auto start is ready. Detected building: %1$s</string>
     <string name="correctionInstructions">Zoom, scroll and rotate the map \n to correct the path</string>
 
     <!-- Sensor Info -->
@@ -114,11 +117,19 @@
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Color</string>
     <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="gnss_always_on">GNSS: always on</string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
     <string name="auto_floor">❇️ Auto Floor </string>
+    <string name="auto_floor_always_on">Auto floor: always on</string>
     <string name="gnss_error">GNSS error:</string>
+    <string name="track_legend">Red: Fused track\nBlue: GNSS\nGreen: WiFi\nOrange: PDR</string>
+    <string name="location_services_on">GNSS + Auto floor on</string>
+    <string name="legend_fused_track">Red: Fused track</string>
+    <string name="legend_gnss_points">Blue: GNSS points</string>
+    <string name="legend_wifi_points">Green: WiFi points</string>
+    <string name="legend_pdr_points">Orange: PDR points</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>

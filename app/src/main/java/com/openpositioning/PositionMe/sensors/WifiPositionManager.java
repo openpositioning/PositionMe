@@ -24,8 +24,16 @@ public class WifiPositionManager implements Observer {
 
     private static final String WIFI_FINGERPRINT = "wf";
 
+    /**
+     * Callback for delivering WiFi positioning results to the fusion layer.
+     */
+    public interface PositionUpdateListener {
+        void onWifiPositionUpdate(LatLng wifiLocation, int floor);
+    }
+
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
+    private final PositionUpdateListener positionUpdateListener;
     private List<Wifi> wifiList;
 
     /**
@@ -35,9 +43,11 @@ public class WifiPositionManager implements Observer {
      * @param recorder        trajectory recorder for writing WiFi fingerprints
      */
     public WifiPositionManager(WiFiPositioning wiFiPositioning,
-                               TrajectoryRecorder recorder) {
+                               TrajectoryRecorder recorder,
+                               PositionUpdateListener positionUpdateListener) {
         this.wiFiPositioning = wiFiPositioning;
         this.recorder = recorder;
+        this.positionUpdateListener = positionUpdateListener;
     }
 
     /**
@@ -65,32 +75,17 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
-        } catch (JSONException e) {
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
-        }
-    }
-
-    /**
-     * Creates a WiFi positioning request using the Volley callback pattern.
-     */
-    private void createWifiPositionRequestCallback() {
-        try {
-            JSONObject wifiAccessPoints = new JSONObject();
-            for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
-            }
-            JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
+                    if (positionUpdateListener != null) {
+                        positionUpdateListener.onWifiPositionUpdate(wifiLocation, floor);
+                    }
                 }
 
                 @Override
                 public void onError(String message) {
-                    // Handle the error response
+                    Log.w("WifiPositionManager", "WiFi positioning failed: " + message);
                 }
             });
         } catch (JSONException e) {

@@ -1,13 +1,17 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -18,6 +22,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -31,10 +36,12 @@ import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -51,6 +58,11 @@ import java.util.Map;
 public class StartLocationFragment extends Fragment {
 
     private static final String TAG = "StartLocationFragment";
+    private static final LatLng DEFAULT_AUTO_MAP_POSITION = new LatLng(55.9230, -3.1741);
+    private static final double FLOORPLAN_REFRESH_DISTANCE_METERS = 15.0;
+    private static final float LIVE_DIRECTION_MARKER_SIZE_DP = 18f;
+    private static final double MIN_DIRECTION_DISTANCE_METERS = 0.55;
+    private static final long AUTO_INIT_REFRESH_INTERVAL_MS = 1_000L;
 
     // UI elements
     private Button button;
@@ -67,11 +79,17 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     private float zoom = 19f;
     private Marker startMarker;
+    private boolean manualSelectionEnabled;
+    private LatLng lastFloorplanRequestPosition;
+    private LatLng previousAutoPreviewPosition;
+    private float lastAutoPreviewDirectionDegrees;
+    private String currentPreviewFloorDisplayName;
 
     // Building selection state
     private String selectedBuildingId;
     private final List<Polygon> buildingPolygons = new ArrayList<>();
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingMap = new HashMap<>();
+    private final Map<String, Polygon> buildingPolygonByName = new HashMap<>();
     private Polygon selectedPolygon;
 
     // Vector shapes drawn as floor plan preview (cleared when switching buildings)
@@ -83,6 +101,14 @@ public class StartLocationFragment extends Fragment {
     private static final int STROKE_COLOR_DEFAULT = Color.argb(200, 33, 150, 243);
     private static final int FILL_COLOR_SELECTED = Color.argb(100, 33, 150, 243);
     private static final int STROKE_COLOR_SELECTED = Color.argb(255, 25, 118, 210);
+    private final Handler autoInitHandler = new Handler(Looper.getMainLooper());
+    private final Runnable autoInitRefresh = new Runnable() {
+        @Override
+        public void run() {
+            refreshAutoInitializationState();
+            autoInitHandler.postDelayed(this, AUTO_INIT_REFRESH_INTERVAL_MS);
+        }
+    };
 
     /**
      * Public Constructor for the class.
@@ -104,14 +130,14 @@ public class StartLocationFragment extends Fragment {
             activity.getSupportActionBar().hide();
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
+        manualSelectionEnabled = requireActivity() instanceof ReplayActivity;
 
-        // Obtain the start position from GPS data
-        startPosition = sensorFusion.getGNSSLatitude(false);
-        if (startPosition[0] == 0 && startPosition[1] == 0) {
-            zoom = 1f;
-        } else {
-            zoom = 19f;
-        }
+        LatLng initialMapPosition = resolveInitialMapPosition();
+        startPosition[0] = (float) initialMapPosition.latitude;
+        startPosition[1] = (float) initialMapPosition.longitude;
+        zoom = manualSelectionEnabled
+                ? ((startPosition[0] == 0 && startPosition[1] == 0) ? 1f : 19f)
+                : 19f;
 
         // Initialize map fragment
         SupportMapFragment supportMapFragment = (SupportMapFragment)
@@ -146,34 +172,33 @@ public class StartLocationFragment extends Fragment {
 
         // Add initial marker at GPS position
         position = new LatLng(startPosition[0], startPosition[1]);
-        startMarker = mMap.addMarker(new MarkerOptions()
-                .position(position)
-                .title("Start Position")
-                .draggable(true));
+        startMarker = mMap.addMarker(buildStartMarkerOptions(position));
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
 
-        // Marker drag listener to update the start position when dragged
-        mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-            @Override
-            public void onMarkerDragStart(Marker marker) {}
+        if (manualSelectionEnabled) {
+            // Marker drag listener to update the start position when dragged
+            mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
+                @Override
+                public void onMarkerDragStart(Marker marker) {}
 
-            @Override
-            public void onMarkerDragEnd(Marker marker) {
-                startPosition[0] = (float) marker.getPosition().latitude;
-                startPosition[1] = (float) marker.getPosition().longitude;
-            }
+                @Override
+                public void onMarkerDragEnd(Marker marker) {
+                    startPosition[0] = (float) marker.getPosition().latitude;
+                    startPosition[1] = (float) marker.getPosition().longitude;
+                }
 
-            @Override
-            public void onMarkerDrag(Marker marker) {}
-        });
+                @Override
+                public void onMarkerDrag(Marker marker) {}
+            });
 
-        // Polygon click listener for building selection
-        mMap.setOnPolygonClickListener(polygon -> {
-            String buildingName = (String) polygon.getTag();
-            if (buildingName != null) {
-                onBuildingSelected(buildingName, polygon);
-            }
-        });
+            // Polygon click listener for building selection
+            mMap.setOnPolygonClickListener(polygon -> {
+                String buildingName = (String) polygon.getTag();
+                if (buildingName != null) {
+                    onBuildingSelected(buildingName, polygon);
+                }
+            });
+        }
     }
 
     /**
@@ -182,6 +207,8 @@ public class StartLocationFragment extends Fragment {
      * the standard drag-marker interaction.
      */
     private void requestBuildingData() {
+        LatLng requestPosition = new LatLng(startPosition[0], startPosition[1]);
+        lastFloorplanRequestPosition = requestPosition;
         FloorplanApiClient apiClient = new FloorplanApiClient();
 
         // Collect observed WiFi AP MAC addresses from latest scan
@@ -212,12 +239,20 @@ public class StartLocationFragment extends Fragment {
                         if (buildings.isEmpty()) {
                             Log.d(TAG, "No buildings returned by API");
                             if (instructionText != null) {
-                                instructionText.setText(R.string.noBuildingsFound);
+                                instructionText.setText(
+                                        manualSelectionEnabled
+                                                ? R.string.noBuildingsFound
+                                                : R.string.auto_init_ready
+                                );
                             }
                             return;
                         }
 
                         drawBuildingOutlines(buildings);
+                        if (!manualSelectionEnabled) {
+                            autoSelectBuildingForPosition(
+                                    new LatLng(startPosition[0], startPosition[1]));
+                        }
                     }
 
                     @Override
@@ -225,6 +260,7 @@ public class StartLocationFragment extends Fragment {
                         if (!isAdded()) return;
                         sensorFusion.setFloorplanBuildings(new ArrayList<>());
                         floorplanBuildingMap.clear();
+                        lastFloorplanRequestPosition = null;
                         Log.e(TAG, "Floorplan API failed: " + error);
                     }
                 });
@@ -236,6 +272,12 @@ public class StartLocationFragment extends Fragment {
      * @param buildings list of building info objects containing outline polygons
      */
     private void drawBuildingOutlines(List<FloorplanApiClient.BuildingInfo> buildings) {
+        for (Polygon polygon : buildingPolygons) {
+            polygon.remove();
+        }
+        buildingPolygons.clear();
+        buildingPolygonByName.clear();
+
         for (FloorplanApiClient.BuildingInfo building : buildings) {
             List<LatLng> outlinePoints = building.getOutlinePolygon();
             if (outlinePoints == null || outlinePoints.size() < 3) {
@@ -254,6 +296,7 @@ public class StartLocationFragment extends Fragment {
             Polygon polygon = mMap.addPolygon(options);
             polygon.setTag(building.getName());
             buildingPolygons.add(polygon);
+            buildingPolygonByName.put(building.getName(), polygon);
         }
 
         // Auto-zoom to include building(s) and current position
@@ -332,6 +375,7 @@ public class StartLocationFragment extends Fragment {
         for (Polyline p : previewPolylines) p.remove();
         previewPolygons.clear();
         previewPolylines.clear();
+        currentPreviewFloorDisplayName = null;
 
         FloorplanApiClient.BuildingInfo building = floorplanBuildingMap.get(buildingName);
         if (building == null) return;
@@ -342,9 +386,9 @@ public class StartLocationFragment extends Fragment {
             return;
         }
 
-        // Pick the default floor to preview (ground floor)
-        int defaultFloor = Math.min(1, floors.size() - 1);
-        FloorplanApiClient.FloorShapes floor = floors.get(defaultFloor);
+        int previewFloor = resolvePreviewFloorIndex(buildingName, floors);
+        FloorplanApiClient.FloorShapes floor = floors.get(previewFloor);
+        currentPreviewFloorDisplayName = floor.getDisplayName();
 
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
             String geoType = feature.getGeometryType();
@@ -400,7 +444,16 @@ public class StartLocationFragment extends Fragment {
         if (buildingInfoCard == null || buildingNameText == null) return;
 
         String displayName = formatBuildingName(buildingName);
-        buildingNameText.setText(getString(R.string.buildingSelected, displayName));
+        if (!manualSelectionEnabled && currentPreviewFloorDisplayName != null
+                && !currentPreviewFloorDisplayName.isEmpty()) {
+            buildingNameText.setText(
+                    getString(R.string.buildingSelected, displayName)
+                            + " | Floor "
+                            + currentPreviewFloorDisplayName
+            );
+        } else {
+            buildingNameText.setText(getString(R.string.buildingSelected, displayName));
+        }
         buildingInfoCard.setVisibility(View.VISIBLE);
     }
 
@@ -458,6 +511,13 @@ public class StartLocationFragment extends Fragment {
         this.buildingInfoCard = view.findViewById(R.id.buildingInfoCard);
         this.buildingNameText = view.findViewById(R.id.buildingNameText);
 
+        if (!manualSelectionEnabled) {
+            button.setEnabled(sensorFusion.hasAutomaticStartFix());
+            button.setText(R.string.start);
+            instructionText.setText(R.string.auto_init_waiting);
+            autoInitHandler.post(autoInitRefresh);
+        }
+
         this.button.setOnClickListener(v -> {
             float chosenLat = startPosition[0];
             float chosenLon = startPosition[1];
@@ -468,9 +528,16 @@ public class StartLocationFragment extends Fragment {
             }
 
             if (requireActivity() instanceof RecordingActivity) {
+                if (!sensorFusion.prepareAutomaticStart()) {
+                    Toast.makeText(
+                            requireContext(),
+                            R.string.auto_init_waiting,
+                            Toast.LENGTH_SHORT
+                    ).show();
+                    return;
+                }
                 // Start sensor recording + set the start location
                 sensorFusion.startRecording();
-                sensorFusion.setStartGNSSLatitude(startPosition);
                 // Write trajectory_id, initial_position and initial heading to protobuf
                 sensorFusion.writeInitialMetadata();
 
@@ -482,5 +549,265 @@ public class StartLocationFragment extends Fragment {
                         .onStartLocationChosen(chosenLat, chosenLon);
             }
         });
+    }
+
+    @Override
+    public void onDestroyView() {
+        autoInitHandler.removeCallbacks(autoInitRefresh);
+        super.onDestroyView();
+    }
+
+    private LatLng resolveInitialMapPosition() {
+        if (!manualSelectionEnabled) {
+            LatLng automaticPosition = getBestAutomaticPreviewPosition();
+            if (automaticPosition != null) {
+                return automaticPosition;
+            }
+        }
+
+        float[] gnssPosition = sensorFusion.getGNSSLatitude(false);
+        if (gnssPosition[0] != 0f || gnssPosition[1] != 0f) {
+            return new LatLng(gnssPosition[0], gnssPosition[1]);
+        }
+
+        return DEFAULT_AUTO_MAP_POSITION;
+    }
+
+    private void refreshAutoInitializationState() {
+        if (!isAdded() || mMap == null || manualSelectionEnabled) {
+            return;
+        }
+
+        LatLng automaticPosition = getBestAutomaticPreviewPosition();
+        if (automaticPosition == null) {
+            button.setEnabled(false);
+            instructionText.setText(R.string.auto_init_waiting);
+            return;
+        }
+
+        updateStartMarker(automaticPosition, true);
+        button.setEnabled(true);
+
+        boolean shouldRefreshFloorplan = lastFloorplanRequestPosition == null
+                || UtilFunctions.distanceBetweenPoints(
+                lastFloorplanRequestPosition,
+                automaticPosition
+        ) >= FLOORPLAN_REFRESH_DISTANCE_METERS;
+        if (shouldRefreshFloorplan) {
+            requestBuildingData();
+        } else {
+            autoSelectBuildingForPosition(automaticPosition);
+        }
+
+        if (selectedBuildingId != null && !selectedBuildingId.isEmpty()) {
+            instructionText.setText(
+                    getString(
+                            R.string.auto_init_ready_with_building,
+                            formatBuildingName(selectedBuildingId)
+                    )
+            );
+        } else {
+            instructionText.setText(R.string.auto_init_ready);
+        }
+    }
+
+    @Nullable
+    private LatLng getBestAutomaticPreviewPosition() {
+        LatLng fusedPosition = sensorFusion.getCurrentFusedPosition();
+        if (fusedPosition != null) {
+            return fusedPosition;
+        }
+
+        float[] gnssPosition = sensorFusion.getGNSSLatitude(false);
+        if (gnssPosition[0] != 0f || gnssPosition[1] != 0f) {
+            return new LatLng(gnssPosition[0], gnssPosition[1]);
+        }
+        return null;
+    }
+
+    private void updateStartMarker(LatLng autoPosition, boolean animateCamera) {
+        startPosition[0] = (float) autoPosition.latitude;
+        startPosition[1] = (float) autoPosition.longitude;
+
+        if (startMarker == null) {
+            startMarker = mMap.addMarker(buildStartMarkerOptions(autoPosition));
+        } else {
+            startMarker.setPosition(autoPosition);
+        }
+
+        if (!manualSelectionEnabled && startMarker != null) {
+            startMarker.setRotation(resolveAutoPreviewDirection(autoPosition));
+        }
+
+        if (animateCamera) {
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(autoPosition, 19f));
+        }
+    }
+
+    private void autoSelectBuildingForPosition(LatLng autoPosition) {
+        String inferredBuildingId = sensorFusion.inferBuildingIdForPosition(autoPosition);
+        if (inferredBuildingId == null || inferredBuildingId.isEmpty()) {
+            return;
+        }
+
+        selectedBuildingId = inferredBuildingId;
+        sensorFusion.setSelectedBuildingId(inferredBuildingId);
+        showFloorPlanOverlay(inferredBuildingId);
+        updateBuildingInfoDisplay(inferredBuildingId);
+
+        if (selectedPolygon != null) {
+            selectedPolygon.setFillColor(FILL_COLOR_DEFAULT);
+            selectedPolygon.setStrokeColor(STROKE_COLOR_DEFAULT);
+        }
+
+        Polygon polygon = buildingPolygonByName.get(inferredBuildingId);
+        if (polygon != null) {
+            selectedPolygon = polygon;
+            polygon.setFillColor(FILL_COLOR_SELECTED);
+            polygon.setStrokeColor(STROKE_COLOR_SELECTED);
+        }
+    }
+
+    private MarkerOptions buildStartMarkerOptions(LatLng markerPosition) {
+        MarkerOptions options = new MarkerOptions()
+                .position(markerPosition)
+                .title(manualSelectionEnabled ? "Start Position" : "Live Position")
+                .draggable(manualSelectionEnabled);
+        if (!manualSelectionEnabled) {
+            options.flat(true)
+                    .anchor(0.5f, 0.5f)
+                    .icon(BitmapDescriptorFactory.fromBitmap(getLiveDirectionBitmap()));
+        }
+        return options;
+    }
+
+    private Bitmap getLiveDirectionBitmap() {
+        Bitmap base = UtilFunctions.getBitmapFromVector(requireContext(), R.drawable.ic_baseline_navigation_24);
+        int sizePx = Math.max(18, Math.round(
+                LIVE_DIRECTION_MARKER_SIZE_DP * requireContext().getResources().getDisplayMetrics().density
+        ));
+        return Bitmap.createScaledBitmap(base, sizePx, sizePx, true);
+    }
+
+    private float resolveAutoPreviewDirection(@NonNull LatLng currentPosition) {
+        if (previousAutoPreviewPosition != null
+                && UtilFunctions.distanceBetweenPoints(previousAutoPreviewPosition, currentPosition)
+                >= MIN_DIRECTION_DISTANCE_METERS) {
+            lastAutoPreviewDirectionDegrees =
+                    computeHeadingDegrees(previousAutoPreviewPosition, currentPosition);
+        } else {
+            lastAutoPreviewDirectionDegrees =
+                    normalizeDegrees((float) Math.toDegrees(sensorFusion.passOrientation()));
+        }
+        previousAutoPreviewPosition = currentPosition;
+        return lastAutoPreviewDirectionDegrees;
+    }
+
+    private int resolvePreviewFloorIndex(String buildingName,
+                                         List<FloorplanApiClient.FloorShapes> floors) {
+        if (floors.isEmpty()) {
+            return 0;
+        }
+
+        if (!manualSelectionEnabled) {
+            int preferredLogicalFloor = sensorFusion.getPreferredDisplayLogicalFloor();
+            for (int i = 0; i < floors.size(); i++) {
+                Integer parsedLogicalFloor = parseLogicalFloorLabel(
+                        floors.get(i).getDisplayName(),
+                        floors.get(i).getKey()
+                );
+                if (parsedLogicalFloor != null && parsedLogicalFloor == preferredLogicalFloor) {
+                    return i;
+                }
+            }
+        }
+
+        for (int i = 0; i < floors.size(); i++) {
+            Integer parsedLogicalFloor = parseLogicalFloorLabel(
+                    floors.get(i).getDisplayName(),
+                    floors.get(i).getKey()
+            );
+            if (parsedLogicalFloor != null && parsedLogicalFloor == 0) {
+                return i;
+            }
+        }
+        return Math.max(0, Math.min(floors.size() - 1, Math.min(1, floors.size() - 1)));
+    }
+
+    @Nullable
+    private Integer parseLogicalFloorLabel(@Nullable String displayName, @Nullable String fallbackKey) {
+        Integer parsed = parseSingleFloorLabel(displayName);
+        if (parsed != null) {
+            return parsed;
+        }
+        return parseSingleFloorLabel(fallbackKey);
+    }
+
+    @Nullable
+    private Integer parseSingleFloorLabel(@Nullable String rawLabel) {
+        if (rawLabel == null) {
+            return null;
+        }
+
+        String normalized = rawLabel.trim().toUpperCase(Locale.UK);
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        normalized = normalized
+                .replace("FLOOR", "")
+                .replace("LEVEL", "")
+                .replace("STOREY", "")
+                .replace("STORY", "")
+                .replace("_", "")
+                .replace("-", "")
+                .replace(" ", "");
+
+        if ("LG".equals(normalized) || "LOWGROUND".equals(normalized)
+                || "LOWERGROUND".equals(normalized)) {
+            return -1;
+        }
+        if ("G".equals(normalized) || "GF".equals(normalized) || "GROUND".equals(normalized)) {
+            return 0;
+        }
+        if ("UG".equals(normalized) || "UPGROUND".equals(normalized)
+                || "UPPERGROUND".equals(normalized)) {
+            return 1;
+        }
+        if (normalized.startsWith("B") && normalized.length() > 1) {
+            try {
+                return -Integer.parseInt(normalized.substring(1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        if (normalized.startsWith("L") && normalized.length() > 1) {
+            try {
+                return Integer.parseInt(normalized.substring(1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        try {
+            return Integer.parseInt(normalized);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private float computeHeadingDegrees(@NonNull LatLng from, @NonNull LatLng to) {
+        double deltaNorth = (to.latitude - from.latitude) * 111_111d;
+        double deltaEast = (to.longitude - from.longitude)
+                * 111_111d
+                * Math.cos(Math.toRadians((from.latitude + to.latitude) * 0.5d));
+        return normalizeDegrees((float) Math.toDegrees(Math.atan2(deltaEast, deltaNorth)));
+    }
+
+    private float normalizeDegrees(float degrees) {
+        float value = degrees % 360f;
+        if (value < 0f) {
+            value += 360f;
+        }
+        return value;
     }
 }

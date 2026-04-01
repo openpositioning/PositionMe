@@ -51,6 +51,7 @@ public class RecordingActivity extends AppCompatActivity {
         setContentView(R.layout.activity_recording);
 
         if (savedInstanceState == null) {
+            SensorFusion.getInstance().resetLivePositioningState();
             // Show trajectory name input dialog before proceeding to start location
             showTrajectoryNameDialog();
         }

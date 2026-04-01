@@ -65,6 +65,8 @@ import android.widget.Toast;
 
 public class RecordingFragment extends Fragment {
 
+    private static final long UI_REFRESH_INTERVAL_MS = 1_000L;
+
     // UI elements
     private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
@@ -81,8 +83,10 @@ public class RecordingFragment extends Fragment {
 
     // Distance tracking
     private float distance = 0f;
-    private float previousPosX = 0f;
-    private float previousPosY = 0f;
+    private LatLng previousDisplayedLocation;
+    private long lastRenderedPositionVersion = -1L;
+    private long lastRenderedFusedTrackVersion = -1L;
+    private long lastRenderedObservationVersion = -1L;
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -92,7 +96,7 @@ public class RecordingFragment extends Fragment {
         public void run() {
             updateUIandPosition();
             // Loop again
-            refreshDataHandler.postDelayed(refreshDataTask, 200);
+            refreshDataHandler.postDelayed(refreshDataTask, UI_REFRESH_INTERVAL_MS);
         }
     };
 
@@ -136,6 +140,10 @@ public class RecordingFragment extends Fragment {
                     .replace(R.id.trajectoryMapFragmentContainer, trajectoryMapFragment)
                     .commit();
         }
+        trajectoryMapFragment.setPreviewFloorOnlyMode(false);
+        lastRenderedPositionVersion = -1L;
+        lastRenderedFusedTrackVersion = -1L;
+        lastRenderedObservationVersion = -1L;
 
         // Initialize UI references
         elevation = view.findViewById(R.id.currentElevation);
@@ -201,10 +209,11 @@ public class RecordingFragment extends Fragment {
             timeRemaining.setProgress(0);
             timeRemaining.setScaleY(3f);
 
-            autoStop = new CountDownTimer(limit, 1000) {
+            autoStop = new CountDownTimer(limit, UI_REFRESH_INTERVAL_MS) {
                 @Override
                 public void onTick(long millisUntilFinished) {
-                    timeRemaining.incrementProgressBy(1);
+                    int elapsedSeconds = (int) ((limit - millisUntilFinished) / 1000L);
+                    timeRemaining.setProgress(elapsedSeconds);
                     updateUIandPosition();
                 }
 
@@ -252,59 +261,75 @@ public class RecordingFragment extends Fragment {
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
      */
     private void updateUIandPosition() {
-        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-        if (pdrValues == null) return;
-
-        // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
-        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-
         // Elevation
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+        LatLng fusedLocation = sensorFusion.getCurrentFusedPosition();
+        if (trajectoryMapFragment != null && fusedLocation != null) {
+            LatLng displayedLocation = trajectoryMapFragment.updateUserLocation(
+                    fusedLocation,
+                    (float) Math.toDegrees(sensorFusion.passOrientation())
             );
-
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+            if (displayedLocation != null) {
+                if (previousDisplayedLocation != null) {
+                    distance += UtilFunctions.distanceBetweenPoints(
+                            previousDisplayedLocation,
+                            displayedLocation
+                    );
+                }
+                previousDisplayedLocation = displayedLocation;
             }
+
+            renderMapOverlaysIfChanged();
         }
+
+        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
-            if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
-                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
-                if (currentLoc != null) {
-                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
-                    gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
-                }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
+            LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
+            LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+            if (currentLoc != null) {
+                double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
+                gnssError.setVisibility(View.VISIBLE);
+                gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
             } else {
                 gnssError.setVisibility(View.GONE);
+            }
+            trajectoryMapFragment.updateGNSS(gnssLocation);
+        } else {
+            gnssError.setVisibility(View.GONE);
+            if (trajectoryMapFragment != null) {
                 trajectoryMapFragment.clearGNSS();
             }
         }
+    }
 
-        // Update previous
-        previousPosX = pdrValues[0];
-        previousPosY = pdrValues[1];
+    private void renderMapOverlaysIfChanged() {
+        if (trajectoryMapFragment == null || !trajectoryMapFragment.isRenderSurfaceReady()) {
+            return;
+        }
+
+        long positionVersion = sensorFusion.getCurrentFusedPositionVersion();
+        long fusedTrackVersion = sensorFusion.getFusedTrackVersion();
+        if (fusedTrackVersion != lastRenderedFusedTrackVersion
+                || positionVersion != lastRenderedPositionVersion) {
+            trajectoryMapFragment.renderFusedHistory(sensorFusion.getFusedTrack());
+            lastRenderedPositionVersion = positionVersion;
+            lastRenderedFusedTrackVersion = fusedTrackVersion;
+        }
+
+        long observationVersion = sensorFusion.getObservationTrailsVersion();
+        if (observationVersion != lastRenderedObservationVersion) {
+            trajectoryMapFragment.renderObservationTails(
+                    sensorFusion.getRecentGnssTrail(),
+                    sensorFusion.getRecentWifiTrail(),
+                    sensorFusion.getRecentPdrTrail()
+            );
+            lastRenderedObservationVersion = observationVersion;
+        }
     }
 
     /**
@@ -329,7 +354,7 @@ public class RecordingFragment extends Fragment {
     public void onResume() {
         super.onResume();
         if(!this.settings.getBoolean("split_trajectory", false)) {
-            refreshDataHandler.postDelayed(refreshDataTask, 500);
+            refreshDataHandler.postDelayed(refreshDataTask, UI_REFRESH_INTERVAL_MS);
         }
     }
 

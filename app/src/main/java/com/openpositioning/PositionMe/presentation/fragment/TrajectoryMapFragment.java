@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -11,10 +12,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.Spinner;
 import android.widget.TextView;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -28,14 +27,28 @@ import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.*;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 /**
- * A fragment responsible for displaying a trajectory map using Google Maps.
+ * CW2 display module for the indoor map. This fragment renders the fused user position, live
+ * heading, observation tails and per-floor track history on top of Google Maps.
+ *
+ * <p>A fragment responsible for displaying a trajectory map using Google Maps.
  * <p>
  * The TrajectoryMapFragment provides a map interface for visualizing movement trajectories,
  * GNSS tracking, and indoor mapping. It manages map settings, user interactions, and real-time
@@ -57,45 +70,54 @@ import java.util.List;
 
 public class TrajectoryMapFragment extends Fragment {
 
+    private static final float DIRECTION_MARKER_SIZE_DP = 18f;
+    private static final double MIN_DIRECTION_DISTANCE_METERS = 0.55;
+    private static final double CAMERA_RECENTER_DISTANCE_METERS = 4.0;
+    private static final long CAMERA_RECENTER_INTERVAL_MS = 1_000L;
+    private static final int MAX_TRACK_HISTORY_POINTS = 600;
+    private static final double TRACK_APPEND_DISTANCE_METERS = 0.06;
+    private static final double TRACK_REPLACE_DISTANCE_METERS = 0.03;
+    private static final double MAX_TRACK_APPEND_DISTANCE_METERS = 6.0;
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
-    private Marker orientationMarker; // Marker representing user's heading
-    private Marker gnssMarker; // GNSS position marker
+    private Marker directionMarker; // Current user direction arrow
     // Keep test point markers so they can be cleared when recording ends
-    private final List<Marker> testPointMarkers = new ArrayList<>();
+    private final List<com.google.android.gms.maps.model.Marker> testPointMarkers = new ArrayList<>();
+    private final List<Circle> gnssTailCircles = new ArrayList<>();
+    private final List<Circle> wifiTailCircles = new ArrayList<>();
+    private final List<Circle> pdrTailCircles = new ArrayList<>();
 
     private Polyline polyline; // Polyline representing user's movement path
-    private boolean isRed = true; // Tracks whether the polyline color is red
-    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
-
-    private Polyline gnssPolyline; // Polyline for GNSS path
-    private LatLng lastGnssLocation = null; // Stores the last GNSS location
+    private boolean isGnssOn = true; // GNSS display stays enabled during recording
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
+    private float lastDirectionDegrees = 0f;
+    private LatLng lastCameraLocation;
+    private long lastCameraUpdateMs;
+    private final Map<Integer, List<LatLng>> userTrackHistoryByFloor = new HashMap<>();
+    private int activeTrackFloor = Integer.MIN_VALUE;
 
     // Auto-floor state
     private static final String TAG = "TrajectoryMapFragment";
-    private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000;
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000;
+    private static final double TAIL_RADIUS_METERS = 0.45;
+    private static final int GNSS_TAIL_COLOR = Color.rgb(25, 118, 210);
+    private static final int WIFI_TAIL_COLOR = Color.rgb(0, 137, 123);
+    private static final int PDR_TAIL_COLOR = Color.rgb(255, 111, 0);
     private Handler autoFloorHandler;
     private Runnable autoFloorTask;
-    private int lastCandidateFloor = Integer.MIN_VALUE;
-    private long lastCandidateTime = 0;
 
     // UI
+    private View mapControlsCard;
     private Spinner switchMapSpinner;
-
-    private SwitchMaterial gnssSwitch;
-    private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
-    private Button switchColorButton;
-    private Polygon buildingPolygon;
+    private boolean previewFloorOnlyMode;
 
 
     public TrajectoryMapFragment() {
@@ -117,13 +139,12 @@ public class TrajectoryMapFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         // Grab references to UI controls
+        mapControlsCard  = view.findViewById(R.id.mapControlsCard);
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
-        gnssSwitch      = view.findViewById(R.id.gnssSwitch);
-        autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
+        applyOverlayMode();
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -159,64 +180,43 @@ public class TrajectoryMapFragment extends Fragment {
         // Map type spinner setup
         initMapTypeSpinner();
 
-        // GNSS Switch
-        gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            isGnssOn = isChecked;
-            if (!isChecked && gnssMarker != null) {
-                gnssMarker.remove();
-                gnssMarker = null;
-            }
-        });
-
-        // Color switch
-        switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
-                } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
-                }
-            }
-        });
-
-        // Auto-floor toggle: start/stop periodic floor evaluation
         sensorFusion = SensorFusion.getInstance();
-        autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-            if (isChecked) {
-                startAutoFloor();
-            } else {
-                stopAutoFloor();
-            }
-        });
+        configureAlwaysOnControls();
+        startAutoFloor();
 
         floorUpButton.setOnClickListener(v -> {
-            // If user manually changes floor, turn off auto floor
-            autoFloorSwitch.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
+                sensorFusion.setCurrentLogicalFloor(indoorMapManager.getCurrentLogicalFloor());
+                syncActiveTrackFloorWithDisplayedFloor();
                 updateFloorLabel();
             }
         });
 
         floorDownButton.setOnClickListener(v -> {
-            autoFloorSwitch.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
+                sensorFusion.setCurrentLogicalFloor(indoorMapManager.getCurrentLogicalFloor());
+                syncActiveTrackFloorWithDisplayedFloor();
                 updateFloorLabel();
             }
         });
+    }
+
+    public void setPreviewFloorOnlyMode(boolean enabled) {
+        previewFloorOnlyMode = enabled;
+        applyOverlayMode();
+    }
+
+    private void configureAlwaysOnControls() {
+        isGnssOn = true;
     }
 
     /**
      * Initialize the map settings with the provided GoogleMap instance.
      * <p>
      *     The method sets basic map settings, initializes the indoor map manager,
-     *     and creates an empty polyline for user movement tracking.
-     *     The method also initializes the GNSS polyline for tracking GNSS path.
+     *     and creates an empty polyline for fused movement tracking.
      *     The method sets the map type to Hybrid and initializes the map with these settings.
      *
      * @param map
@@ -236,13 +236,6 @@ public class TrajectoryMapFragment extends Fragment {
         // Initialize an empty polyline
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
-                .width(5f)
-                .add() // start empty
-        );
-
-        // GNSS path in blue
-        gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
                 .width(5f)
                 .add() // start empty
         );
@@ -307,59 +300,65 @@ public class TrajectoryMapFragment extends Fragment {
      * @param newLocation The new location to plot.
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
-    public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
-        if (gMap == null) return;
+    /**
+     * Updates the live user marker and the visible track on the map.
+     *
+     * <p>The raw fused position is first constrained by the indoor map, then the display heading
+     * is resolved, and finally the floor-specific track history is updated. This keeps the
+     * rendered marker responsive while still respecting map-matching constraints.</p>
+     */
+    public LatLng updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+        if (gMap == null) return newLocation;
 
-        // Keep track of current location
         LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
-
-        // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
-                    .flat(true)
-                    .title("Current Position")
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(requireContext(),
-                                    R.drawable.ic_baseline_navigation_24)))
-            );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
-        } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+        LatLng displayLocation = newLocation;
+        if (indoorMapManager != null) {
+            // Update building/floor context from the fused point before clipping the visible
+            // marker to legal indoor space.
+            indoorMapManager.setCurrentLocation(newLocation);
+            syncDisplayedFloor();
+            syncActiveTrackFloorWithDisplayedFloor();
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+            displayLocation = indoorMapManager.constrainPositionToLegalSpace(oldLocation, newLocation);
+            indoorMapManager.setCurrentLocation(displayLocation);
         }
 
-        // Extend polyline if movement occurred
-        /*if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
-            polyline.setPoints(points);
-        }*/
-        // Extend polyline
-        if (polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        float resolvedDirection = resolveDisplayDirection(oldLocation, displayLocation, orientation);
+        boolean insignificantMove = oldLocation != null
+                && UtilFunctions.distanceBetweenPoints(oldLocation, displayLocation) < 0.18;
+        boolean insignificantRotation = directionMarker != null
+                && absoluteBearingDelta(lastDirectionDegrees, resolvedDirection) < 2.5f;
+        this.currentLocation = displayLocation;
 
-            // First position fix: add the first polyline point
-            if (oldLocation == null) {
-                points.add(newLocation);
-                polyline.setPoints(points);
-            } else if (!oldLocation.equals(newLocation)) {
-                // Subsequent movement: append a new polyline point
-                points.add(newLocation);
-                polyline.setPoints(points);
+        if (insignificantMove && insignificantRotation) {
+            updateTrackHistory(displayLocation);
+            return displayLocation;
+        }
+
+        if (directionMarker == null) {
+            updateDirectionMarker(displayLocation, resolvedDirection);
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
+            lastCameraLocation = displayLocation;
+            lastCameraUpdateMs = SystemClock.elapsedRealtime();
+        } else {
+            updateDirectionMarker(displayLocation, resolvedDirection);
+            long now = SystemClock.elapsedRealtime();
+            boolean movedEnough = lastCameraLocation == null
+                    || UtilFunctions.distanceBetweenPoints(lastCameraLocation, displayLocation)
+                    >= CAMERA_RECENTER_DISTANCE_METERS;
+            if (movedEnough && now - lastCameraUpdateMs >= CAMERA_RECENTER_INTERVAL_MS) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(displayLocation));
+                lastCameraLocation = displayLocation;
+                lastCameraUpdateMs = now;
             }
         }
 
+        updateTrackHistory(displayLocation);
+        return displayLocation;
+    }
 
-        // Update indoor map overlay
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
-        }
+    public boolean isRenderSurfaceReady() {
+        return gMap != null && polyline != null;
     }
 
 
@@ -401,7 +400,7 @@ public class TrajectoryMapFragment extends Fragment {
     public void addTestPointMarker(int index, long timestampMs, @NonNull LatLng position) {
         if (gMap == null) return;
 
-        Marker m = gMap.addMarker(new MarkerOptions()
+        com.google.android.gms.maps.model.Marker m = gMap.addMarker(new com.google.android.gms.maps.model.MarkerOptions()
                 .position(position)
                 .title("TP " + index)
                 .snippet("t=" + timestampMs));
@@ -413,44 +412,12 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
-    /**
-     * Called when we want to set or update the GNSS marker position
-     */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
-        if (gMap == null) return;
-        if (!isGnssOn) return;
-
-        if (gnssMarker == null) {
-            // Create the GNSS marker for the first time
-            gnssMarker = gMap.addMarker(new MarkerOptions()
-                    .position(gnssLocation)
-                    .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory
-                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-            lastGnssLocation = gnssLocation;
-        } else {
-            // Move existing GNSS marker
-            gnssMarker.setPosition(gnssLocation);
-
-            // Add a segment to the blue GNSS line, if this is a new location
-            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
-                List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-                gnssPoints.add(gnssLocation);
-                gnssPolyline.setPoints(gnssPoints);
-            }
-            lastGnssLocation = gnssLocation;
-        }
+        // GNSS is rendered as recent observation dots only.
     }
 
-
-    /**
-     * Remove GNSS marker if user toggles it off
-     */
     public void clearGNSS() {
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
+        // GNSS is rendered as recent observation dots only.
     }
 
     /**
@@ -460,11 +427,46 @@ public class TrajectoryMapFragment extends Fragment {
         return isGnssOn;
     }
 
+    /**
+     * Synchronises the rendered track container with the fusion lifecycle.
+     *
+     * <p>The actual visible history is maintained locally in this fragment so it can be split per
+     * floor and rerouted around walls. The fusion history is therefore only used as a reset signal
+     * when a session restarts.</p>
+     */
+    public void renderFusedHistory(@Nullable List<LatLng> fusedHistory) {
+        if (polyline == null) return;
+        if (fusedHistory == null) {
+            clearTrackHistory();
+            return;
+        }
+        if (fusedHistory.isEmpty()) {
+            clearTrackHistory();
+            return;
+        }
+    }
+
+    /**
+     * Renders the recent GNSS, WiFi and PDR observation dots used for debugging and validation.
+     */
+    public void renderObservationTails(@Nullable List<LatLng> gnssTrail,
+                                       @Nullable List<LatLng> wifiTrail,
+                                       @Nullable List<LatLng> pdrTrail) {
+        if (gMap == null) return;
+        redrawTailCircles(gnssTailCircles, gnssTrail, GNSS_TAIL_COLOR);
+        redrawTailCircles(wifiTailCircles, wifiTrail, WIFI_TAIL_COLOR);
+        redrawTailCircles(pdrTailCircles, pdrTrail, PDR_TAIL_COLOR);
+    }
+
     private void setFloorControlsVisibility(int visibility) {
-        floorUpButton.setVisibility(visibility);
-        floorDownButton.setVisibility(visibility);
         floorLabel.setVisibility(visibility);
-        autoFloorSwitch.setVisibility(visibility);
+        if (previewFloorOnlyMode) {
+            floorUpButton.setVisibility(View.GONE);
+            floorDownButton.setVisibility(View.GONE);
+        } else {
+            floorUpButton.setVisibility(visibility);
+            floorDownButton.setVisibility(visibility);
+        }
         if (visibility == View.VISIBLE) {
             updateFloorLabel();
         }
@@ -474,50 +476,49 @@ public class TrajectoryMapFragment extends Fragment {
      * Updates the floor label text to reflect the current floor display name.
      */
     private void updateFloorLabel() {
-        if (floorLabel != null && indoorMapManager != null) {
+        if (floorLabel == null) {
+            return;
+        }
+        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
             floorLabel.setText(indoorMapManager.getCurrentFloorDisplayName());
+            return;
+        }
+        if (sensorFusion != null && sensorFusion.isIndoorContextActive()) {
+            floorLabel.setText(sensorFusion.getCurrentFloorDisplayName());
         }
     }
 
     public void clearMapAndReset() {
         stopAutoFloor();
-        if (autoFloorSwitch != null) {
-            autoFloorSwitch.setChecked(false);
-        }
         if (polyline != null) {
             polyline.remove();
             polyline = null;
         }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
+        if (directionMarker != null) {
+            directionMarker.remove();
+            directionMarker = null;
         }
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
-        }
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-        lastGnssLocation = null;
         currentLocation  = null;
+        lastDirectionDegrees = 0f;
+        lastCameraLocation = null;
+        lastCameraUpdateMs = 0L;
+        userTrackHistoryByFloor.clear();
+        activeTrackFloor = Integer.MIN_VALUE;
 
         // Clear test point markers
-        for (Marker m : testPointMarkers) {
+        for (com.google.android.gms.maps.model.Marker m : testPointMarkers) {
             m.remove();
         }
         testPointMarkers.clear();
+        clearCircles(gnssTailCircles);
+        clearCircles(wifiTailCircles);
+        clearCircles(pdrTailCircles);
 
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
             polyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
-                    .width(5f)
-                    .add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
                     .width(5f)
                     .add());
         }
@@ -545,74 +546,7 @@ public class TrajectoryMapFragment extends Fragment {
             Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
             return;
         }
-
-        // nuclear building polygon vertices
-        LatLng nucleus1 = new LatLng(55.92279538827796, -3.174612147506538);
-        LatLng nucleus2 = new LatLng(55.92278121423647, -3.174107900816096);
-        LatLng nucleus3 = new LatLng(55.92288405733954, -3.173843694667146);
-        LatLng nucleus4 = new LatLng(55.92331786793876, -3.173832892645086);
-        LatLng nucleus5 = new LatLng(55.923337194112555, -3.1746284301397387);
-
-
-        // nkml building polygon vertices
-        LatLng nkml1 = new LatLng(55.9230343434213, -3.1751847990731954);
-        LatLng nkml2 = new LatLng(55.923032840563366, -3.174777103346131);
-        LatLng nkml4 = new LatLng(55.92280139974615, -3.175195527934348);
-        LatLng nkml3 = new LatLng(55.922793885410734, -3.1747958788136867);
-
-        LatLng fjb1 = new LatLng(55.92269205199916, -3.1729563477188774);//left top
-        LatLng fjb2 = new LatLng(55.922822801570994, -3.172594249522305);
-        LatLng fjb3 = new LatLng(55.92223512226413, -3.171921917547244);
-        LatLng fjb4 = new LatLng(55.9221071265519, -3.1722813131202097);
-
-        LatLng faraday1 = new LatLng(55.92242866264128, -3.1719553662011815);
-        LatLng faraday2 = new LatLng(55.9224966752294, -3.1717846714743474);
-        LatLng faraday3 = new LatLng(55.922271383074154, -3.1715191463437162);
-        LatLng faraday4 = new LatLng(55.92220124468304, -3.171705013935158);
-
-
-
-        PolygonOptions buildingPolygonOptions = new PolygonOptions()
-                .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
-                .strokeColor(Color.RED)    // Red border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-        // Options for the new polygon
-        PolygonOptions buildingPolygonOptions2 = new PolygonOptions()
-                .add(nkml1, nkml2, nkml3, nkml4, nkml1)
-                .strokeColor(Color.BLUE)    // Blue border
-                .strokeWidth(10f)           // Border width
-               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-        PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
-                .add(fjb1, fjb2, fjb3, fjb4, fjb1)
-                .strokeColor(Color.GREEN)    // Green border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 0, 255, 0)) // Semi-transparent green fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-        PolygonOptions buildingPolygonOptions4 = new PolygonOptions()
-                .add(faraday1, faraday2, faraday3, faraday4, faraday1)
-                .strokeColor(Color.YELLOW)    // Yellow border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 255, 0)) // Semi-transparent yellow fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-
-        // Remove the old polygon if it exists
-        if (buildingPolygon != null) {
-            buildingPolygon.remove();
-        }
-
-        // Add the polygon to the map
-        buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
-        gMap.addPolygon(buildingPolygonOptions2);
-        gMap.addPolygon(buildingPolygonOptions3);
-        gMap.addPolygon(buildingPolygonOptions4);
-        Log.d(TAG, "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
+        indoorMapManager.setIndicationOfIndoorMap();
     }
 
     //region Auto-floor logic
@@ -626,10 +560,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (autoFloorHandler == null) {
             autoFloorHandler = new Handler(Looper.getMainLooper());
         }
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0;
+        if (autoFloorTask != null) {
+            autoFloorHandler.removeCallbacks(autoFloorTask);
+        }
 
-        // Immediately jump to the best-guess floor (skip debounce on first toggle)
         applyImmediateFloor();
 
         autoFloorTask = new Runnable() {
@@ -652,21 +586,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
-        int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
-        }
-
-        indoorMapManager.setCurrentFloor(candidateFloor, true);
+        int resolvedFloor = sensorFusion.getPreferredDisplayLogicalFloor();
+        indoorMapManager.setCurrentFloor(resolvedFloor, true);
+        syncActiveTrackFloorWithDisplayedFloor();
         updateFloorLabel();
-        // Seed the debounce state so subsequent checks don't re-trigger immediately
-        lastCandidateFloor = candidateFloor;
-        lastCandidateTime = SystemClock.elapsedRealtime();
     }
 
     /**
@@ -676,8 +599,6 @@ public class TrajectoryMapFragment extends Fragment {
         if (autoFloorHandler != null && autoFloorTask != null) {
             autoFloorHandler.removeCallbacks(autoFloorTask);
         }
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0;
         Log.d(TAG, "Auto-floor stopped");
     }
 
@@ -690,34 +611,305 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
-        int candidateFloor;
-
-        // Priority 1: WiFi-based floor (only if WiFi positioning has returned data)
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            // Fallback: barometric elevation estimate
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
-        }
-
-        // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
-        long now = SystemClock.elapsedRealtime();
-        if (candidateFloor != lastCandidateFloor) {
-            lastCandidateFloor = candidateFloor;
-            lastCandidateTime = now;
+        if (currentLocation == null) return;
+        Integer resolvedFloor = sensorFusion.evaluateIndoorFloorChange(
+                currentLocation,
+                SystemClock.elapsedRealtime()
+        );
+        if (resolvedFloor != null) {
+            indoorMapManager.setCurrentFloor(resolvedFloor, true);
+            syncActiveTrackFloorWithDisplayedFloor();
+            updateFloorLabel();
             return;
         }
-
-        if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            indoorMapManager.setCurrentFloor(candidateFloor, true);
-            updateFloorLabel();
-            // Reset timer so we don't keep re-applying the same floor
-            lastCandidateTime = now;
-        }
+        syncDisplayedFloor();
     }
 
     //endregion
+
+    private void redrawTailCircles(List<Circle> targetCircles,
+                                   @Nullable List<LatLng> points,
+                                   int baseColor) {
+        clearCircles(targetCircles);
+        if (points == null || points.isEmpty() || gMap == null) {
+            return;
+        }
+
+        int count = points.size();
+        for (int i = 0; i < count; i++) {
+            LatLng point = points.get(i);
+            float ratio = (i + 1f) / count;
+            int strokeColor = withAlpha(baseColor, (int) (80 + ratio * 140));
+            int fillColor = withAlpha(baseColor, (int) (25 + ratio * 90));
+            targetCircles.add(gMap.addCircle(new CircleOptions()
+                    .center(point)
+                    .radius(TAIL_RADIUS_METERS)
+                    .strokeWidth(1.4f)
+                    .strokeColor(strokeColor)
+                    .fillColor(fillColor)
+                    .zIndex(3f)));
+        }
+    }
+
+    /**
+     * Aligns the map floor with the best floor estimate currently exposed by SensorFusion.
+     */
+    private void syncDisplayedFloor() {
+        if (sensorFusion == null || indoorMapManager == null) {
+            return;
+        }
+        if (!indoorMapManager.getIsIndoorMapSet()) {
+            return;
+        }
+        int preferredFloor = sensorFusion.getPreferredDisplayLogicalFloor();
+        indoorMapManager.setCurrentFloor(preferredFloor, true);
+        syncActiveTrackFloorWithDisplayedFloor();
+        updateFloorLabel();
+    }
+
+    private void clearCircles(List<Circle> circles) {
+        for (Circle circle : circles) {
+            circle.remove();
+        }
+        circles.clear();
+    }
+
+    private int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (Math.max(0, Math.min(255, alpha)) << 24);
+    }
+
+    private void updateDirectionMarker(@NonNull LatLng position, float directionDegrees) {
+        if (gMap == null || getContext() == null) {
+            return;
+        }
+
+        if (directionMarker == null) {
+            directionMarker = gMap.addMarker(new MarkerOptions()
+                    .position(position)
+                    .flat(true)
+                    .anchor(0.5f, 0.5f)
+                    .icon(BitmapDescriptorFactory.fromBitmap(getDirectionBitmap()))
+                    .zIndex(6f));
+        } else {
+            directionMarker.setPosition(position);
+        }
+        directionMarker.setRotation(directionDegrees);
+    }
+
+    private void updateDirectionFromHistory(@Nullable List<LatLng> fusedHistory) {
+        if (fusedHistory == null || fusedHistory.size() < 2 || directionMarker == null) {
+            return;
+        }
+
+        LatLng last = fusedHistory.get(fusedHistory.size() - 1);
+        for (int i = fusedHistory.size() - 2; i >= 0; i--) {
+            LatLng candidate = fusedHistory.get(i);
+            if (UtilFunctions.distanceBetweenPoints(candidate, last) >= MIN_DIRECTION_DISTANCE_METERS) {
+                float trackDirection = computeHeadingDegrees(candidate, last);
+                lastDirectionDegrees = trackDirection;
+                directionMarker.setRotation(trackDirection);
+                return;
+            }
+        }
+    }
+
+    private Bitmap getDirectionBitmap() {
+        Bitmap base = UtilFunctions.getBitmapFromVector(requireContext(), R.drawable.ic_baseline_navigation_24);
+        int sizePx = Math.max(18, Math.round(
+                DIRECTION_MARKER_SIZE_DP * requireContext().getResources().getDisplayMetrics().density
+        ));
+        return Bitmap.createScaledBitmap(base, sizePx, sizePx, true);
+    }
+
+    /**
+     * Resolves the marker direction shown on the map.
+     *
+     * <p>Movement direction takes priority whenever there is enough displacement between two
+     * rendered locations. Sensor orientation is only used as a fallback when movement direction is
+     * not observable yet.</p>
+     */
+    private float resolveDisplayDirection(@Nullable LatLng previousLocation,
+                                          @NonNull LatLng currentLocation,
+                                          float fallbackOrientationDegrees) {
+        if (previousLocation != null
+                && UtilFunctions.distanceBetweenPoints(previousLocation, currentLocation)
+                >= MIN_DIRECTION_DISTANCE_METERS) {
+            lastDirectionDegrees = computeHeadingDegrees(previousLocation, currentLocation);
+            return lastDirectionDegrees;
+        }
+
+        if (!Float.isNaN(fallbackOrientationDegrees)) {
+            lastDirectionDegrees = normalizeDegrees(fallbackOrientationDegrees);
+            return lastDirectionDegrees;
+        }
+
+        if (directionMarker != null) {
+            return lastDirectionDegrees;
+        }
+
+        return lastDirectionDegrees;
+    }
+
+    private float computeHeadingDegrees(@NonNull LatLng from, @NonNull LatLng to) {
+        double deltaNorth = (to.latitude - from.latitude) * 111_111d;
+        double deltaEast = (to.longitude - from.longitude)
+                * 111_111d
+                * Math.cos(Math.toRadians((from.latitude + to.latitude) * 0.5d));
+        return normalizeDegrees((float) Math.toDegrees(Math.atan2(deltaEast, deltaNorth)));
+    }
+
+    private float normalizeDegrees(float degrees) {
+        float value = degrees % 360f;
+        if (value < 0f) {
+            value += 360f;
+        }
+        return value;
+    }
+
+    /**
+     * Updates the per-floor user history that drives the rendered red trajectory line.
+     *
+     * <p>Very small position changes replace the last point instead of extending the path, while
+     * larger movements append either a direct point or a routed multi-point detour around walls.</p>
+     */
+    private void updateTrackHistory(@NonNull LatLng location) {
+        if (polyline == null) {
+            return;
+        }
+
+        List<LatLng> userTrackHistory = getActiveTrackHistory();
+
+        if (userTrackHistory.isEmpty()) {
+            userTrackHistory.add(location);
+            refreshDisplayedTrackPolyline();
+            return;
+        }
+
+        int lastIndex = userTrackHistory.size() - 1;
+        LatLng lastPoint = userTrackHistory.get(lastIndex);
+        List<LatLng> routedSegment = indoorMapManager == null
+                ? Collections.emptyList()
+                : indoorMapManager.buildLegalDisplaySegment(lastPoint, location);
+        double distanceMeters = !routedSegment.isEmpty()
+                ? computePathDistanceMeters(routedSegment)
+                : UtilFunctions.distanceBetweenPoints(lastPoint, location);
+
+        if (distanceMeters <= TRACK_REPLACE_DISTANCE_METERS) {
+            userTrackHistory.set(lastIndex, location);
+            refreshDisplayedTrackPolyline();
+            return;
+        }
+
+        if (routedSegment.size() >= 3
+                && distanceMeters >= TRACK_APPEND_DISTANCE_METERS
+                && distanceMeters <= MAX_TRACK_APPEND_DISTANCE_METERS * 1.8d) {
+            appendTrackSegment(userTrackHistory, routedSegment);
+            refreshDisplayedTrackPolyline();
+            return;
+        }
+
+        if (distanceMeters <= MAX_TRACK_APPEND_DISTANCE_METERS
+                && distanceMeters >= TRACK_APPEND_DISTANCE_METERS) {
+            userTrackHistory.add(location);
+            trimTrackHistory(userTrackHistory);
+            refreshDisplayedTrackPolyline();
+            return;
+        }
+
+        userTrackHistory.set(lastIndex, location);
+        refreshDisplayedTrackPolyline();
+    }
+
+    private void appendTrackSegment(@NonNull List<LatLng> userTrackHistory,
+                                    @NonNull List<LatLng> routedSegment) {
+        for (int i = 1; i < routedSegment.size(); i++) {
+            LatLng point = routedSegment.get(i);
+            LatLng lastPoint = userTrackHistory.get(userTrackHistory.size() - 1);
+            if (UtilFunctions.distanceBetweenPoints(lastPoint, point) <= TRACK_REPLACE_DISTANCE_METERS) {
+                userTrackHistory.set(userTrackHistory.size() - 1, point);
+            } else {
+                userTrackHistory.add(point);
+            }
+        }
+        trimTrackHistory(userTrackHistory);
+    }
+
+    private void trimTrackHistory(@NonNull List<LatLng> userTrackHistory) {
+        while (userTrackHistory.size() > MAX_TRACK_HISTORY_POINTS) {
+            userTrackHistory.remove(0);
+        }
+    }
+
+    private double computePathDistanceMeters(@NonNull List<LatLng> path) {
+        double distanceMeters = 0d;
+        for (int i = 1; i < path.size(); i++) {
+            distanceMeters += UtilFunctions.distanceBetweenPoints(path.get(i - 1), path.get(i));
+        }
+        return distanceMeters;
+    }
+
+    private void clearTrackHistory() {
+        userTrackHistoryByFloor.clear();
+        activeTrackFloor = Integer.MIN_VALUE;
+        if (polyline != null) {
+            polyline.setPoints(Collections.emptyList());
+        }
+    }
+
+    /**
+     * Rebuilds the visible track polyline from the active floor history and reroutes it through
+     * legal map segments when needed.
+     */
+    private void refreshDisplayedTrackPolyline() {
+        if (polyline == null) {
+            return;
+        }
+        List<LatLng> activeHistory = getActiveTrackHistory();
+        List<LatLng> displayPath = indoorMapManager == null
+                ? new ArrayList<>(activeHistory)
+                : indoorMapManager.buildLegalDisplayPath(activeHistory);
+        polyline.setPoints(displayPath);
+    }
+
+    private List<LatLng> getActiveTrackHistory() {
+        int floorKey = activeTrackFloor != Integer.MIN_VALUE ? activeTrackFloor : 0;
+        return userTrackHistoryByFloor.computeIfAbsent(floorKey, ignored -> new ArrayList<>());
+    }
+
+    /**
+     * Switches the active local history buffer to the floor currently shown on the map.
+     */
+    private void syncActiveTrackFloorWithDisplayedFloor() {
+        if (indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+            return;
+        }
+        int displayedFloor = indoorMapManager.getCurrentLogicalFloor();
+        if (displayedFloor == activeTrackFloor) {
+            return;
+        }
+        activeTrackFloor = displayedFloor;
+        refreshDisplayedTrackPolyline();
+        clearCircles(gnssTailCircles);
+        clearCircles(wifiTailCircles);
+        clearCircles(pdrTailCircles);
+    }
+
+    private float absoluteBearingDelta(float first, float second) {
+        float delta = Math.abs(normalizeDegrees(first) - normalizeDegrees(second));
+        return delta > 180f ? 360f - delta : delta;
+    }
+
+    private void applyOverlayMode() {
+        if (mapControlsCard != null) {
+            mapControlsCard.setVisibility(previewFloorOnlyMode ? View.GONE : View.VISIBLE);
+        }
+        if (previewFloorOnlyMode) {
+            if (floorUpButton != null) {
+                floorUpButton.setVisibility(View.GONE);
+            }
+            if (floorDownButton != null) {
+                floorDownButton.setVisibility(View.GONE);
+            }
+        }
+    }
 }

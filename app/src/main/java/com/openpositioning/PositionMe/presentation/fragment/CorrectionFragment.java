@@ -51,6 +51,7 @@ public class CorrectionFragment extends Fragment {
     private static float scalingRatio = 0f;
     private static LatLng start;
     private PathView pathView;
+    private float initialMapZoom = Float.NaN;
 
     public CorrectionFragment() {
         // Required empty public constructor
@@ -64,6 +65,7 @@ public class CorrectionFragment extends Fragment {
             activity.getSupportActionBar().hide();
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
+        pathView = rootView.findViewById(R.id.pathView1);
 
         // Validate trajectory quality before uploading
         validateAndUpload();
@@ -80,19 +82,33 @@ public class CorrectionFragment extends Fragment {
             public void onMapReady(GoogleMap map) {
                 mMap = map;
                 mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-                mMap.getUiSettings().setCompassEnabled(true);
-                mMap.getUiSettings().setTiltGesturesEnabled(true);
-                mMap.getUiSettings().setRotateGesturesEnabled(true);
-                mMap.getUiSettings().setScrollGesturesEnabled(true);
+                // 校正页允许缩放查看轨迹，但不允许平移/旋转底图，
+                // 否则屏幕坐标轨迹会和地图发生相对漂移。
+                mMap.getUiSettings().setScrollGesturesEnabled(false);
+                mMap.getUiSettings().setRotateGesturesEnabled(false);
+                mMap.getUiSettings().setTiltGesturesEnabled(false);
+                mMap.getUiSettings().setZoomGesturesEnabled(false);
+                mMap.getUiSettings().setZoomControlsEnabled(true);
+                mMap.getUiSettings().setCompassEnabled(false);
+                mMap.getUiSettings().setMapToolbarEnabled(false);
 
                 // Add a marker at the start position
                 start = new LatLng(startPosition[0], startPosition[1]);
                 mMap.addMarker(new MarkerOptions().position(start).title("Start Position"));
 
-                // Calculate zoom for demonstration
-                double zoom = Math.log(156543.03392f * Math.cos(startPosition[0] * Math.PI / 180)
-                        * scalingRatio) / Math.log(2);
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) zoom));
+                if (pathView != null) {
+                    pathView.post(() -> {
+                        float baseScale = pathView.ensureBaseScale();
+                        double safeScale = Math.max(1e-3, baseScale);
+                        double zoom = Math.log(156543.03392f
+                                * Math.cos(startPosition[0] * Math.PI / 180)
+                                * safeScale) / Math.log(2);
+                        initialMapZoom = (float) zoom;
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, initialMapZoom));
+                        pathView.setMapZoomScale(1f);
+                        mMap.setOnCameraMoveListener(() -> CorrectionFragment.this.syncOverlayZoom());
+                    });
+                }
             }
         });
 
@@ -119,6 +135,9 @@ public class CorrectionFragment extends Fragment {
                 sensorFusion.redrawPath(newStepLength / averageStepLength);
                 averageStepLengthText.setText(getString(R.string.averageStepLgn)
                         + ": " + String.format("%.2f", newStepLength));
+                if (mMap != null && !Float.isNaN(initialMapZoom)) {
+                    syncOverlayZoom();
+                }
                 pathView.invalidate();
 
                 secondPass++;
@@ -160,6 +179,16 @@ public class CorrectionFragment extends Fragment {
 
     public void setScalingRatio(float scalingRatio) {
         this.scalingRatio = scalingRatio;
+    }
+
+    private void syncOverlayZoom() {
+        if (mMap == null || pathView == null || Float.isNaN(initialMapZoom)) {
+            return;
+        }
+        float currentZoom = mMap.getCameraPosition().zoom;
+        float zoomScale = (float) Math.pow(2d, currentZoom - initialMapZoom);
+        pathView.setMapZoomScale(zoomScale);
+        pathView.invalidate();
     }
 
     /**

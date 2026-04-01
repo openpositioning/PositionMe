@@ -14,6 +14,7 @@
 
     <!-- Overlaid controls for map visualization -->
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/mapControlsCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="10dp"
@@ -27,41 +28,61 @@
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:gravity="start"
             android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:padding="8dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
+            <TextView
+                android:id="@+id/alwaysOnLegend"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:text="@string/location_services_on"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
+            <TextView
+                android:id="@+id/fusedLegend"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                android:layout_marginTop="6dp"
+                android:text="@string/legend_fused_track"
+                android:textColor="#D32F2F"
+                android:textSize="12sp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
+            <TextView
+                android:id="@+id/gnssLegend"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp"/>
+                android:text="@string/legend_gnss_points"
+                android:textColor="#1976D2"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/wifiLegend"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/legend_wifi_points"
+                android:textColor="#00897B"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/pdrLegend"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/legend_pdr_points"
+                android:textColor="#FF6F00"
+                android:textSize="12sp" />
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
+                android:layout_height="40dp"
                 android:layout_marginTop="8dp"
                 android:background="@android:color/white"
+                android:elevation="5dp"
                 android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                app:layout_constraintTop_toTopOf="parent" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -75,8 +96,10 @@
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="12dp"
             android:src="@android:drawable/arrow_down_float"
+            app:fabSize="mini"
             app:backgroundTint="@color/md_theme_primary"
             app:tint="@color/md_theme_onPrimary"
             app:layout_constraintBottom_toBottomOf="parent"
@@ -85,17 +108,17 @@
 
         <TextView
             android:id="@+id/floorLabel"
-            android:layout_width="56dp"
+            android:layout_width="48dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="16dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="10dp"
             android:background="@drawable/floor_label_bg"
             android:gravity="center"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
             android:text="G"
             android:textColor="@color/md_theme_onSurface"
-            android:textSize="18sp"
+            android:textSize="15sp"
             android:textStyle="bold"
             app:layout_constraintBottom_toTopOf="@id/floorDownButton"
             app:layout_constraintEnd_toEndOf="parent" />
@@ -104,11 +127,11 @@
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="28dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="14dp"
             android:contentDescription="@string/floor_up"
             android:src="@android:drawable/arrow_up_float"
+            app:fabSize="mini"
             app:backgroundTint="@color/md_theme_primary"
             app:layout_constraintBottom_toTopOf="@+id/floorLabel"
             app:layout_constraintEnd_toEndOf="parent"
