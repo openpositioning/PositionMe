@@ -35,18 +35,21 @@
                 android:id="@+id/gnssSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:checked="true"
                 android:text="@string/gnssSwitch"/>
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/wifiSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:checked="true"
                 android:text="@string/wifiSwitch"/>
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/pdrSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:checked="true"
                 android:text="@string/pdrSwitch" />
 
 
