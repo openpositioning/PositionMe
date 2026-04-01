@@ -55,8 +55,13 @@ public class ParticleFilter {
     }
 
 
-    public static final float HEADING_NOISE_STD = 0.05f; //TODO CHANGE LATER? -- JAPJOT
-    public static final float STRIDE_LENGTH_NOISE_STD = 0.05f; // WE CAN TUNE THESE NOISE PARAMETERS BASED ON EXPECTED SENSOR ACCURACY AND ENVIRONMENTAL CONDITIONS
+    public static final float HEADING_NOISE_STD = 0.05f;
+    public static final float STRIDE_LENGTH_NOISE_STD = 0.05f;
+
+    // Small positional noise added to each particle after resampling.
+    // Prevents sample impoverishment: without roughening, particles copied from the
+    // same parent are identical and provide no extra information on the next step.
+    private static final float ROUGHENING_STD = 0.3f; // metres
 
     public void predict(float deltaEasting, float deltaNorthing) {
         if (!initialized) return; // ignore if not initialized
@@ -99,7 +104,9 @@ public class ParticleFilter {
                 particles[i][1] = newY;
             }
         }
-        normalizeWeightsAndResample();
+        // Weights are intentionally NOT updated or resampled here.
+        // predict() only propagates particle positions; weight updates happen
+        // exclusively in updateGNSS() and updateWiFi() when a new observation arrives.
     }
 
     private boolean intersectsWall(float x1, float y1, float x2, float y2) { 
@@ -125,27 +132,32 @@ public class ParticleFilter {
         return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
     }
 
-    private void normalizeWeightsAndResample() {
-        float weightSum = 0f;
-        for (float w : weights) weightSum += w;
-
-        if (weightSum < 1e-6) {
-            // All particles hit a wall or died, re-initialize around current best or uniform
-            for (int i = 0; i < NUM_PARTICLES; i++) {
-                weights[i] = 1.0f / NUM_PARTICLES;
-                // Add some jitter to avoid collapse if we just reset positions
-            }
-            return;
+    /**
+     * Computes the effective sample size: N_eff = 1 / Σ(w_i²).
+     *
+     * <p>N_eff equals NUM_PARTICLES when all weights are equal (maximum diversity)
+     * and approaches 1 when a single particle carries all the weight (collapsed).
+     * Resampling is triggered when N_eff falls below NUM_PARTICLES / 2.</p>
+     */
+    private float computeEffectiveSampleSize() {
+        float sumSquared = 0f;
+        for (float w : weights) {
+            sumSquared += w * w;
         }
-
-        for (int i = 0; i < NUM_PARTICLES; i++) {
-            weights[i] /= weightSum;
-        }
-
-        // Resample only if effective sample size is low or every step (simple version: every step)
-        resample();
+        return sumSquared < 1e-10f ? NUM_PARTICLES : 1.0f / sumSquared;
     }
 
+    /**
+     * Systematic resampling followed by roughening.
+     *
+     * <p>Systematic resampling draws NUM_PARTICLES new particles proportional to
+     * their weights using a single random offset, which has lower variance than
+     * multinomial resampling.</p>
+     *
+     * <p>Roughening adds small Gaussian noise after resampling. Without it,
+     * particles copied from the same parent are identical and degenerate into
+     * a point mass on the next predict step.</p>
+     */
     private void resample() {
         float[][] newParticles = new float[NUM_PARTICLES][2];
         float step = 1.0f / NUM_PARTICLES;
@@ -162,7 +174,17 @@ public class ParticleFilter {
             newParticles[i][1] = particles[j][1];
         }
         particles = newParticles;
-        for (int i = 0; i < NUM_PARTICLES; i++) weights[i] = 1.0f / NUM_PARTICLES;
+
+        // Roughening: add small noise so copied particles diverge on the next step
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            particles[i][0] += (float) (random.nextGaussian() * ROUGHENING_STD);
+            particles[i][1] += (float) (random.nextGaussian() * ROUGHENING_STD);
+        }
+
+        // Reset to uniform weights after resampling
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            weights[i] = 1.0f / NUM_PARTICLES;
+        }
     }
 
     public void updateGNSS(LatLng gnssPosition, float gnssAccuracy) {
@@ -191,19 +213,23 @@ public class ParticleFilter {
         }
 
         if (weightSum < 1e-6) {
-            // Avoid division by zero, reinitialize weights uniformly
             for (int i = 0; i < NUM_PARTICLES; i++) {
                 weights[i] = 1.0f / NUM_PARTICLES;
             }
         } else {
-            // Normalize weights
             for (int i = 0; i < NUM_PARTICLES; i++) {
                 weights[i] /= weightSum;
             }
         }
 
-        resample();
-        Log.d(TAG, "GNSS UPDATE" + " GNSS position: " + gnssPosition + " accuracy: " + gnssAccuracy + "m" + (mx + ", " + my));
+        // Resample only when particle diversity is low (N_eff < N/2).
+        // Resampling on every observation wastes diversity; N_eff-gating preserves it.
+        float nEff = computeEffectiveSampleSize();
+        if (nEff < NUM_PARTICLES / 2.0f) {
+            resample();
+            Log.d(TAG, "GNSS resampled: Neff=" + nEff);
+        }
+        Log.d(TAG, "GNSS update: pos=" + gnssPosition + " accuracy=" + gnssAccuracy + "m Neff=" + nEff);
 
 
     }
@@ -230,19 +256,22 @@ public class ParticleFilter {
         }
 
         if (weightSum < 1e-6) {
-            // Avoid division by zero, reinitialize weights uniformly
             for (int i = 0; i < NUM_PARTICLES; i++) {
                 weights[i] = 1.0f / NUM_PARTICLES;
             }
         } else {
-            // Normalize weights
             for (int i = 0; i < NUM_PARTICLES; i++) {
                 weights[i] /= weightSum;
             }
         }
 
-        resample();
-        Log.d(TAG, "wifi UPDATE" + " WiFi position: " + wifiPosition + " accuracy: " + wifiAccuracy + "m" + (mx + ", " + my));
+        // Resample only when particle diversity is low (N_eff < N/2)
+        float nEff = computeEffectiveSampleSize();
+        if (nEff < NUM_PARTICLES / 2.0f) {
+            resample();
+            Log.d(TAG, "WiFi resampled: Neff=" + nEff);
+        }
+        Log.d(TAG, "WiFi update: pos=" + wifiPosition + " accuracy=" + wifiAccuracy + "m Neff=" + nEff);
 
 
     }

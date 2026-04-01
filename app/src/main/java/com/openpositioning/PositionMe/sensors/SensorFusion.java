@@ -735,6 +735,30 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns true if the most recent WiFi position fix arrived within the last 30 seconds.
+     * Used by auto-floor logic to avoid permanently bypassing barometric guards once WiFi
+     * has fired even once during a recording session.
+     *
+     * @return true if WiFi position data is fresh enough to trust for floor detection
+     */
+    public boolean isWifiPositionFresh() {
+        return wifiPositionManager.isWifiPositionFresh(30_000L);
+    }
+
+    /**
+     * Returns the magnitude of horizontal filtered acceleration (m/s²).
+     * Used by CrossFloorClassifier to distinguish lift (low horizontal movement)
+     * from stairs (higher horizontal movement) during floor transitions.
+     *
+     * @return horizontal acceleration magnitude in m/s²
+     */
+    public float getHorizontalAccelMagnitude() {
+        return (float) Math.sqrt(
+            Math.pow(state.filteredAcc[0], 2) + Math.pow(state.filteredAcc[1], 2)
+        );
+    }
+
+    /**
      * Utility function to log the event frequency of each sensor.
      */
     public void logSensorFrequencies() {

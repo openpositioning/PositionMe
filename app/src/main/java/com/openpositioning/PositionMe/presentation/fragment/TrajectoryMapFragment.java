@@ -37,10 +37,6 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
-import java.util.List;
-
-import com.google.android.gms.maps.model.Circle;
-import com.google.android.gms.maps.model.CircleOptions;
 
 
 /**
@@ -86,6 +82,11 @@ public class TrajectoryMapFragment extends Fragment {
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
 
+    // Floorplan live-fetch state
+    private FloorplanApiClient floorplanApiClient = new FloorplanApiClient();
+    private boolean floorplanFetchAttempted = false;
+    private boolean wasIndoorMapSet = false;
+
     // Auto-floor state
     private static final String TAG = "TrajectoryMapFragment";
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000;
@@ -110,6 +111,9 @@ public class TrajectoryMapFragment extends Fragment {
     private TextView floorLabel;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+    private Polygon nkmlPolygon;
+    private Polygon fjbPolygon;
+    private Polygon faradayPolygon;
 
     // --- Last N observation display state ---
     private static final int MAX_OBSERVATIONS = 20;
@@ -657,7 +661,20 @@ public class TrajectoryMapFragment extends Fragment {
         // Update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(displayLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+            boolean nowIndoorMapSet = indoorMapManager.getIsIndoorMapSet();
+            setFloorControlsVisibility(nowIndoorMapSet ? View.VISIBLE : View.GONE);
+
+            // When we first enter a building with floor data, center the camera on it
+            if (!wasIndoorMapSet && nowIndoorMapSet) {
+                int building = indoorMapManager.getCurrentBuilding();
+                String apiName = buildingConstantToApiName(building);
+                FloorplanApiClient.BuildingInfo info = (sensorFusion != null && apiName != null)
+                        ? sensorFusion.getFloorplanBuilding(apiName) : null;
+                if (info != null) {
+                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(info.getCenter(), 19f));
+                }
+            }
+            wasIndoorMapSet = nowIndoorMapSet;
         }
     }
 
@@ -719,6 +736,7 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) return;
         addObservation(gnssHistory, gnssLocation);
         redrawObservationOverlays();
+        fetchFloorplanIfNeeded(gnssLocation);
         if (!isGnssOn) return;
 
         if (gnssMarker == null) {
@@ -811,6 +829,8 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation  = null;
+        floorplanFetchAttempted = false;
+        wasIndoorMapSet = false;
 
         // Clear test point markers
         for (Marker m : testPointMarkers) {
@@ -890,50 +910,67 @@ public class TrajectoryMapFragment extends Fragment {
 
         PolygonOptions buildingPolygonOptions = new PolygonOptions()
                 .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
-                .strokeColor(Color.RED)    // Red border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.RED)
+                .strokeWidth(10f)
+                .fillColor(Color.argb(70, 255, 0, 0))
+                .clickable(true)
+                .zIndex(1);
 
-        // Options for the new polygon
         PolygonOptions buildingPolygonOptions2 = new PolygonOptions()
                 .add(nkml1, nkml2, nkml3, nkml4, nkml1)
-                .strokeColor(Color.BLUE)    // Blue border
-                .strokeWidth(10f)           // Border width
-                // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.BLUE)
+                .strokeWidth(10f)
+                .fillColor(Color.argb(50, 0, 0, 255))
+                .clickable(true)
+                .zIndex(1);
 
         PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
                 .add(fjb1, fjb2, fjb3, fjb4, fjb1)
-                .strokeColor(Color.GREEN)    // Green border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 0, 255, 0)) // Semi-transparent green fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.GREEN)
+                .strokeWidth(10f)
+                .fillColor(Color.argb(70, 0, 255, 0))
+                .clickable(true)
+                .zIndex(1);
 
         PolygonOptions buildingPolygonOptions4 = new PolygonOptions()
                 .add(faraday1, faraday2, faraday3, faraday4, faraday1)
-                .strokeColor(Color.YELLOW)    // Yellow border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 255, 0)) // Semi-transparent yellow fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.YELLOW)
+                .strokeWidth(10f)
+                .fillColor(Color.argb(70, 255, 255, 0))
+                .clickable(true)
+                .zIndex(1);
 
+        // Remove old polygons if they exist (e.g. after map reset)
+        if (buildingPolygon != null) buildingPolygon.remove();
+        if (nkmlPolygon    != null) nkmlPolygon.remove();
+        if (fjbPolygon     != null) fjbPolygon.remove();
+        if (faradayPolygon != null) faradayPolygon.remove();
 
-        // Remove the old polygon if it exists
-        if (buildingPolygon != null) {
-            buildingPolygon.remove();
-        }
-
-        // Add the polygon to the map
         buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
-        gMap.addPolygon(buildingPolygonOptions2);
-        gMap.addPolygon(buildingPolygonOptions3);
-        gMap.addPolygon(buildingPolygonOptions4);
+        nkmlPolygon     = gMap.addPolygon(buildingPolygonOptions2);
+        fjbPolygon      = gMap.addPolygon(buildingPolygonOptions3);
+        faradayPolygon  = gMap.addPolygon(buildingPolygonOptions4);
+
+        // Tag each polygon so the click listener can identify the building by name
+        buildingPolygon.setTag("Nucleus Building");
+        nkmlPolygon.setTag("Noreen & Kenneth Murray Library");
+        fjbPolygon.setTag("Frank Jarvis Building");
+        faradayPolygon.setTag("Faraday Building");
+
+        // Show the building name in a Toast when the user taps a polygon
+        gMap.setOnPolygonClickListener(polygon -> {
+            Object tag = polygon.getTag();
+            if (tag != null && getContext() != null) {
+                android.widget.Toast.makeText(
+                        getContext(), (String) tag, android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+
         Log.d(TAG, "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
     //region Auto-floor logic
     // Uses WiFi floor when available; otherwise barometric elevation divided by floor height (meters).
-    // Behavior unchanged; proximity to stairs/lift will be added in later steps.
 
     /**
      * Starts the periodic auto-floor evaluation task. Checks every second
@@ -973,13 +1010,14 @@ public class TrajectoryMapFragment extends Fragment {
         updateWallsForPdr();
 
         int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
+        // Use WiFi floor only when the last fix is fresh (within 30 s); otherwise fall through
+        // to the barometric path so stale WiFi data does not permanently override it.
+        if (sensorFusion.getLatLngWifiPositioning() != null && sensorFusion.isWifiPositionFresh()) {
             candidateFloor = sensorFusion.getWifiFloor();
         } else {
             float elevation = sensorFusion.getElevation();
             float floorHeight = indoorMapManager.getFloorHeight();
             if (floorHeight <= 0) {
-                // Fallback to config default if building metadata is missing
                 floorHeight = mapMatchingConfig.baroHeightThreshold;
             }
             if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
@@ -988,16 +1026,23 @@ public class TrajectoryMapFragment extends Fragment {
             if (floorHeight <= 0) return;
             candidateFloor = Math.round(elevation / floorHeight);
 
-            // Require proximity to stairs/lift when using barometer path
+            // Require proximity to stairs/lift before changing floors
             boolean nearFeature = indoorMapManager.isNearCrossFloorFeature(mapMatchingConfig.crossFeatureProximity);
             if (!nearFeature) {
                 return;
             }
 
+            // Use real horizontal acceleration to distinguish lift from stairs
+            float horizAccel = sensorFusion.getHorizontalAccelMagnitude();
             CrossFloorClassifier.Mode mode =
-                    CrossFloorClassifier.classify(0.0, elevation, 0.0, mapMatchingConfig);
+                    CrossFloorClassifier.classify(horizAccel, elevation, 0.0, mapMatchingConfig);
             Log.d(TAG, "Auto-floor (baro) mode=" + mode + " elevation=" + elevation
-                    + " floorHeight=" + floorHeight);
+                    + " horizAccel=" + horizAccel);
+
+            // Only accept LIFT or STAIRS; UNKNOWN means not enough signal to change floor
+            if (mode == CrossFloorClassifier.Mode.UNKNOWN) {
+                return;
+            }
         }
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
@@ -1032,15 +1077,15 @@ public class TrajectoryMapFragment extends Fragment {
 
         int candidateFloor;
 
-        // Priority 1: WiFi-based floor (only if WiFi positioning has returned data)
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
+        // Priority 1: WiFi floor — only when a fresh fix is available (within 30 s).
+        // Stale WiFi data must not permanently suppress the barometric path.
+        if (sensorFusion.getLatLngWifiPositioning() != null && sensorFusion.isWifiPositionFresh()) {
             candidateFloor = sensorFusion.getWifiFloor();
         } else {
-            // Fallback: barometric elevation estimate
+            // Fallback: barometric elevation estimate with map-matching guards
             float elevation = sensorFusion.getElevation();
             float floorHeight = indoorMapManager.getFloorHeight();
             if (floorHeight <= 0) {
-                // Fallback to config default if building metadata is missing
                 floorHeight = mapMatchingConfig.baroHeightThreshold;
             }
             if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
@@ -1053,10 +1098,17 @@ public class TrajectoryMapFragment extends Fragment {
             if (floorHeight <= 0) return;
             candidateFloor = Math.round(elevation / floorHeight);
 
+            // Use real horizontal acceleration so LIFT (low horiz) vs STAIRS (high horiz) is distinguished
+            float horizAccel = sensorFusion.getHorizontalAccelMagnitude();
             CrossFloorClassifier.Mode mode =
-                    CrossFloorClassifier.classify(0.0, elevation, 0.0, mapMatchingConfig);
+                    CrossFloorClassifier.classify(horizAccel, elevation, 0.0, mapMatchingConfig);
             Log.d(TAG, "Auto-floor (baro) mode=" + mode + " elevation=" + elevation
-                    + " floorHeight=" + floorHeight);
+                    + " horizAccel=" + horizAccel);
+
+            // Reject UNKNOWN — not enough movement signal to commit to a floor change
+            if (mode == CrossFloorClassifier.Mode.UNKNOWN) {
+                return;
+            }
         }
 
         // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
@@ -1076,6 +1128,52 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     //endregion
+
+    /**
+     * Fetches floorplan data from the server once per recording session.
+     * On success, caches the buildings in SensorFusion and refreshes indoor map overlays.
+     */
+    private void fetchFloorplanIfNeeded(LatLng gnssLocation) {
+        if (floorplanFetchAttempted) return;
+        if (sensorFusion == null) return;
+        floorplanFetchAttempted = true;
+
+        floorplanApiClient.requestFloorplan(
+                gnssLocation.latitude,
+                gnssLocation.longitude,
+                new ArrayList<>(),
+                new FloorplanApiClient.FloorplanCallback() {
+                    @Override
+                    public void onSuccess(List<FloorplanApiClient.BuildingInfo> buildings) {
+                        if (sensorFusion == null) return;
+                        sensorFusion.setFloorplanBuildings(buildings);
+                        if (indoorMapManager != null) {
+                            indoorMapManager.setIndicationOfIndoorMap();
+                            if (currentLocation != null) {
+                                indoorMapManager.setCurrentLocation(currentLocation);
+                            }
+                        }
+                        Log.d(TAG, "Floorplan fetched: " + buildings.size() + " buildings");
+                    }
+
+                    @Override
+                    public void onFailure(String error) {
+                        Log.w(TAG, "Floorplan fetch failed: " + error);
+                        floorplanFetchAttempted = false; // allow retry on next update
+                    }
+                }
+        );
+    }
+
+    /** Maps an IndoorMapManager building constant to the API building name. */
+    private String buildingConstantToApiName(int building) {
+        switch (building) {
+            case IndoorMapManager.BUILDING_NUCLEUS:   return "nucleus_building";
+            case IndoorMapManager.BUILDING_LIBRARY:   return "library";
+            case IndoorMapManager.BUILDING_MURCHISON: return "murchison_house";
+            default: return null;
+        }
+    }
 
     private void updateWallsForPdr() {
         if (sensorFusion == null || indoorMapManager == null) return;

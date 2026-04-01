@@ -4,15 +4,21 @@ import android.graphics.Color;
 import android.util.Log;
 
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.GroundOverlay;
+import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -35,6 +41,20 @@ public class IndoorMapManager {
     public static final int BUILDING_LIBRARY = 2;
     public static final int BUILDING_MURCHISON = 3;
 
+    // Pre-rendered PNG floor plan images for Nucleus and Library (same as PositionMe_Private)
+    private static final List<Integer> NUCLEUS_MAPS = Arrays.asList(
+            R.drawable.nucleuslg, R.drawable.nucleusg, R.drawable.nucleus1,
+            R.drawable.nucleus2, R.drawable.nucleus3);
+    private static final List<Integer> LIBRARY_MAPS = Arrays.asList(
+            R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
+            R.drawable.library3);
+
+    // Lat/lng bounds for positioning ground overlay images on the map
+    private static final LatLngBounds NUCLEUS_BOUNDS = new LatLngBounds(
+            BuildingPolygon.NUCLEUS_SW, BuildingPolygon.NUCLEUS_NE);
+    private static final LatLngBounds LIBRARY_BOUNDS = new LatLngBounds(
+            BuildingPolygon.LIBRARY_SW, BuildingPolygon.LIBRARY_NE);
+
     private GoogleMap gMap;
     private LatLng currentLocation;
     private boolean isIndoorMapSet = false;
@@ -42,6 +62,9 @@ public class IndoorMapManager {
     private int currentBuilding = BUILDING_NONE;
     // Floor height in meters derived from building metadata
     private float floorHeight;
+
+    // Ground overlay for Nucleus and Library (pre-rendered PNG floor plan images)
+    private GroundOverlay groundOverlay;
 
     // Vector shapes currently drawn on the map (cleared on floor switch or exit)
     private final List<Polygon> drawnPolygons = new ArrayList<>();
@@ -181,6 +204,14 @@ public class IndoorMapManager {
                 && currentFloor < currentFloorShapes.size()) {
             return currentFloorShapes.get(currentFloor).getDisplayName();
         }
+        // Fallback display names for PNG buildings when API data not yet loaded
+        if (currentBuilding == BUILDING_NUCLEUS) {
+            String[] names = {"LG", "G", "1", "2", "3"};
+            if (currentFloor >= 0 && currentFloor < names.length) return names[currentFloor];
+        } else if (currentBuilding == BUILDING_LIBRARY) {
+            String[] names = {"G", "1", "2", "3"};
+            if (currentFloor >= 0 && currentFloor < names.length) return names[currentFloor];
+        }
         return String.valueOf(currentFloor);
     }
 
@@ -211,16 +242,27 @@ public class IndoorMapManager {
      * @param autoFloor true if called by auto-floor feature
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
+        boolean hasPng = (currentBuilding == BUILDING_NUCLEUS
+                || currentBuilding == BUILDING_LIBRARY);
+
+        // For PNG buildings we don't need API data; for others we do
+        if (!hasPng && (currentFloorShapes == null || currentFloorShapes.isEmpty())) return;
 
         if (autoFloor) {
             newFloor += getAutoFloorBias();
         }
 
-        if (newFloor >= 0 && newFloor < currentFloorShapes.size()
-                && newFloor != this.currentFloor) {
+        int maxFloor = hasPng
+                ? (currentBuilding == BUILDING_NUCLEUS ? NUCLEUS_MAPS.size() : LIBRARY_MAPS.size())
+                : currentFloorShapes.size();
+
+        if (newFloor >= 0 && newFloor < maxFloor && newFloor != this.currentFloor) {
             this.currentFloor = newFloor;
-            drawFloorShapes(newFloor);
+            if (hasPng) {
+                showGroundOverlay(currentBuilding, newFloor);
+            } else {
+                drawFloorShapes(newFloor);
+            }
         }
     }
 
@@ -277,20 +319,24 @@ public class IndoorMapManager {
                         return;
                 }
 
-                // Load floor shapes from cached API data
+                // Always load floor shapes from cached API data (used by particle filter / auto-floor)
                 FloorplanApiClient.BuildingInfo building =
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
                     currentFloorShapes = building.getFloorShapesList();
                 }
 
-                if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+                // Display: PNG ground overlay for Nucleus/Library; API vectors for Murchison
+                if (detected == BUILDING_NUCLEUS || detected == BUILDING_LIBRARY) {
+                    showGroundOverlay(detected, currentFloor);
+                    isIndoorMapSet = true;
+                } else if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
                     drawFloorShapes(currentFloor);
                     isIndoorMapSet = true;
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
-                clearDrawnShapes();
+                clearDrawnShapes(); // also removes groundOverlay
                 isIndoorMapSet = false;
                 currentBuilding = BUILDING_NONE;
                 currentFloor = 0;
@@ -299,6 +345,36 @@ public class IndoorMapManager {
         } catch (Exception ex) {
             Log.e(TAG, "Error with overlay: " + ex.toString());
         }
+    }
+
+    /**
+     * Displays the pre-rendered PNG floor plan image for Nucleus or Library as a
+     * ground overlay. Replaces any existing ground overlay.
+     *
+     * @param building   BUILDING_NUCLEUS or BUILDING_LIBRARY
+     * @param floorIndex floor index matching the NUCLEUS_MAPS / LIBRARY_MAPS list
+     */
+    private void showGroundOverlay(int building, int floorIndex) {
+        if (groundOverlay != null) {
+            groundOverlay.remove();
+            groundOverlay = null;
+        }
+        List<Integer> maps;
+        LatLngBounds bounds;
+        if (building == BUILDING_NUCLEUS) {
+            maps = NUCLEUS_MAPS;
+            bounds = NUCLEUS_BOUNDS;
+        } else if (building == BUILDING_LIBRARY) {
+            maps = LIBRARY_MAPS;
+            bounds = LIBRARY_BOUNDS;
+        } else {
+            return;
+        }
+        if (floorIndex < 0 || floorIndex >= maps.size()) return;
+        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+                .image(BitmapDescriptorFactory.fromResource(maps.get(floorIndex)))
+                .positionFromBounds(bounds)
+                .transparency(0.1f)); // slight transparency so satellite map is visible underneath
     }
 
     /**
@@ -315,17 +391,23 @@ public class IndoorMapManager {
 
         FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(floorIndex);
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
-            String geoType = feature.getGeometryType();
+            String geoType    = feature.getGeometryType();
             String indoorType = feature.getIndoorType();
+
+            // Prefer API-provided colours; fall back to type-based defaults
+            int stroke = parseApiColor(feature.getStrokeColor(), getStrokeColor(indoorType));
+            int fill   = parseApiColor(feature.getFillColor(),   getFillColor(indoorType));
+            float width = feature.getStrokeWidth() > 0
+                    ? Math.max(feature.getStrokeWidth(), 4f) : 5f;
 
             if ("MultiPolygon".equals(geoType) || "Polygon".equals(geoType)) {
                 for (List<LatLng> ring : feature.getParts()) {
                     if (ring.size() < 3) continue;
                     Polygon p = gMap.addPolygon(new PolygonOptions()
                             .addAll(ring)
-                            .strokeColor(getStrokeColor(indoorType))
-                            .strokeWidth(5f)
-                            .fillColor(getFillColor(indoorType)));
+                            .strokeColor(stroke)
+                            .strokeWidth(width)
+                            .fillColor(fill));
                     drawnPolygons.add(p);
                 }
             } else if ("MultiLineString".equals(geoType)
@@ -334,11 +416,24 @@ public class IndoorMapManager {
                     if (line.size() < 2) continue;
                     Polyline pl = gMap.addPolyline(new PolylineOptions()
                             .addAll(line)
-                            .color(getStrokeColor(indoorType))
-                            .width(6f));
+                            .color(stroke)
+                            .width(width));
                     drawnPolylines.add(pl);
                 }
             }
+        }
+    }
+
+    /**
+     * Parses an API colour string (e.g. "#666666") to an ARGB int.
+     * Returns {@code fallback} if the string is null, empty, or unparseable.
+     */
+    private int parseApiColor(String colorStr, int fallback) {
+        if (colorStr == null || colorStr.trim().isEmpty()) return fallback;
+        try {
+            return Color.parseColor(colorStr.trim());
+        } catch (IllegalArgumentException ex) {
+            return fallback;
         }
     }
 
@@ -350,6 +445,10 @@ public class IndoorMapManager {
         for (Polyline p : drawnPolylines) p.remove();
         drawnPolygons.clear();
         drawnPolylines.clear();
+        if (groundOverlay != null) {
+            groundOverlay.remove();
+            groundOverlay = null;
+        }
     }
 
     /**

@@ -119,6 +119,19 @@ public class WifiPositionManager implements Observer {
     }
 
     /**
+     * Returns true if the most recent WiFi position fix is newer than {@code maxAgeMs} milliseconds.
+     * Used to prevent stale WiFi fixes from permanently overriding the barometric floor path.
+     *
+     * @param maxAgeMs maximum acceptable age of the WiFi fix in milliseconds
+     * @return true if a fresh fix is available
+     */
+    public boolean isWifiPositionFresh(long maxAgeMs) {
+        long ts = wiFiPositioning.getWifiLocationTimestampMs();
+        if (ts == 0) return false;
+        return (System.currentTimeMillis() - ts) <= maxAgeMs;
+    }
+
+    /**
      * Returns the most recent list of WiFi scan results.
      *
      * @return list of {@link Wifi} objects
