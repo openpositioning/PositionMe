@@ -30,6 +30,7 @@ public class SensorEventHandler {
     private StepListener stepListener; // Listener for step events to update the particle filter
     private float lastEasting = 0f; // Track last easting for calculating deltas
     private float lastNorthing = 0f;// Track last northing for calculating deltas
+    private boolean orientationInitialized = false; // True once the first rotation-vector event has arrived
 
     public void setStepListener(StepListener listener) {
         this.stepListener = listener; // Set the step listener for particle filter updates
@@ -44,6 +45,7 @@ public class SensorEventHandler {
     public void resetStepOrigin() {
         lastEasting  = 0f;
         lastNorthing = 0f;
+        orientationInitialized = false;
     }
 
     // END OF PARTICLE FILTER
@@ -120,12 +122,11 @@ public class SensorEventHandler {
                 }
                 break;
 
-            // NOTE: intentional fall-through from GYROSCOPE to LINEAR_ACCELERATION
-            // (existing behavior preserved during refactoring)
             case Sensor.TYPE_GYROSCOPE:
                 state.angularVelocity[0] = sensorEvent.values[0];
                 state.angularVelocity[1] = sensorEvent.values[1];
                 state.angularVelocity[2] = sensorEvent.values[2];
+                break;
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 state.filteredAcc[0] = sensorEvent.values[0];
@@ -171,9 +172,14 @@ public class SensorEventHandler {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, state.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, state.orientation);
+                orientationInitialized = true;
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
+                if (!orientationInitialized) {
+                    Log.d("SensorFusion", "Step detected but orientation not yet ready — skipping PDR update");
+                    break;
+                }
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
 
                 if (currentTime - lastStepTime < 20) {

@@ -764,6 +764,12 @@ public class TrajectoryMapFragment extends Fragment {
             if (!wasIndoorMapSet && nowIndoorMapSet) {
                 int building = indoorMapManager.getCurrentBuilding();
                 String apiName = buildingConstantToApiName(building);
+                // Auto-set building ID so floor-change logic works without StartLocationFragment
+                if (sensorFusion != null && apiName != null
+                        && (sensorFusion.getSelectedBuildingId() == null
+                            || sensorFusion.getSelectedBuildingId().isEmpty())) {
+                    sensorFusion.setSelectedBuildingId(apiName);
+                }
                 FloorplanApiClient.BuildingInfo info = (sensorFusion != null && apiName != null)
                         ? sensorFusion.getFloorplanBuilding(apiName) : null;
                 if (info != null) {
@@ -844,6 +850,12 @@ public class TrajectoryMapFragment extends Fragment {
             if (!wasIndoorMapSet && nowIndoorMapSet) {
                 int building = indoorMapManager.getCurrentBuilding();
                 String apiName = buildingConstantToApiName(building);
+                // Auto-set building ID so floor-change logic works without StartLocationFragment
+                if (sensorFusion != null && apiName != null
+                        && (sensorFusion.getSelectedBuildingId() == null
+                            || sensorFusion.getSelectedBuildingId().isEmpty())) {
+                    sensorFusion.setSelectedBuildingId(apiName);
+                }
                 FloorplanApiClient.BuildingInfo info = (sensorFusion != null && apiName != null)
                         ? sensorFusion.getFloorplanBuilding(apiName) : null;
                 if (info != null) {

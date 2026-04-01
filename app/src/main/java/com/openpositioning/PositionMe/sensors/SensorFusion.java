@@ -114,6 +114,14 @@ public class SensorFusion implements SensorEventListener {
     private final List<Float> linearAccelWindow = new ArrayList<>();
     private boolean isStationary = false;
 
+    // Timestamp (elapsedRealtime ms) of the last setStartGNSSLatitude() call.
+    // GNSS updates are suppressed for 10 s so a bad indoor GPS fix cannot drag
+    // particles away from the user-confirmed anchor immediately after anchoring.
+    private long filterAnchorTimeMs = 0L;
+
+    // True once the first GNSS fix during this recording session has been used to
+    // anchor startLocation and write initial protobuf metadata (auto-init path).
+    private boolean initialMetadataWritten = false;
 
 
     // Floorplan API cache (latest result from start-location step)
@@ -507,6 +515,14 @@ public class SensorFusion implements SensorEventListener {
         // session doesn't fire a massive spurious delta from the previous session's position.
         eventHandler.resetStepOrigin();
 
+        // Reset per-session positioning state so each recording starts clean.
+        initialMetadataWritten = false;
+        state.startLocation[0] = 0f;
+        state.startLocation[1] = 0f;
+        filterAnchorTimeMs = 0L;
+        lastGnssForFilter = null;
+        particleFilter.reset();
+
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
 
@@ -670,12 +686,29 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Getter function for fused position from particle filter.
+     * Returns the best available position estimate.
+     * Priority: (1) particle-filter fused estimate; (2) PDR dead-reckoning from
+     * the GNSS-anchored start location when WiFi/GNSS are unavailable (deep indoors).
+     * This keeps the trajectory live and fluid even when external signals fail.
      *
-     * @return LatLng of the current estimated position. JAPJOT
+     * @return current position estimate, or null if no fix is available yet.
      */
-    public LatLng getFusedPosition(){
-        return particleFilter.getFusedPosition();
+    public LatLng getFusedPosition() {
+        LatLng filtered = particleFilter.getFusedPosition();
+        if (filtered != null) return filtered;
+
+        // PDR fallback: startLocation + accumulated step displacement.
+        float startLat = state.startLocation[0];
+        float startLon = state.startLocation[1];
+        if (startLat == 0f && startLon == 0f) {
+            startLat = state.latitude;   // fall back to latest raw GNSS if not anchored yet
+            startLon = state.longitude;
+        }
+        if (startLat == 0f && startLon == 0f) return null;
+        float[] pdr = pdrProcessing.getPDRMovement();
+        LatLng origin = new LatLng(startLat, startLon);
+        if (pdr[0] == 0f && pdr[1] == 0f) return origin;
+        return UtilFunctions.convertENUToWGS84(origin, new float[]{pdr[0], pdr[1], 0f});
     }
 
     /**
@@ -693,6 +726,7 @@ public class SensorFusion implements SensorEventListener {
         particleFilter.reset();
         LatLng chosenStart = new LatLng(startPosition[0], startPosition[1]);
         particleFilter.initialise(chosenStart, 5f); // 5 m spread — user just pinpointed their location
+        filterAnchorTimeMs = SystemClock.elapsedRealtime(); // start 10 s GNSS grace period
         lastGnssForFilter = chosenStart;
     }
 
@@ -914,38 +948,63 @@ public class SensorFusion implements SensorEventListener {
             LatLng gnssPos = new LatLng(location.getLatitude(), location.getLongitude());
             float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
 
+            // Auto-initialise: first GNSS fix during recording anchors start location and
+            // writes initial metadata automatically — no manual StartLocationFragment needed.
+            if (recorder.isRecording() && !initialMetadataWritten) {
+                state.startLocation[0] = state.latitude;
+                state.startLocation[1] = state.longitude;
+                if (!particleFilter.isInitialized()) {
+                    // WiFi hasn't provided a better anchor yet; seed with GNSS + generous spread.
+                    float initSpread = Math.max(accuracy * 4f, 25f);
+                    particleFilter.initialise(gnssPos, initSpread);
+                    lastGnssForFilter = gnssPos;
+                }
+                writeInitialMetadata();
+                initialMetadataWritten = true;
+                Log.d("SensorFusion", "Auto-anchored: " + state.latitude + "," + state.longitude);
+                return;
+            }
+
+            // Grace period: for 10 s after setStartGNSSLatitude() suppress ALL GNSS so a bad
+            // indoor GPS fix cannot drag particles away from the confirmed anchor.
+            if (filterAnchorTimeMs > 0
+                    && SystemClock.elapsedRealtime() - filterAnchorTimeMs < 10_000L) {
+                return;
+            }
+
             if (!particleFilter.isInitialized()) {
                 // Inflate spread aggressively for indoor GNSS initialization.
                 // Reported accuracy is typically 5-15 m, but indoor multipath error is 20-100 m.
-                // A 25 m minimum spread ensures particles cover enough area for WiFi corrections
-                // to work without a full filter reset. Ref: Davidson et al. (2010), "Application
-                // of particle filters to a map-aided indoor positioning system," IEEE/ION PLANS.
+                // A 25 m minimum spread ensures particles cover enough area for WiFi corrections.
+                // Ref: Davidson et al. (2010), "Application of particle filters to a map-aided
+                // indoor positioning system," IEEE/ION PLANS.
                 float initSpread = Math.max(accuracy * 4f, 25f);
                 particleFilter.initialise(gnssPos, initSpread);
                 lastGnssForFilter = gnssPos;
             } else {
-                // Only feed GNSS into the particle filter if the reported position has moved
-                // at least half the stated accuracy radius since the last accepted fix.
-                // This suppresses the 10-30 m noise bounce that GPS produces indoors when
-                // the device is stationary, which would otherwise drag particles through walls.
+                // Displacement gate: only update if the fix has actually moved enough.
+                // Suppresses the 10-30 m stationary bounce GPS produces indoors.
                 float minDisplacement = Math.max(accuracy * 0.5f, 3.0f);
                 boolean shouldUpdate = (lastGnssForFilter == null)
                         || (UtilFunctions.distanceBetweenPoints(lastGnssForFilter, gnssPos)
                             >= minDisplacement);
                 if (shouldUpdate) {
-                    // Outlier gate: if the filter has converged (low uncertainty) and the GNSS
-                    // fix is implausibly far from the current estimate, reject it as indoor
-                    // multipath. This protects a good WiFi-anchored position from being
-                    // overridden by a bad GPS reflection.
-                    float uncertainty = particleFilter.getPositionUncertaintyMeters();
+                    // Outlier gate: reject spurious GNSS jumps.
+                    // Hard limit: >50 m is physically impossible from GPS; always reject.
+                    // Soft limit: once filter has partially converged (uncertainty < 30 m),
+                    // reject fixes that are >2.5× accuracy away from the fused estimate.
                     LatLng fused = particleFilter.getFusedPosition();
                     boolean outlier = false;
-                    if (fused != null && uncertainty < 12f) {
+                    if (fused != null) {
                         double offset = UtilFunctions.distanceBetweenPoints(fused, gnssPos);
-                        if (offset > Math.max(accuracy * 2.5f, 20f)) {
+                        float uncertainty = particleFilter.getPositionUncertaintyMeters();
+                        if (offset > 50f) {
                             outlier = true;
-                            Log.d("SensorFusion", "GNSS outlier rejected: " + (int) offset
-                                    + "m offset, uncertainty=" + (int) uncertainty + "m");
+                            Log.d("SensorFusion", "GNSS hard-rejected: " + (int) offset + "m");
+                        } else if (uncertainty < 30f && offset > Math.max(accuracy * 2.5f, 20f)) {
+                            outlier = true;
+                            Log.d("SensorFusion", "GNSS outlier: " + (int) offset
+                                    + "m offset, σ=" + (int) uncertainty + "m");
                         }
                     }
                     if (!outlier) {

@@ -93,9 +93,18 @@ public class RecordingFragment extends Fragment {
     // per resample so 0.5 m gives comfortable headroom above the noise floor.
     private static final double MOVEMENT_THRESHOLD_METERS = 0.5;
 
+    // Maximum single-tick displacement accepted from the fused estimate.
+    // Jumps larger than this are treated as filter teleports: the PDR dead-reckoning
+    // fallback is used instead so the trajectory stays physically continuous.
+    private static final double MAX_JUMP_METERS = 8.0;
 
     // Last fused point that was actually rendered
     private LatLng lastSentFusedPosition = null;
+
+    // PDR {x, y} coordinates (meters from recording origin) at the last accepted render.
+    // Used to compute the PDR delta when the fused estimate teleports.
+    private float lastAcceptedPdrX = 0f;
+    private float lastAcceptedPdrY = 0f;
 
     // Last WiFi location sent to the map — avoids flooding wifiHistory with the same point
     private LatLng lastSentWifiPosition = null;
@@ -299,57 +308,57 @@ public class RecordingFragment extends Fragment {
         // Get the latest fused position from SensorFusion (best estimate of user location)
         LatLng fusedPosition = sensorFusion.getFusedPosition();
 
-        // Only proceed if:
-        // 1. We have a valid fused position
-        // 2. The map fragment is ready to receive updates
         if (fusedPosition != null && trajectoryMapFragment != null) {
 
-            // --- CONDITION 1: First point ---
-            // If no previous fused point has been sent to the map,
-            // this is the very first update → must display it
             boolean isFirstPoint = (lastSentFusedPosition == null);
-
-            // --- CONDITION 2: Movement-based update ---
-            // Only move the displayed point when the fused position has shifted
-            // at least MOVEMENT_THRESHOLD_METERS from the last displayed position.
-            // Time-based unconditional updates are intentionally omitted here —
-            // they caused the dot to drift every second even when stationary.
-            boolean movementDetected = false;
             double movedDistance = 0.0;
+            boolean movementDetected = false;
 
             if (lastSentFusedPosition != null) {
                 movedDistance = UtilFunctions.distanceBetweenPoints(
-                        lastSentFusedPosition,
-                        fusedPosition
-                );
+                        lastSentFusedPosition, fusedPosition);
                 movementDetected = movedDistance >= MOVEMENT_THRESHOLD_METERS;
             }
 
             if (isFirstPoint || movementDetected) {
+                LatLng positionToRender;
 
-                Log.d("FUSED_TEST", "MAP UPDATE -> "
-                        + "first=" + isFirstPoint
-                        + ", movementDetected=" + movementDetected
-                        + ", movedDistance=" + movedDistance
-                        + ", lat=" + fusedPosition.latitude
-                        + ", lng=" + fusedPosition.longitude);
+                if (!isFirstPoint && movedDistance > MAX_JUMP_METERS) {
+                    // ---- TELEPORT DETECTED ----
+                    // The fused estimate jumped implausibly (bad GNSS/filter divergence).
+                    // Fall back to PDR dead-reckoning: apply the PDR step delta to the
+                    // last confirmed anchor so the trajectory stays physically continuous.
+                    float pdrDeltaX = pdrValues[0] - lastAcceptedPdrX;
+                    float pdrDeltaY = pdrValues[1] - lastAcceptedPdrY;
+                    double pdrStep = Math.sqrt(pdrDeltaX * pdrDeltaX + pdrDeltaY * pdrDeltaY);
 
-                // Send the fused position to the map.
-                // updateUserLocation returns false when the Google Map is not ready yet
-                // (gMap == null during the brief window between fragment creation and
-                // onMapReady firing). In that case do NOT consume the first-point slot —
-                // keep lastSentFusedPosition null so the next tick retries as a first point.
-                boolean rendered = trajectoryMapFragment.updateUserLocation(
-                        fusedPosition,
-                        (float) Math.toDegrees(sensorFusion.passOrientation())
-                );
-
-                if (rendered) {
-                    lastSentFusedPosition = fusedPosition;
+                    if (pdrStep >= MOVEMENT_THRESHOLD_METERS && pdrStep < MAX_JUMP_METERS) {
+                        positionToRender = UtilFunctions.convertENUToWGS84(
+                                lastSentFusedPosition,
+                                new float[]{pdrDeltaX, pdrDeltaY, 0f});
+                        Log.d("FUSED_TEST", "Teleport " + (int) movedDistance
+                                + "m → PDR fallback " + String.format("%.2f", pdrStep) + "m");
+                    } else {
+                        // PDR also hasn't moved enough — stay put this tick
+                        positionToRender = null;
+                        Log.d("FUSED_TEST", "Teleport " + (int) movedDistance
+                                + "m rejected, no PDR movement yet");
+                    }
+                } else {
+                    // Normal update — fused estimate is within plausible range
+                    positionToRender = fusedPosition;
                 }
 
-            } else {
-                Log.d("FUSED_TEST", "SKIPPED -> movedDistance=" + movedDistance);
+                if (positionToRender != null) {
+                    boolean rendered = trajectoryMapFragment.updateUserLocation(
+                            positionToRender,
+                            (float) Math.toDegrees(sensorFusion.passOrientation()));
+                    if (rendered) {
+                        lastSentFusedPosition = positionToRender;
+                        lastAcceptedPdrX = pdrValues[0];
+                        lastAcceptedPdrY = pdrValues[1];
+                    }
+                }
             }
         }
 
