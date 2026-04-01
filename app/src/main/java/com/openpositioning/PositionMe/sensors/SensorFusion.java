@@ -273,6 +273,7 @@ public class SensorFusion implements SensorEventListener {
                         }
                     }
                 }
+                autoSeedStartAndMetadataIfNeeded();
             }, 1000);
         });
     }
@@ -756,6 +757,73 @@ public class SensorFusion implements SensorEventListener {
         lastGnssForFilter = chosenStart;
     }
 
+    private boolean hasValidStartLocation() {
+        return isValidCoordinate(state.startLocation[0], state.startLocation[1]);
+    }
+
+    private boolean isValidCoordinate(double lat, double lon) {
+        if (Double.isNaN(lat) || Double.isNaN(lon)
+                || Double.isInfinite(lat) || Double.isInfinite(lon)) {
+            return false;
+        }
+        if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
+            return false;
+        }
+        // Treat (0,0) as unset in this app.
+        return !(lat == 0.0 && lon == 0.0);
+    }
+
+    /**
+     * Seeds initial position from sensors without user interaction.
+     * Priority: GNSS -> WiFi -> fused particle estimate.
+     *
+     * @return true if a valid initial position is available
+     */
+    public boolean initializeStartPositionAutonomously() {
+        if (hasValidStartLocation()) {
+            return true;
+        }
+
+        if (isValidCoordinate(state.latitude, state.longitude)) {
+            setStartGNSSLatitude(new float[]{state.latitude, state.longitude});
+            return true;
+        }
+
+        LatLng wifiPosition = (wifiPositionManager != null)
+                ? wifiPositionManager.getLatLngWifiPositioning()
+                : null;
+        if (wifiPosition != null
+                && isValidCoordinate(wifiPosition.latitude, wifiPosition.longitude)) {
+            setStartGNSSLatitude(new float[]{
+                    (float) wifiPosition.latitude,
+                    (float) wifiPosition.longitude
+            });
+            return true;
+        }
+
+        LatLng fusedPosition = particleFilter.getFusedPosition();
+        if (fusedPosition != null
+                && isValidCoordinate(fusedPosition.latitude, fusedPosition.longitude)) {
+            setStartGNSSLatitude(new float[]{
+                    (float) fusedPosition.latitude,
+                    (float) fusedPosition.longitude
+            });
+            return true;
+        }
+
+        return false;
+    }
+
+    private void autoSeedStartAndMetadataIfNeeded() {
+        if (!recorder.isRecording() || hasValidStartLocation()) {
+            return;
+        }
+
+        if (initializeStartPositionAutonomously()) {
+            writeInitialMetadata();
+        }
+    }
+
     /**
      * Function to redraw path in corrections fragment.
      *
@@ -1042,6 +1110,8 @@ public class SensorFusion implements SensorEventListener {
                     }
                 }
             }
+
+            autoSeedStartAndMetadataIfNeeded();
         }
     }
 

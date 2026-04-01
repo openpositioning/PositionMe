@@ -149,23 +149,8 @@ public class StartLocationFragment extends Fragment {
         startMarker = mMap.addMarker(new MarkerOptions()
                 .position(position)
                 .title("Start Position")
-                .draggable(true));
+                .draggable(false));
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
-
-        // Marker drag listener to update the start position when dragged
-        mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-            @Override
-            public void onMarkerDragStart(Marker marker) {}
-
-            @Override
-            public void onMarkerDragEnd(Marker marker) {
-                startPosition[0] = (float) marker.getPosition().latitude;
-                startPosition[1] = (float) marker.getPosition().longitude;
-            }
-
-            @Override
-            public void onMarkerDrag(Marker marker) {}
-        });
 
         // Polygon click listener for building selection
         mMap.setOnPolygonClickListener(polygon -> {
@@ -468,11 +453,12 @@ public class StartLocationFragment extends Fragment {
             }
 
             if (requireActivity() instanceof RecordingActivity) {
-                // Start sensor recording + set the start location
+                // Start sensor recording and seed initial position autonomously (GNSS/WiFi).
                 sensorFusion.startRecording();
-                sensorFusion.setStartGNSSLatitude(startPosition);
-                // Write trajectory_id, initial_position and initial heading to protobuf
-                sensorFusion.writeInitialMetadata();
+                // If no fix is available yet, listeners will populate initial metadata later.
+                if (sensorFusion.initializeStartPositionAutonomously()) {
+                    sensorFusion.writeInitialMetadata();
+                }
 
                 // Switch to the recording screen
                 ((RecordingActivity) requireActivity()).showRecordingScreen();
