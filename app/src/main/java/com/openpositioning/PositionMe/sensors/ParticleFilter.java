@@ -8,7 +8,11 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * The Particle Filter class represents a sensor fusion algorithm
+ * The Particle Filter class upholds a sensor fusion algorithm.
+ *
+ * Fuses PDR motion estimates with WiFi and GNSS position fixes through
+ * a predict, update and resample cycle to produce a fused position estimate
+ * of user location.
  */
 
 public class ParticleFilter {
@@ -19,7 +23,7 @@ public class ParticleFilter {
     // Meters conversion constant for WGS84 to easting, northing space
     private static final double Meters_Per_Degree = 111111.0;
 
-    // Initial standard deviation spread from GNSS/WiFi fix.
+    // Approximated standard deviation spread from GNSS/WiFi fix.
     private static final float GNSS_Init_STD = 15.0f;
     private static final float WiFi_Init_STD = 8.0f;
 
@@ -40,7 +44,7 @@ public class ParticleFilter {
     private float estimatedX;
     private float estimatedY;
 
-    // True once initial position estimation has been established
+    // True once initial position estimate has been established
     private boolean initialised;
 
     private final Random random;
@@ -54,7 +58,7 @@ public class ParticleFilter {
         // Easting offset from local origin
         float x;
 
-        //Northing offset from local origin
+        // Northing offset from local origin
         float y;
 
         // Normalised importance weight
@@ -104,7 +108,7 @@ public class ParticleFilter {
 
         // Defer initialisation if neither GNSS or WiFi have a valid reading
         if (!hasGNSS && !hasWifi) {
-            return; // Initialisation retried via tryInitialise() on later call
+            return;
         }
 
         // Initialisation source and particle spread based on priority
@@ -152,8 +156,8 @@ public class ParticleFilter {
     }
 
     /**
-     * Distributes particles as an isotropic 2D gaussian distribution around
-     * (centerX, centerY) and assigns equal weights to each particle (1/N).
+     * Distributes particles as an isotropic 2D Gaussian distribution around
+     * (centerX, centerY) and assigns equal weights to each particle (1/Num_Particles).
      */
     private void spreadParticles(float centerX, float centerY, float stdM) {
         float initWeight = 1.0f / Num_Particles;
@@ -219,6 +223,8 @@ public class ParticleFilter {
                     }
                 }
             }
+
+            // Debug and terminal verification
             Log.d("ParticleFilter", "Wall rejection (floor " + floorIndex + "): "
                     + snapped + "/" + Num_Particles + " particles snapped this step");
         }
@@ -231,13 +237,13 @@ public class ParticleFilter {
             estimatedY += particles[i].y * particles[i].weight;
         }
 
-        //Debug test
+        //Debug test and terminal verification
         Log.d("ParticleFilter", "Delta: (" + deltaEast + ", " + deltaNorth
                 + " ; Estimate: ("+ estimatedX + ", " + estimatedY +")");
     }
 
     /**
-     *  Particle weight update
+     *
      */
     public void updateWeights(LatLng measurementLatLng, float accuracy) {
         // Early return if not initialised
@@ -307,7 +313,10 @@ public class ParticleFilter {
     }
 
     /**
-     * Systematic resampling of particles for weight degeneration solution (SIR)
+     * Systematic resampling of particles for weight degeneration solution.
+     *
+     * Eliminates low weight particles and duplicates high weight particles when
+     * N_eff < Num_Particles / 2.
      */
     private void resample() {
         // Calculate effective sample size as 1 / sum of particle weights squared
@@ -331,7 +340,7 @@ public class ParticleFilter {
             cumulativeSum[i] = cumulativeSum[i-1] + particles[i].weight;
         }
 
-        // Set uniform staring point
+        // Set uniform starting point
         float overN = 1.0f / Num_Particles;
         float u1 = random.nextFloat() * overN;
 
@@ -353,6 +362,7 @@ public class ParticleFilter {
         // Replace particle array with resampled particles
         System.arraycopy(resampledParticles, 0, particles, 0, Num_Particles);
 
+        // Debugging terminal output line
         Log.d("ParticleFilter", "Resampling complete: all weights reset to " + uniformWeighting);
     }
 
@@ -389,7 +399,7 @@ public class ParticleFilter {
     }
 
     /**
-     * State accessors defined below.
+     * State accessors:
      */
 
     public boolean isInitialised() {
