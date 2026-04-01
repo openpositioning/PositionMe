@@ -48,6 +48,15 @@ public class PositionFusionEngine {
     private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(45.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
     private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.50;
+    private static final boolean ENABLE_WALL_SLIDE = true;
+    private static final double WALL_STOP_MARGIN_RATIO = 0.02;
+    private static final double MAX_WALL_SLIDE_M = 0.60;
+    private static final double WALL_PENALTY_HIT_INCREMENT = 1.0;
+    private static final double WALL_PENALTY_DECAY_ON_FREE_MOVE = 0.65;
+    private static final double WALL_PENALTY_STRENGTH = 0.35;
+    private static final double WALL_PENALTY_SCORE_MAX = 8.0;
+    private static final double FIX_WALL_CROSS_PROB_GNSS = 0.35;
+    private static final double FIX_WALL_CROSS_PROB_WIFI = 0.08;
     private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     private final float floorHeightMeters;
@@ -76,6 +85,7 @@ public class PositionFusionEngine {
         double yNorth;
         int floor;
         double weight;
+        double wallPenaltyScore;
     }
 
     private static final class Point2D {
@@ -95,6 +105,16 @@ public class PositionFusionEngine {
         Segment(Point2D a, Point2D b) {
             this.a = a;
             this.b = b;
+        }
+    }
+
+    private static final class WallIntersection {
+        final Segment wall;
+        final double t;
+
+        WallIntersection(Segment wall, double t) {
+            this.wall = wall;
+            this.t = t;
         }
     }
 
@@ -149,6 +169,8 @@ public class PositionFusionEngine {
         double correctedDx = correctedStep[0];
         double correctedDy = correctedStep[1];
         int blockedByWall = 0;
+        int slidAlongWall = 0;
+        int stoppedAtWall = 0;
 
         for (Particle p : particles) {
             double oldX = p.xEast;
@@ -156,23 +178,62 @@ public class PositionFusionEngine {
             double candidateX = oldX + correctedDx + random.nextGaussian() * PDR_NOISE_STD_M;
             double candidateY = oldY + correctedDy + random.nextGaussian() * PDR_NOISE_STD_M;
 
-            if (crossesWall(p.floor, oldX, oldY, candidateX, candidateY)) {
+            WallIntersection hit = firstWallIntersection(p.floor, oldX, oldY, candidateX, candidateY);
+            if (hit != null) {
                 blockedByWall++;
+
+                p.wallPenaltyScore = Math.min(
+                        WALL_PENALTY_SCORE_MAX,
+                        p.wallPenaltyScore + WALL_PENALTY_HIT_INCREMENT);
+
+                if (ENABLE_WALL_SLIDE) {
+                    Point2D wallDir = normalize(hit.wall.b.x - hit.wall.a.x, hit.wall.b.y - hit.wall.a.y);
+                    double travelRatio = clamp(hit.t - WALL_STOP_MARGIN_RATIO, 0.0, 1.0);
+                    double baseX = oldX + (candidateX - oldX) * travelRatio;
+                    double baseY = oldY + (candidateY - oldY) * travelRatio;
+
+                    double remDx = candidateX - baseX;
+                    double remDy = candidateY - baseY;
+                    double slideMag = remDx * wallDir.x + remDy * wallDir.y;
+                    slideMag = clamp(slideMag, -MAX_WALL_SLIDE_M, MAX_WALL_SLIDE_M);
+
+                    double slideX = baseX + wallDir.x * slideMag;
+                    double slideY = baseY + wallDir.y * slideMag;
+
+                    if (!crossesWall(p.floor, oldX, oldY, baseX, baseY)
+                            && !crossesWall(p.floor, baseX, baseY, slideX, slideY)) {
+                        p.xEast = slideX;
+                        p.yNorth = slideY;
+                        slidAlongWall++;
+                        continue;
+                    }
+
+                    if (!crossesWall(p.floor, oldX, oldY, baseX, baseY)) {
+                        p.xEast = baseX;
+                        p.yNorth = baseY;
+                        stoppedAtWall++;
+                        continue;
+                    }
+                }
+
                 continue;
             }
 
             p.xEast = candidateX;
             p.yNorth = candidateY;
+            p.wallPenaltyScore *= WALL_PENALTY_DECAY_ON_FREE_MOVE;
         }
 
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "Predict dPDRraw=(%.2fE, %.2fN) dPDRcorr=(%.2fE, %.2fN) headingBiasDeg=%.2f noiseStd=%.2f blockedByWall=%d",
+                    "Predict dPDRraw=(%.2fE, %.2fN) dPDRcorr=(%.2fE, %.2fN) headingBiasDeg=%.2f noiseStd=%.2f blockedByWall=%d slid=%d stopAtWall=%d",
                     dxEastMeters, dyNorthMeters,
                     correctedDx, correctedDy,
                     Math.toDegrees(headingBiasRad),
                     PDR_NOISE_STD_M,
-                    blockedByWall));
+                    blockedByWall,
+                    slidAlongWall,
+                    stoppedAtWall));
         }
     }
 
@@ -427,6 +488,7 @@ public class PositionFusionEngine {
         double sigma2 = effectiveSigma * effectiveSigma;
         double maxLogWeight = Double.NEGATIVE_INFINITY;
         double[] logWeights = new double[particles.size()];
+        int fixWallBlockedCount = 0;
 
         for (int i = 0; i < particles.size(); i++) {
             Particle p = particles.get(i);
@@ -434,6 +496,19 @@ public class PositionFusionEngine {
             double dy = p.yNorth - z[1];
             double distance2 = dx * dx + dy * dy;
             double logLikelihood = -0.5 * (distance2 / sigma2);
+
+            // Softly down-weight particles with repeated recent wall collisions.
+            double wallPenaltyFactor = Math.exp(-WALL_PENALTY_STRENGTH * p.wallPenaltyScore);
+            logLikelihood += Math.log(Math.max(wallPenaltyFactor, EPS));
+
+            // Map-aware fix gating: avoid rewarding through-wall attraction.
+            if (crossesWall(p.floor, p.xEast, p.yNorth, z[0], z[1])) {
+                fixWallBlockedCount++;
+                double blockedFixProb = floorHint == null
+                        ? FIX_WALL_CROSS_PROB_GNSS
+                        : FIX_WALL_CROSS_PROB_WIFI;
+                logLikelihood += Math.log(Math.max(blockedFixProb, EPS));
+            }
 
             if (floorHint != null) {
                 // Soft floor gating: keep mismatch possible, but less probable.
@@ -479,6 +554,13 @@ public class PositionFusionEngine {
 
         updateCounter++;
         logUpdateSummary(z[0], z[1], effectiveSigma, floorHint, effectiveBefore, effectiveN, resampled);
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "Fix wall-aware src=%s blockedLOS=%d/%d",
+                    floorHint == null ? "GNSS" : "WiFi",
+                    fixWallBlockedCount,
+                    particles.size()));
+        }
     }
 
     private void updateOrientationBiasFromInnovation(double innovationEast,
@@ -535,6 +617,7 @@ public class PositionFusionEngine {
             p.yNorth = random.nextGaussian() * INIT_STD_M;
             p.floor = initialFloor;
             p.weight = w;
+            p.wallPenaltyScore = 0.0;
             particles.add(p);
         }
     }
@@ -549,6 +632,7 @@ public class PositionFusionEngine {
             p.yNorth = y + random.nextGaussian() * INIT_STD_M;
             p.floor = floor;
             p.weight = w;
+            p.wallPenaltyScore = 0.0;
             particles.add(p);
         }
     }
@@ -585,6 +669,7 @@ public class PositionFusionEngine {
             copy.yNorth = src.yNorth;
             copy.floor = src.floor;
             copy.weight = step;
+            copy.wallPenaltyScore = src.wallPenaltyScore;
             resampled.add(copy);
         }
 
@@ -642,19 +727,31 @@ public class PositionFusionEngine {
 
     /** Returns true when segment (x0,y0)->(x1,y1) intersects any mapped wall segment. */
     private boolean crossesWall(int floor, double x0, double y0, double x1, double y1) {
+        return firstWallIntersection(floor, x0, y0, x1, y1) != null;
+    }
+
+    /** Returns first wall hit along a segment using smallest forward t in [0,1]. */
+    private WallIntersection firstWallIntersection(int floor, double x0, double y0, double x1, double y1) {
         FloorConstraint fc = floorConstraints.get(floor);
         if (fc == null || fc.walls.isEmpty()) {
-            return false;
+            return null;
         }
 
         Point2D a = new Point2D(x0, y0);
         Point2D b = new Point2D(x1, y1);
+        WallIntersection best = null;
         for (Segment wall : fc.walls) {
             if (segmentsIntersect(a, b, wall.a, wall.b)) {
-                return true;
+                double t = intersectionProgress(a, b, wall.a, wall.b);
+                if (Double.isNaN(t)) {
+                    t = 1.0;
+                }
+                if (best == null || t < best.t) {
+                    best = new WallIntersection(wall, t);
+                }
             }
         }
-        return false;
+        return best;
     }
 
     /**
@@ -857,6 +954,33 @@ public class PositionFusionEngine {
 
     private double orientation(Point2D a, Point2D b, Point2D c) {
         return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    }
+
+    /** Returns normalized direction; falls back to east if norm is tiny. */
+    private Point2D normalize(double x, double y) {
+        double norm = Math.hypot(x, y);
+        if (norm < 1e-9) {
+            return new Point2D(1.0, 0.0);
+        }
+        return new Point2D(x / norm, y / norm);
+    }
+
+    /** Returns progress t along AB where intersection occurs; NaN if indeterminate. */
+    private double intersectionProgress(Point2D a, Point2D b, Point2D c, Point2D d) {
+        double rX = b.x - a.x;
+        double rY = b.y - a.y;
+        double sX = d.x - c.x;
+        double sY = d.y - c.y;
+
+        double rxs = rX * sY - rY * sX;
+        if (Math.abs(rxs) < 1e-12) {
+            return Double.NaN;
+        }
+
+        double qmpX = c.x - a.x;
+        double qmpY = c.y - a.y;
+        double t = (qmpX * sY - qmpY * sX) / rxs;
+        return clamp(t, 0.0, 1.0);
     }
 
     /** Inclusive collinearity-bound check used by segment intersection. */
