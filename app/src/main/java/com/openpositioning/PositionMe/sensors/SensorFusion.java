@@ -637,23 +637,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         if (coordinateConverter != null && indoorMapManager != null
                                 && settings.getBoolean("use_wall_constraints", true)) {
 
-                            if (useEKF) {
-                                // EKF mode: clamp single position to wall boundary
-                                float[] prevEnu  = {prevPdrX, prevPdrY};
-                                float[] ekfState = ekfPositioning.getBestEstimate();
-                                float[] clamped  = indoorMapManager.constrainMovementToWalls(
-                                        prevEnu, ekfState);
-                                // Use value comparison — constrainMovementToWalls always returns
-                                // a new array, so reference equality would always be true.
-                                boolean wallHit = Math.abs(clamped[0] - ekfState[0]) > 1e-4f
-                                               || Math.abs(clamped[1] - ekfState[1]) > 1e-4f;
-                                if (wallHit) {
-                                    ekfPositioning.resetAroundPosition(
-                                            clamped[0], clamped[1],
-                                            (float) ekfPositioning.getSigmaMetres());
-                                    Log.d("SensorFusion", "EKF wall clamp applied");
-                                }
-                            } else {
+                            if (!useEKF) {
                                 // Particle filter mode: batch weight penalty per particle
                                 float[] currEast = particleFilter.getParticlesXRef();
                                 float[] currNorth = particleFilter.getParticlesYRef();
@@ -1478,7 +1462,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         float[] displayEnu = new float[]{rawEnu[0], rawEnu[1]};
 
-        if (indoorMapManager != null && prevBestEnu != null) {
+        if (indoorMapManager != null && prevBestEnu != null
+                && settings.getBoolean("use_wall_constraints", true)) {
             displayEnu = indoorMapManager.constrainMovementToWalls(prevBestEnu, rawEnu);
         }
 
@@ -1740,7 +1725,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             //The app often crashes here because the scan receiver stops after it has found the list.
             // It will only unregister one if there is to unregister
             try {
-                this.wifiProcessor.stopListening(); //error here?
+                this.wifiProcessor.stopListening();
             } catch (Exception e) {
                 System.err.println("Wifi resumed before existing");
             }
