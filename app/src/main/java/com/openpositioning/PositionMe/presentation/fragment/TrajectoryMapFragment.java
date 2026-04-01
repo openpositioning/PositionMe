@@ -1203,6 +1203,17 @@ public class TrajectoryMapFragment extends Fragment {
 
             // Use real horizontal acceleration so LIFT (low horiz) vs STAIRS (high horiz) is distinguished
             float horizAccel = sensorFusion.getHorizontalAccelMagnitude();
+
+            // Lift snap guard: while inside a lift (near-zero horizontal movement) only commit
+            // once the barometer is within 15% of floor height from the exact target level,
+            // preventing false triggers mid-ascent/descent.
+            if (horizAccel < 0.3f) {
+                float targetElev = candidateFloor * floorHeight;
+                if (Math.abs(elevation - targetElev) > floorHeight * 0.15f) {
+                    return;
+                }
+            }
+
             CrossFloorClassifier.Mode mode =
                     CrossFloorClassifier.classify(horizAccel, elevation, 0.0, mapMatchingConfig);
             Log.d(TAG, "Auto-floor (baro) mode=" + mode + " elevation=" + elevation

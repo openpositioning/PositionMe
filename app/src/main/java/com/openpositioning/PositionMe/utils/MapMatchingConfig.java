@@ -23,8 +23,8 @@ public class MapMatchingConfig {
     public final float crossFeatureProximity;
 
     public MapMatchingConfig() {
-        // Defaults chosen to align with current app behavior (floor height ~4m, small wall padding)
-        this(4.0f, 1.5f, 2.0f, 0.2f, 5.0f);
+        // Defaults: Nucleus floor height 5.5 m, 3 m baro threshold, 10 m feature proximity
+        this(3.0f, 1.5f, 2.0f, 0.2f, 10.0f);
     }
 
     public MapMatchingConfig(float baroHeightThreshold,

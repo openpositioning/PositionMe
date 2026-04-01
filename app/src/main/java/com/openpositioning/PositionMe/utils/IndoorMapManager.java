@@ -84,7 +84,7 @@ public class IndoorMapManager {
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
 
     // Average floor heights per building (meters), used for barometric auto-floor
-    public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
+    public static final float NUCLEUS_FLOOR_HEIGHT = 5.5F;
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
 

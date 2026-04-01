@@ -28,6 +28,11 @@ public class ParticleFilter {
     // Wall segments: {x1, y1, x2, y2} in ENU
     private List<float[]> walls = new ArrayList<>();
 
+    // ~17° initial heading-bias uncertainty, matching Woodman & Harle (UbiComp 2008).
+    private static final float INITIAL_BIAS_STD = 0.3f;
+    // Slow random-walk drift on heading bias per step (rad).
+    private static final float BIAS_DRIFT_STD = 0.01f;
+
     public void initialise(LatLng firstFix, float accuracyMeters) {
         if (initialized) return;          // ignore subsequent calls
         this.origin = firstFix;
@@ -82,19 +87,14 @@ public class ParticleFilter {
         float heading = (float) Math.atan2(deltaNorthing, deltaEasting); // calculate heading from deltas
 
         for (int i = 0; i < NUM_PARTICLES; i++) {
-            // Add noise to heading and stride
-            float noisyHeading = heading + (float) (random.nextGaussian() * HEADING_NOISE_STD);
-            float noisyStride = stride + (float) (random.nextGaussian() * STRIDE_LENGTH_NOISE_STD);
-
-            // Update particle position based on noisy heading and stride
-
-            //JAPJOT: ive commented this out to add wall collision checking, we need to check if the line from old position to new position intersects any walls, if it does, we can either discard the particle (set weight to 0) 
-            // or reflect it off the wall (more complex). and particles that hit walls will be reflected in opposite direction
-            //like dvd logo
-
-            // particles[i][0] += noisyStride * Math.cos(noisyHeading); // update east
-            // particles[i][1] += noisyStride * Math.sin(noisyHeading); // update north
-
+            // Apply this particle's estimated heading bias before adding step noise.
+            // Based on: Woodman, O.J. & Harle, R. (2008). "Pedestrian localisation for
+            // indoor environments." UbiComp 2008, pp. 114-123.
+            // The bias corrects systematic compass error so particles that are aligned
+            // with the true walking direction accumulate higher weights over time.
+            float correctedHeading = heading + particles[i][2];
+            float noisyHeading = correctedHeading + (float) (random.nextGaussian() * HEADING_NOISE_STD);
+            float noisyStride  = stride + (float) (random.nextGaussian() * STRIDE_LENGTH_NOISE_STD);
 
             float oldX = particles[i][0];
             float oldY = particles[i][1];
@@ -103,12 +103,13 @@ public class ParticleFilter {
 
             if (intersectsWall(oldX, oldY, newX, newY)) {
                 // Stop at old position — can't pass through a wall.
-                // Keeping oldX/oldY is more stable than reversing direction,
-                // which can send the particle into an opposite wall.
             } else {
                 particles[i][0] = newX;
                 particles[i][1] = newY;
             }
+
+            // Heading bias random walk: bias drifts slowly each step.
+            particles[i][2] += (float) (random.nextGaussian() * BIAS_DRIFT_STD);
         }
         // Weights are intentionally NOT updated or resampled here.
         // predict() only propagates particle positions; weight updates happen
@@ -180,7 +181,7 @@ public class ParticleFilter {
      * a point mass on the next predict step.</p>
      */
     private void resample() {
-        float[][] newParticles = new float[NUM_PARTICLES][2];
+        float[][] newParticles = new float[NUM_PARTICLES][3];
         float step = 1.0f / NUM_PARTICLES;
         float cumulativeWeight = weights[0];
         float randomStart = random.nextFloat() * step;
@@ -193,6 +194,7 @@ public class ParticleFilter {
             }
             newParticles[i][0] = particles[j][0];
             newParticles[i][1] = particles[j][1];
+            newParticles[i][2] = particles[j][2];
         }
         particles = newParticles;
 
@@ -231,20 +233,20 @@ public class ParticleFilter {
         float variance = effectiveAccuracy * effectiveAccuracy; // Convert accuracy to variance sigma^2
 
 
-        //gaussian likelihood function
-
+        // Student-t likelihood (ν=4) — heavier tails than Gaussian, robust to outlier GNSS fixes.
+        // Based on: Nurminen, H. et al. (2013). "Particle Filter and Smoother for Indoor
+        // Localization." IPIN 2013. w_i ∝ (1 + d²/(ν·σ²))^(-(ν+2)/2), ν=4 → exponent=-3.
+        final float nu = 4.0f;
         float weightSum = 0f;
         for (int i = 0; i < NUM_PARTICLES; i++) {
             float dx = particles[i][0] - mx;
             float dy = particles[i][1] - my;
             float distanceSquared = dx * dx + dy * dy;
-
-            // Calculate weight using Gaussian likelihood
-            weights[i] *= (float) Math.exp(-distanceSquared / (2 * variance));
+            weights[i] *= (float) Math.pow(1.0f + distanceSquared / (nu * variance), -(nu + 2f) / 2f);
             weightSum += weights[i];
         }
 
-        if (weightSum < 1e-6) {
+        if (weightSum < 1e-10f) {
             for (int i = 0; i < NUM_PARTICLES; i++) {
                 weights[i] = 1.0f / NUM_PARTICLES;
             }
@@ -274,20 +276,18 @@ public class ParticleFilter {
         float variance = wifiAccuracy * wifiAccuracy; // Convert accuracy to variance sigma^2
 
 
-        //gaussian likelihood function
-
+        // Student-t likelihood (ν=4) — same robust formulation as updateGNSS().
+        final float nu = 4.0f;
         float weightSum = 0f;
         for (int i = 0; i < NUM_PARTICLES; i++) {
             float dx = particles[i][0] - mx;
             float dy = particles[i][1] - my;
             float distanceSquared = dx * dx + dy * dy;
-
-            // Calculate weight using Gaussian likelihood
-            weights[i] *= (float) Math.exp(-distanceSquared / (2 * variance));
+            weights[i] *= (float) Math.pow(1.0f + distanceSquared / (nu * variance), -(nu + 2f) / 2f);
             weightSum += weights[i];
         }
 
-        if (weightSum < 1e-6) {
+        if (weightSum < 1e-10f) {
             for (int i = 0; i < NUM_PARTICLES; i++) {
                 weights[i] = 1.0f / NUM_PARTICLES;
             }

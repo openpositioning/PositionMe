@@ -265,6 +265,10 @@ public class RecordingFragment extends Fragment {
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
      */
     private void updateUIandPosition() {
+        // Elevation comes from the barometer — available immediately, no PDR needed.
+        float elevationVal = sensorFusion.getElevation();
+        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
@@ -272,10 +276,6 @@ public class RecordingFragment extends Fragment {
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
                 + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-
-        // Elevation
-        float elevationVal = sensorFusion.getElevation();
-        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
         // // Current location
         // // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon

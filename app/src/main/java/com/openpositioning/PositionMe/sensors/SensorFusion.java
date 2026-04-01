@@ -292,56 +292,73 @@ public class SensorFusion implements SensorEventListener {
         isStationary = variance < STATIONARY_THRESHOLD;
     }
 
+    // Nucleus floor-to-floor height in metres (GF=0, F1=5.5, F2=11, F3=16.5).
+    // Used for absolute floor index computation from barometric elevation.
+    private static final float NUCLEUS_FLOOR_HEIGHT_M = 5.5f;
+    // Lift snap tolerance: only commit a lift floor change when the barometer elevation
+    // is within this distance of the exact target level (prevents mid-ascent false triggers).
+    private static final float LIFT_SNAP_TOLERANCE_M = 0.8f;
+
     private void updateFloorLogic() {
         if (!pdrProcessing.getElevationList().isFull()) return;
-        
+
         float finishAvg = (float) pdrProcessing.getElevationList().getListCopy().stream()
                 .mapToDouble(f -> f).average().orElse(0.0);
         float diff = finishAvg - pdrProcessing.getStartElevation();
-        int floorHeight = pdrProcessing.getFloorHeightValue();
+        float floorHeight = NUCLEUS_FLOOR_HEIGHT_M;
 
-        if (Math.abs(diff) > floorHeight) {
-            int targetFloor = pdrProcessing.getCurrentFloor() + (int)(diff / floorHeight);
-            LatLng pos = getFusedPosition();
-            if (pos == null) return;
+        // Require at least 40% of floor height before evaluating a change.
+        if (Math.abs(diff) < floorHeight * 0.4f) return;
 
-            FloorplanApiClient.BuildingInfo building = getFloorplanBuilding(getSelectedBuildingId());
-            if (building == null) return;
+        // Absolute floor index from recording origin (not relative to current floor).
+        // Math.round avoids cumulative integer-truncation errors.
+        int targetFloor = Math.round(diff / floorHeight);
+        if (targetFloor == pdrProcessing.getCurrentFloor()) return;
 
-            int currentFloorIdx = pdrProcessing.getCurrentFloor() + 1; // Assuming bias 1 for Nucleus/Murchison
-            if (currentFloorIdx < 0 || currentFloorIdx >= building.getFloorShapesList().size()) return;
+        LatLng pos = getFusedPosition();
+        if (pos == null) return;
 
-            FloorplanApiClient.FloorShapes floorShapes = building.getFloorShapesList().get(currentFloorIdx);
-            boolean nearTransition = false;
-            String type = "unknown";
+        FloorplanApiClient.BuildingInfo building = getFloorplanBuilding(getSelectedBuildingId());
+        if (building == null) return;
 
-            for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
-                String fType = feature.getIndoorType();
-                if ("lift".equals(fType) || "stairs".equals(fType)) {
-                    for (List<LatLng> part : feature.getParts()) {
-                        if (BuildingPolygon.pointInPolygon(pos, part)) {
-                            nearTransition = true;
-                            type = fType;
-                            break;
-                        }
+        // Use current floor + bias to index into the building's floor list.
+        int currentFloorIdx = pdrProcessing.getCurrentFloor() + 1; // +1 bias for Nucleus/Murchison (GF at index 1)
+        if (currentFloorIdx < 0 || currentFloorIdx >= building.getFloorShapesList().size()) return;
+
+        FloorplanApiClient.FloorShapes floorShapes = building.getFloorShapesList().get(currentFloorIdx);
+        boolean nearTransition = false;
+        String type = "unknown";
+
+        for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
+            String fType = feature.getIndoorType();
+            if ("lift".equals(fType) || "stairs".equals(fType)) {
+                for (List<LatLng> part : feature.getParts()) {
+                    if (BuildingPolygon.pointInPolygon(pos, part)) {
+                        nearTransition = true;
+                        type = fType;
+                        break;
                     }
                 }
-                if (nearTransition) break;
             }
+            if (nearTransition) break;
+        }
 
-            if (nearTransition) {
-                // Classification logic: lift vs stairs
-                // We check if the user is moving horizontally during the elevation change
-                float horizontalMovement = (float) Math.sqrt(
-                    Math.pow(state.filteredAcc[0], 2) + Math.pow(state.filteredAcc[1], 2)
-                );
-                
-                boolean isLift = horizontalMovement < 0.2f; // threshold for "near zero" horizontal stride/acceleration
-                
-                if (("lift".equals(type) && isLift) || ("stairs".equals(type) && !isLift)) {
-                    pdrProcessing.setCurrentFloor(targetFloor);
-                }
-            }
+        if (!nearTransition) return;
+
+        float horizontalMovement = (float) Math.sqrt(
+                Math.pow(state.filteredAcc[0], 2) + Math.pow(state.filteredAcc[1], 2));
+        boolean isLift = horizontalMovement < 0.2f;
+
+        if ("lift".equals(type) && isLift) {
+            // Snap-to-floor guard: only commit once the barometer reads within
+            // LIFT_SNAP_TOLERANCE_M of the exact target level (GF=0, F1=5.5, F2=11 …).
+            float targetElev = targetFloor * floorHeight;
+            if (Math.abs(diff - targetElev) > LIFT_SNAP_TOLERANCE_M) return;
+            pdrProcessing.setCurrentFloor(targetFloor);
+            Log.d(TAG, "Floor change (lift) → " + targetFloor + " diff=" + diff);
+        } else if ("stairs".equals(type) && !isLift) {
+            pdrProcessing.setCurrentFloor(targetFloor);
+            Log.d(TAG, "Floor change (stairs) → " + targetFloor + " diff=" + diff);
         }
     }
 
