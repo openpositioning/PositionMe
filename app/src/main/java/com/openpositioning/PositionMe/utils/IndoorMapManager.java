@@ -320,17 +320,43 @@ public class IndoorMapManager {
                         return;
                 }
 
-                // Always load floor shapes from cached API data (used by particle filter / auto-floor)
+                // Mark as indoors immediately so floor controls, auto-floor, and wall
+                // collision all activate without waiting for the API response.
+                isIndoorMapSet = true;
+
+                // Load floor shapes from cached API data if already available
                 FloorplanApiClient.BuildingInfo building =
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
                     currentFloorShapes = building.getFloorShapesList();
                 }
 
-                // Display API vector shapes for all buildings
+                // Draw shapes now if available; otherwise they will be drawn when
+                // setCurrentLocation is called again after the floorplan API responds.
                 if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
                     drawFloorShapes(currentFloor);
-                    isIndoorMapSet = true;
+                }
+
+            } else if (inAnyBuilding && isIndoorMapSet
+                    && (currentFloorShapes == null || currentFloorShapes.isEmpty())) {
+                // Already marked indoors but shapes weren't available yet — try again now
+                // that the API may have responded.
+                String apiName2;
+                switch (currentBuilding) {
+                    case BUILDING_NUCLEUS:  apiName2 = "nucleus_building"; break;
+                    case BUILDING_LIBRARY:  apiName2 = "library";          break;
+                    case BUILDING_MURCHISON:apiName2 = "murchison_house";  break;
+                    default: apiName2 = null;
+                }
+                if (apiName2 != null) {
+                    FloorplanApiClient.BuildingInfo b =
+                            SensorFusion.getInstance().getFloorplanBuilding(apiName2);
+                    if (b != null) {
+                        currentFloorShapes = b.getFloorShapesList();
+                        if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+                            drawFloorShapes(currentFloor);
+                        }
+                    }
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
