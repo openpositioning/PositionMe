@@ -579,6 +579,27 @@ public class PositionFusionEngine {
         }
     }
 
+    /**
+     * Updates the heading-bias calibration from the innovation residual.
+     *
+     * <p>This method learns gyroscope bias by observing the direction difference between
+     * the predicted step displacement and the absolute-fix correction. It uses a cross-product
+     * test to determine if the absolute fix is left or right of the step, then applies
+     * a bounded adaptive update to {@code headingBiasRad}.</p>
+     *
+     * <p>The function only updates when:</p>
+     * <ul>
+     *   <li>Recent step displacement exceeds {@link #ORIENTATION_BIAS_MIN_STEP_M}</li>
+     *   <li>Innovation residual magnitude exceeds {@link #ORIENTATION_BIAS_MIN_INNOVATION_M}</li>
+     * </ul>
+     *
+     * <p>The bias delta is clamped per-step to {@link #ORIENTATION_BIAS_MAX_STEP_RAD} and
+     * the absolute bias is constrained to ±{@link #ORIENTATION_BIAS_MAX_ABS_RAD}.</p>
+     *
+     * @param innovationEast  residual in East (meters), fix_east - predicted_mean_east
+     * @param innovationNorth residual in North (meters), fix_north - predicted_mean_north
+     * @param source          measurement source ("GNSS" or "WiFi") for logging
+     */
     private void updateOrientationBiasFromInnovation(double innovationEast,
                                                      double innovationNorth,
                                                      String source) {
@@ -677,7 +698,26 @@ public class PositionFusionEngine {
         return 1.0 / sumSquared;
     }
 
-    /** Systematic resampling used when effective particle count drops too low. */
+    /**
+     * Performs systematic resampling to recover particle diversity when effective count drops.
+     *
+     * <p>This method implements the systematic resampling step of the Sequential Importance
+     * Resampling (SIR) particle filter. When particle weights become skewed (many particles
+     * with negligible weight), resampling duplicates high-weight particles and discards
+     * low-weight ones, restoring the effective particle count and preventing weight collapse.</p>
+     *
+     * <p>Algorithm:</p>
+     * <ol>
+     *   <li>Compute cumulative distribution function (CDF) of particle weights</li>
+     *   <li>Generate evenly-spaced quantile positions u + m/N (deterministic: reduces variance)</li>
+     *   <li>For each quantile, find the corresponding particle via CDF lookup</li>
+     *   <li>Copy selected particles with reset uniform weight (1/N)</li>
+     *   <li>Wall penalty scores are preserved from source particles</li>
+     * </ol>
+     *
+     * <p>After resampling, all particles have equal weight 1/N. The filter then calls
+     * {@link #roughenParticles()} to add process noise and prevent duplicate collapse.</p>
+     */
     private void resampleSystematic() {
         List<Particle> resampled = new ArrayList<>(PARTICLE_COUNT);
         double step = 1.0 / PARTICLE_COUNT;
@@ -706,6 +746,17 @@ public class PositionFusionEngine {
         particles.addAll(resampled);
     }
 
+    /**
+     * Adds process noise to particles after resampling to prevent collapse.
+     *
+     * <p>When systematic resampling duplicates high-weight particles, identical copies
+     * can cause divergence (filter collapse). This function perturbs each particle's
+     * position by Gaussian noise (std {@link #ROUGHEN_STD_M}) to restore diversity.</p>
+     *
+     * <p>Noise is applied only if the perturbed position does not cross a mapped wall.
+     * If roughening would violate wall constraints, the particle remains at its
+     * resampled position.</p>
+     */
     private void roughenParticles() {
         for (Particle p : particles) {
             double oldX = p.xEast;
@@ -720,7 +771,21 @@ public class PositionFusionEngine {
         }
     }
 
-    /** Applies heading-bias correction to a step vector in local EN coordinates. */
+    /**
+     * Applies heading-bias correction by rotating a step vector.
+     *
+     * <p>Applies a 2D rotation matrix by angle {@code angleRad}. Used to correct
+     * PDR step displacements when the gyroscope has a known systematic bias relative
+     * to magnetic north (as learned from absolute-fix innovations).</p>
+     *
+     * <p>Formula: [rotated_east; rotated_north] = R(angle) · [east; north]
+     * where R is the standard 2D CCW rotation matrix.</p>
+     *
+     * @param east      East component of step (meters)
+     * @param north     North component of step (meters)
+     * @param angleRad  rotation angle in radians (positive = CCW)
+     * @return array [rotated_east, rotated_north]
+     */
     private static double[] rotateVector(double east, double north, double angleRad) {
         double cos = Math.cos(angleRad);
         double sin = Math.sin(angleRad);
@@ -733,7 +798,23 @@ public class PositionFusionEngine {
         return Math.max(min, Math.min(max, value));
     }
 
-    /** Converts WGS84 coordinates to local East/North meters around the anchor. */
+    /**
+     * Projects WGS84 lat/lon coordinates to local East/North meters.
+     *
+     * <p>Establishes a local tangent plane at {@code (anchorLatDeg, anchorLonDeg)}
+     * and converts global coordinates to meters in that frame. This linearization
+     * is accurate for small areas (< 1 km2) typical of indoor positioning scenarios.</p>
+     *
+     * <p>Projection:</p>
+     * <ul>
+     *   <li>East (meters) = Deltalon · cos(lat0) · R_earth</li>
+     *   <li>North (meters) = Deltalat · R_earth</li>
+     * </ul>
+     *
+     * @param latDeg latitude in degrees
+     * @param lonDeg longitude in degrees
+     * @return [east_meters, north_meters] in local frame
+     */
     private double[] toLocal(double latDeg, double lonDeg) {
         double lat0Rad = Math.toRadians(anchorLatDeg);
         double dLat = Math.toRadians(latDeg - anchorLatDeg);
@@ -744,7 +825,22 @@ public class PositionFusionEngine {
         return new double[]{east, north};
     }
 
-    /** Converts local East/North meters back to WGS84 coordinates. */
+    /**
+     * Inverse projection: converts local East/North meters back to WGS84 lat/lon.
+     *
+     * <p>Reverses the local tangent plane transformation performed by {@link #toLocal}.
+     * Inverts the linearized projection to recover global coordinates.</p>
+     *
+     * <p>Inverse projection:</p>
+     * <ul>
+     *   <li>Δlat (degrees) = north_meters / R_earth</li>
+     *   <li>Δlon (degrees) = east_meters / (R_earth · cos(lat0))</li>
+     * </ul>
+     *
+     * @param eastMeters  position in East direction (meters in local frame)
+     * @param northMeters position in North direction (meters in local frame)
+     * @return WGS84 LatLng coordinate
+     */
     private LatLng toLatLng(double eastMeters, double northMeters) {
         double lat0Rad = Math.toRadians(anchorLatDeg);
 
@@ -805,12 +901,45 @@ public class PositionFusionEngine {
         return null;
     }
 
-    /** Returns true when segment (x0,y0)->(x1,y1) intersects any mapped wall segment. */
+    /**
+     * Checks if a motion segment crosses any mapped wall on a floor.
+     *
+     * <p>Convenience wrapper that returns true if {@link #firstWallIntersection} finds
+     * any wall hit, false otherwise. Used for constraint validation during particle
+     * prediction and during position roughening after resampling.</p>
+     *
+     * @param floor logical floor ID
+     * @param x0    starting East position (meters)
+     * @param y0    starting North position (meters)
+     * @param x1    ending East position (meters)
+     * @param y1    ending North position (meters)
+     * @return true if segment crosses a wall, false if free path
+     */
     private boolean crossesWall(int floor, double x0, double y0, double x1, double y1) {
         return firstWallIntersection(floor, x0, y0, x1, y1) != null;
     }
 
-    /** Returns first wall hit along a segment using smallest forward t in [0,1]. */
+    /**
+     * Finds the first wall intersection along a particle's motion segment.
+     *
+     * <p>This method searches all mapped wall segments on a floor for the earliest
+     * intersection along the motion vector from (x0, y0) to (x1, y1). It returns
+     * the wall segment and the progress parameter t ∈ [0,1] where intersection occurs.</p>
+     *
+     * <p>Used for:</p>
+     * <ul>
+     *   <li>Wall collision detection during PDR prediction</li>
+     *   <li>Blocking or sliding particles that would cross walls</li>
+     *   <li>Height-map aware trajectory constraint validation</li>
+     * </ul>
+     *
+     * @param floor      logical floor ID to query constraints
+     * @param x0         starting East position (meters in local frame)
+     * @param y0         starting North position (meters in local frame)
+     * @param x1         candidate East position (meters in local frame)
+     * @param y1         candidate North position (meters in local frame)
+     * @return {@link WallIntersection} with wall segment and smallest t value, or null if no hit
+     */
     private WallIntersection firstWallIntersection(int floor, double x0, double y0, double x1, double y1) {
         FloorConstraint fc = floorConstraints.get(floor);
         if (fc == null || fc.walls.isEmpty()) {
@@ -836,6 +965,24 @@ public class PositionFusionEngine {
 
     /**
      * Validates whether a floor transition is plausible at the particle position.
+     *
+     * <p>Floor transitions (via stairs or elevators) are only allowed at mapped connector
+     * locations. This method checks whether the particle's current position is near
+     * a valid connector (stairs or lift) on the current floor.</p>
+     *
+     * <p>Logic:</p>
+     * <ul>
+     *   <li>If elevator is detected and horizontal motion is minimal (≤ {@link #LIFT_HORIZONTAL_MAX_M}),
+     *       require proximity to a mapped lift</li>
+     *   <li>Otherwise, require proximity to stairs (within {@link #CONNECTOR_RADIUS_M})</li>
+     *   <li>If no connectors are mapped for the floor, allow transition (fail-open)</li>
+     * </ul>
+     *
+     * @param floor         current logical floor ID
+     * @param x             current East position (meters in local frame)
+     * @param y             current North position (meters in local frame)
+     * @param elevatorLikely true if barometer and motion cues suggest elevator (vertical-only)
+     * @return true if transition is allowed, false if blocked by connector constraint
      */
     private boolean canUseConnector(int floor, double x, double y, boolean elevatorLikely) {
         if (floorConstraints.isEmpty()) {
@@ -874,7 +1021,16 @@ public class PositionFusionEngine {
         return false;
     }
 
-    /** Converts polyline points from API geometry into local wall segments. */
+    /**
+     * Converts a polyline from FloorPlan API into local-frame wall segments.
+     *
+     * <p>Takes a list of WGS84 LatLng points (forming a wall boundary) and converts
+     * them to sequential segments in the local East/North coordinate system.
+     * Each pair of consecutive points becomes a {@link Segment} for wall intersection tests.</p>
+     *
+     * @param points list of LatLng coordinates (≥2 required for a valid wall)
+     * @param out    output list to accumulate converted segments
+     */
     private void addWallSegments(List<LatLng> points, List<Segment> out) {
         if (points == null || points.size() < 2) {
             return;
@@ -888,6 +1044,12 @@ public class PositionFusionEngine {
         }
     }
 
+    /**
+     * Converts a single WGS84 point to local East/North coordinates.
+     *
+     * @param latLng WGS84 coordinate (null safe)
+     * @return local Point2D, or null if input is null
+     */
     private Point2D toLocalPoint(LatLng latLng) {
         if (latLng == null) {
             return null;
@@ -896,7 +1058,16 @@ public class PositionFusionEngine {
         return new Point2D(local[0], local[1]);
     }
 
-    /** Computes a centroid in local meters for stairs/lift connector features. */
+    /**
+     * Computes the centroid of a connector feature (stairs/lift) in local coordinates.
+     *
+     * <p>Takes a polyline (list of LatLng points) representing a stair or lift area,
+     * converts each point to the local frame, and returns their arithmetic mean.
+     * Centroid is used as the contact point for floor-transition validation.</p>
+     *
+     * @param points LatLng coordinates of the connector boundary
+     * @return centroid as local Point2D, or null if pointlist is empty or all out-of-bounds
+     */
     private Point2D toLocalCentroid(List<LatLng> points) {
         if (points == null || points.isEmpty()) {
             return null;
@@ -996,7 +1167,17 @@ public class PositionFusionEngine {
         return null;
     }
 
-    /** Point-in-polygon test in lat/lon space for containing-building detection. */
+    /**
+     * Tests whether a WGS84 point lies inside a polygon using the ray-casting algorithm.
+     *
+     * <p>Counts the number of times a ray from the point crosses polygon edges.
+     * If the count is odd, the point is inside; if even (including 0), outside.
+     * Used to determine which building (outline) contains the user's current position.</p>
+     *
+     * @param point   WGS84 coordinate to test
+     * @param polygon ordered list of WGS84 vertices forming a closed polygon
+     * @return true if point is inside polygon, false otherwise
+     */
     private boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
         boolean inside = false;
         for (int i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
@@ -1015,7 +1196,22 @@ public class PositionFusionEngine {
         return inside;
     }
 
-    /** Robust segment intersection test with collinearity handling. */
+    /**
+     * Detects whether two line segments intersect, with robust collinearity handling.
+     *
+     * <p>Uses the orientation method to classify point configurations. Two segments
+     * intersect if the endpoints of one segment are on opposite sides of the other
+     * segment's line (orientation test), OR if they are collinear and overlapping
+     * (onSegment bounding box test).</p>
+     *
+     * <p>Used for wall intersection detection and floor-transition validation.</p>
+     *
+     * @param p1 segment 1 start
+     * @param p2 segment 1 end
+     * @param q1 segment 2 start
+     * @param q2 segment 2 end
+     * @return true if segments intersect (including touching at endpoints)
+     */
     private boolean segmentsIntersect(Point2D p1, Point2D p2, Point2D q1, Point2D q2) {
         double o1 = orientation(p1, p2, q1);
         double o2 = orientation(p1, p2, q2);
@@ -1032,11 +1228,38 @@ public class PositionFusionEngine {
                 || (Math.abs(o4) < 1e-9 && onSegment(q1, p2, q2));
     }
 
+    /**
+     * Computes the orientation of an ordered triplet of points.
+     *
+     * <p>Returns the signed cross product (b - a) × (c - a):</p>
+     * <ul>
+     *   <li>&gt; 0: c is left of the vector (a → b) (counter-clockwise)</li>
+     *   <li>&lt; 0: c is right of the vector (a → b) (clockwise)</li>
+     *   <li>≈ 0: points are collinear</li>
+     * </ul>
+     *
+     * <p>Used by segment intersection tests and point-in-polygon algorithms.</p>
+     *
+     * @param a first point
+     * @param b second point (vector start)
+     * @param c third point
+     * @return signed cross product magnitude
+     */
     private double orientation(Point2D a, Point2D b, Point2D c) {
         return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
     }
 
-    /** Returns normalized direction; falls back to east if norm is tiny. */
+    /**
+     * Normalizes a 2D vector to unit length.
+     *
+     * <p>Returns the unit vector in the direction of (x, y). If the norm is
+     * negligible (< 1e-9), falls back to unit East vector (1, 0) to avoid
+     * division by zero and provide a reasonable default direction.</p>
+     *
+     * @param x East component
+     * @param y North component
+     * @return unit vector: (x', y') where x'² + y'² ≈ 1 (or (1, 0) for tiny inputs)
+     */
     private Point2D normalize(double x, double y) {
         double norm = Math.hypot(x, y);
         if (norm < 1e-9) {
@@ -1045,7 +1268,22 @@ public class PositionFusionEngine {
         return new Point2D(x / norm, y / norm);
     }
 
-    /** Returns progress t along AB where intersection occurs; NaN if indeterminate. */
+    /**
+     * Computes the progress parameter t where two lines intersect.
+     *
+     * <p>Finds the parameter t ∈ [0, 1] along segment AB where it intersects
+     * line CD. Uses the parametric form: intersection = A + t·(B - A).
+     * If lines are parallel (cross product ≈ 0), returns NaN.</p>
+     *
+     * <p>Used to determine depth of wall hit for collision response (e.g., how far
+     * along the motion vector the particle would hit a wall).</p>
+     *
+     * @param a segment start (AB)
+     * @param b segment end (AB)
+     * @param c line start (CD)
+     * @param d line end (CD)
+     * @return progress t ∈ [0, 1] clamped, or NaN if parallel
+     */
     private double intersectionProgress(Point2D a, Point2D b, Point2D c, Point2D d) {
         double rX = b.x - a.x;
         double rY = b.y - a.y;
@@ -1063,7 +1301,18 @@ public class PositionFusionEngine {
         return clamp(t, 0.0, 1.0);
     }
 
-    /** Inclusive collinearity-bound check used by segment intersection. */
+    /**
+     * Checks if point B lies on segment AC (collinearity bounding box test).
+     *
+     * <p>Used when points a, b, c are collinear (determined by orientation).
+     * This test verifies that B is within the bounding box of segment AC.
+     * Includes small tolerance (1e-9) for numerical stability.</p>
+     *
+     * @param a segment start
+     * @param b point to test
+     * @param c segment end
+     * @return true if b is on segment ac, false otherwise
+     */
     private boolean onSegment(Point2D a, Point2D b, Point2D c) {
         return b.x >= Math.min(a.x, c.x) - 1e-9
                 && b.x <= Math.max(a.x, c.x) + 1e-9
