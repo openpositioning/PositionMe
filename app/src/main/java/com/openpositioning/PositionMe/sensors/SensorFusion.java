@@ -100,6 +100,11 @@ public class SensorFusion implements SensorEventListener {
     //particle filter
     private final ParticleFilter particleFilter = new ParticleFilter();
 
+    // Last GNSS position actually sent to the particle filter.
+    // Used to suppress stationary noise: indoors, GPS bounces 10-30 m even when
+    // the device is still, which drags particles out of the building.
+    private LatLng lastGnssForFilter = null;
+
 
 
     // Floorplan API cache (latest result from start-location step)
@@ -601,6 +606,14 @@ public class SensorFusion implements SensorEventListener {
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];
         state.startLocation[1] = startPosition[1];
+
+        // Reset and re-seed the particle filter at the chosen start location.
+        // The filter may have been initialized earlier from a noisy indoor GPS fix;
+        // re-seeding here ensures the fused position starts at the user-confirmed location.
+        particleFilter.reset();
+        LatLng chosenStart = new LatLng(startPosition[0], startPosition[1]);
+        particleFilter.initialise(chosenStart, 5f); // 5 m spread — user just pinpointed their location
+        lastGnssForFilter = chosenStart;
     }
 
     /**
@@ -800,11 +813,24 @@ public class SensorFusion implements SensorEventListener {
             recorder.addGnssData(location);
 
             LatLng gnssPos = new LatLng(location.getLatitude(), location.getLongitude());
-            float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f; // Default to 20m if accuracy is unavailable
+            float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
+
             if (!particleFilter.isInitialized()) {
                 particleFilter.initialise(gnssPos, accuracy);
+                lastGnssForFilter = gnssPos;
             } else {
-                particleFilter.updateGNSS(gnssPos, accuracy);
+                // Only feed GNSS into the particle filter if the reported position has moved
+                // at least half the stated accuracy radius since the last accepted fix.
+                // This suppresses the 10-30 m noise bounce that GPS produces indoors when
+                // the device is stationary, which would otherwise drag particles through walls.
+                float minDisplacement = Math.max(accuracy * 0.5f, 3.0f);
+                boolean shouldUpdate = (lastGnssForFilter == null)
+                        || (UtilFunctions.distanceBetweenPoints(lastGnssForFilter, gnssPos)
+                            >= minDisplacement);
+                if (shouldUpdate) {
+                    particleFilter.updateGNSS(gnssPos, accuracy);
+                    lastGnssForFilter = gnssPos;
+                }
             }
         }
     }

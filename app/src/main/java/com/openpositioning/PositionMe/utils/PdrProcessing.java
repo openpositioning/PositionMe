@@ -45,7 +45,7 @@ public class PdrProcessing {
 
 
     // Centralized map-matching thresholds (currently informational only)
-    private MapMatchingConfig mapMatchingConfig;
+    private final MapMatchingConfig mapMatchingConfig;
 
     // Step length
     private float stepLength;
@@ -93,7 +93,9 @@ public class PdrProcessing {
         // Check if estimate or manual values should be used
         this.useManualStep = this.settings.getBoolean("manual_step_values", false);
         
-        // this.mapMatchingConfig = mapMatchingConfig;
+        // Initialize map-matching configuration with defaults
+        this.mapMatchingConfig = new MapMatchingConfig();
+
         if(useManualStep) {
             try {
                 // Retrieve manual step  length
@@ -408,6 +410,9 @@ public class PdrProcessing {
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+        // Must be reset so the elevation baseline is recalibrated from scratch
+        this.setupIndex = 0;
+        this.startElevation = 0f;
     }
 
     /**

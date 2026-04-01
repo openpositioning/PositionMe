@@ -71,7 +71,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
-    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+    private boolean isGnssOn = true; // Tracks if GNSS tracking is enabled (matches default android:checked="true")
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
@@ -781,6 +781,25 @@ public class TrajectoryMapFragment extends Fragment {
         addObservation(gnssHistory, gnssLocation);
         redrawObservationOverlays();
         fetchFloorplanIfNeeded(gnssLocation);
+
+        // Drive building detection from raw GNSS so the floorplan appears as soon
+        // as GPS is available, even before the particle filter produces a fused position.
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(gnssLocation);
+            boolean nowIndoorMapSet = indoorMapManager.getIsIndoorMapSet();
+            setFloorControlsVisibility(nowIndoorMapSet ? View.VISIBLE : View.GONE);
+            if (!wasIndoorMapSet && nowIndoorMapSet) {
+                int building = indoorMapManager.getCurrentBuilding();
+                String apiName = buildingConstantToApiName(building);
+                FloorplanApiClient.BuildingInfo info = (sensorFusion != null && apiName != null)
+                        ? sensorFusion.getFloorplanBuilding(apiName) : null;
+                if (info != null) {
+                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(info.getCenter(), 19f));
+                }
+                wasIndoorMapSet = true;
+            }
+        }
+
         if (!isGnssOn) return;
 
         if (gnssMarker == null) {
@@ -1196,6 +1215,10 @@ public class TrajectoryMapFragment extends Fragment {
                             if (currentLocation != null) {
                                 indoorMapManager.setCurrentLocation(currentLocation);
                             }
+                            // Load wall geometry immediately so the particle filter has wall
+                            // constraints from the moment the floorplan arrives, even if
+                            // auto-floor is not enabled.
+                            updateWallsForPdr();
                         }
                         Log.d(TAG, "Floorplan fetched: " + buildings.size() + " buildings");
                     }
