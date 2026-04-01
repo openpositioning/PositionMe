@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
 import android.util.Log;
+import android.os.SystemClock;
 
 import com.google.android.gms.maps.model.LatLng;
 
@@ -30,8 +31,9 @@ public class WifiPositionManager implements Observer {
 
     // Exponential moving average smoothing for WiFi positions.
     // Prevents sudden large jumps from individual noisy scan results bugging out the trajectory.
-    private static final double EMA_ALPHA = 0.65;          // higher alpha reduces lag in turns
-    private static final double JUMP_THRESHOLD_M = 10.0;   // avoid over-dampening legitimate corner corrections
+    private static final double EMA_ALPHA = 0.80;          // stronger pull to newest WiFi fix
+    private static final double JUMP_THRESHOLD_M = 18.0;   // allow larger corrections before dampening
+    private static final long WIFI_TIME_DECAY_HALF_LIFE_MS = 10000L;
 
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
@@ -39,6 +41,7 @@ public class WifiPositionManager implements Observer {
     private WifiFixListener wifiFixListener;
     private LatLng smoothedWifiPosition = null;
     private int lastSmoothedFloor = 0;
+    private long lastSmoothedWifiFixMs = 0L;
 
     /**
      * Creates a new WifiPositionManager.
@@ -179,9 +182,11 @@ public class WifiPositionManager implements Observer {
      * position when the user changes floor so cross-floor averaging is avoided.
      */
     private LatLng smoothWifiPosition(LatLng raw, int floor) {
+        long nowMs = SystemClock.elapsedRealtime();
         if (smoothedWifiPosition == null || floor != lastSmoothedFloor) {
             smoothedWifiPosition = raw;
             lastSmoothedFloor = floor;
+            lastSmoothedWifiFixMs = nowMs;
             return raw;
         }
 
@@ -196,15 +201,21 @@ public class WifiPositionManager implements Observer {
                 ? EMA_ALPHA * (JUMP_THRESHOLD_M / distM)
                 : EMA_ALPHA;
 
+        // Age-based decay: older WiFi fixes fade faster, newer fixes retain more weight.
+        long ageMs = Math.max(0L, nowMs - lastSmoothedWifiFixMs);
+        double timeDecay = Math.pow(0.5, ageMs / (double) WIFI_TIME_DECAY_HALF_LIFE_MS);
+        alpha *= timeDecay;
+
         double smoothLat = smoothedWifiPosition.latitude
                 + alpha * (raw.latitude  - smoothedWifiPosition.latitude);
         double smoothLon = smoothedWifiPosition.longitude
                 + alpha * (raw.longitude - smoothedWifiPosition.longitude);
 
         smoothedWifiPosition = new LatLng(smoothLat, smoothLon);
+        lastSmoothedWifiFixMs = nowMs;
         Log.d("WifiPositionManager", String.format(
-                "WiFi EMA raw=(%.6f,%.6f) dist=%.1fm alpha=%.2f smooth=(%.6f,%.6f)",
-                raw.latitude, raw.longitude, distM, alpha,
+            "WiFi EMA raw=(%.6f,%.6f) dist=%.1fm age=%dms alpha=%.2f smooth=(%.6f,%.6f)",
+            raw.latitude, raw.longitude, distM, ageMs, alpha,
                 smoothLat, smoothLon));
         return smoothedWifiPosition;
     }
