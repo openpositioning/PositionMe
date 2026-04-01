@@ -253,27 +253,17 @@ public class IndoorMapManager {
      * @param autoFloor true if called by auto-floor feature
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        boolean hasPng = (currentBuilding == BUILDING_NUCLEUS
-                || currentBuilding == BUILDING_LIBRARY);
-
-        // For PNG buildings we don't need API data; for others we do
-        if (!hasPng && (currentFloorShapes == null || currentFloorShapes.isEmpty())) return;
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
 
         if (autoFloor) {
             newFloor += getAutoFloorBias();
         }
 
-        int maxFloor = hasPng
-                ? (currentBuilding == BUILDING_NUCLEUS ? NUCLEUS_MAPS.size() : LIBRARY_MAPS.size())
-                : currentFloorShapes.size();
+        int maxFloor = currentFloorShapes.size();
 
         if (newFloor >= 0 && newFloor < maxFloor && newFloor != this.currentFloor) {
             this.currentFloor = newFloor;
-            if (hasPng) {
-                showGroundOverlay(currentBuilding, newFloor);
-            } else {
-                drawFloorShapes(newFloor);
-            }
+            drawFloorShapes(newFloor);
         }
     }
 
@@ -337,11 +327,8 @@ public class IndoorMapManager {
                     currentFloorShapes = building.getFloorShapesList();
                 }
 
-                // Display: PNG ground overlay for Nucleus/Library; API vectors for Murchison
-                if (detected == BUILDING_NUCLEUS || detected == BUILDING_LIBRARY) {
-                    showGroundOverlay(detected, currentFloor);
-                    isIndoorMapSet = true;
-                } else if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+                // Display API vector shapes for all buildings
+                if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
                     drawFloorShapes(currentFloor);
                     isIndoorMapSet = true;
                 }
