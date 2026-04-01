@@ -45,7 +45,7 @@ public class PdrProcessing {
 
 
     // Centralized map-matching thresholds (currently informational only)
-    private MapMatchingConfig mapMatchingConfig;
+    //private MapMatchingConfig mapMatchingConfig;
 
     // Step length
     private float stepLength;

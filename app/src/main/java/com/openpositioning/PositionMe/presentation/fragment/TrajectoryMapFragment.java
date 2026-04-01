@@ -737,6 +737,25 @@ public class TrajectoryMapFragment extends Fragment {
         addObservation(gnssHistory, gnssLocation);
         redrawObservationOverlays();
         fetchFloorplanIfNeeded(gnssLocation);
+
+        // Drive building detection from raw GNSS so the floorplan appears as soon
+        // as GPS is available, even before the particle filter produces a fused position.
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(gnssLocation);
+            boolean nowIndoorMapSet = indoorMapManager.getIsIndoorMapSet();
+            setFloorControlsVisibility(nowIndoorMapSet ? View.VISIBLE : View.GONE);
+            if (!wasIndoorMapSet && nowIndoorMapSet) {
+                int building = indoorMapManager.getCurrentBuilding();
+                String apiName = buildingConstantToApiName(building);
+                FloorplanApiClient.BuildingInfo info = (sensorFusion != null && apiName != null)
+                        ? sensorFusion.getFloorplanBuilding(apiName) : null;
+                if (info != null) {
+                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(info.getCenter(), 19f));
+                }
+                wasIndoorMapSet = true;
+            }
+        }
+
         if (!isGnssOn) return;
 
         if (gnssMarker == null) {

@@ -14,15 +14,19 @@ import java.util.List;
  */
 public class BuildingPolygon {
     // Defining the coordinates of the building boundaries (rectangular boundaries based on floor map shape)
-    // North-East and South-West Coordinates for the Nucleus Building
-    public static final LatLng NUCLEUS_NE=new LatLng(55.92332001571212, -3.1738768212979593);
-    public static final LatLng NUCLEUS_SW=new LatLng(55.92282257022002, -3.1745956532857647);
+    // Detection-only shift — leave at 0.0. To move the PNG overlay, use OVERLAY_SHIFT_* in IndoorMapManager instead.
+    static final double SHIFT_LAT = 0.0;
+    static final double SHIFT_LNG = 0.0;
+
+    public static final LatLng NUCLEUS_NE=new LatLng(55.92332001571212+SHIFT_LAT, -3.1738768212979593+SHIFT_LNG);
+    public static final LatLng NUCLEUS_SW=new LatLng(55.92282257022002+SHIFT_LAT, -3.1745956532857647+SHIFT_LNG);
+
     // North-East and South-West Coordinates for the Kenneth and Murray Library Building
-    public static final LatLng LIBRARY_NE=new LatLng(55.92306692576906, -3.174771893078224);
-    public static final LatLng LIBRARY_SW=new LatLng(55.92281045664704, -3.175184089079065);
+    public static final LatLng LIBRARY_NE=new LatLng(55.92306692576906+SHIFT_LAT, -3.174771893078224+SHIFT_LNG);
+    public static final LatLng LIBRARY_SW=new LatLng(55.92281045664704+SHIFT_LAT, -3.175184089079065+SHIFT_LNG);
     // North-East and South-West Coordinates for Murchison House
-    public static final LatLng MURCHISON_NE=new LatLng(55.92240, -3.17150);
-    public static final LatLng MURCHISON_SW=new LatLng(55.92170, -3.17280);
+    public static final LatLng MURCHISON_NE=new LatLng(55.92240+SHIFT_LAT, -3.17150+SHIFT_LNG);
+    public static final LatLng MURCHISON_SW=new LatLng(55.92170+SHIFT_LAT, -3.17280+SHIFT_LNG);
     // Boundary coordinates of the Nucleus building (clockwise)
 
     public static final List<LatLng> NUCLEUS_POLYGON = new ArrayList<LatLng>() {{

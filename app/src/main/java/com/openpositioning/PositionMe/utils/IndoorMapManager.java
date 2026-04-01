@@ -49,11 +49,22 @@ public class IndoorMapManager {
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
 
+    // Fine-tune these to shift the PNG floor-plan overlay without affecting building detection.
+    // +0.00005 ≈ +5 m north,  -0.00001 ≈ -1 m west  (1 deg lat ≈ 111 km, 1 deg lng ≈ 70 km here)
+    private static final double OVERLAY_SHIFT_LAT = 0.0001;
+    private static final double OVERLAY_SHIFT_LNG = 0.0;
+
     // Lat/lng bounds for positioning ground overlay images on the map
     private static final LatLngBounds NUCLEUS_BOUNDS = new LatLngBounds(
-            BuildingPolygon.NUCLEUS_SW, BuildingPolygon.NUCLEUS_NE);
+            new LatLng(BuildingPolygon.NUCLEUS_SW.latitude  + OVERLAY_SHIFT_LAT,
+                       BuildingPolygon.NUCLEUS_SW.longitude + OVERLAY_SHIFT_LNG),
+            new LatLng(BuildingPolygon.NUCLEUS_NE.latitude  + OVERLAY_SHIFT_LAT,
+                       BuildingPolygon.NUCLEUS_NE.longitude + OVERLAY_SHIFT_LNG));
     private static final LatLngBounds LIBRARY_BOUNDS = new LatLngBounds(
-            BuildingPolygon.LIBRARY_SW, BuildingPolygon.LIBRARY_NE);
+            new LatLng(BuildingPolygon.LIBRARY_SW.latitude  + OVERLAY_SHIFT_LAT,
+                       BuildingPolygon.LIBRARY_SW.longitude + OVERLAY_SHIFT_LNG),
+            new LatLng(BuildingPolygon.LIBRARY_NE.latitude  + OVERLAY_SHIFT_LAT,
+                       BuildingPolygon.LIBRARY_NE.longitude + OVERLAY_SHIFT_LNG));
 
     private GoogleMap gMap;
     private LatLng currentLocation;
