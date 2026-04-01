@@ -537,6 +537,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     // Skip PDR update if the acceleration pattern indicates no real movement
                     if (isStationary(accelMagnitude)) {
+                        Log.d("SensorFusion", "isStationary=true, skipping PDR step (samples="
+                                + accelMagnitude.size() + ")");
                         accelMagnitude.clear();
                         break;
                     }
