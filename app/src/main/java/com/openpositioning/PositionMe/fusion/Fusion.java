@@ -289,8 +289,6 @@ public class Fusion {
             Log.d(TAG, "New GNSS Observation: " + pos + "; sigma = " + accuracyMetres + "m");
         }
 
-        // TODO - Do we want to add an observation if it isn't necessarily acceptable?
-        // (ie, should this not be inside the if() check?)
         double[] en = particleFilter.latLngToEN(pos.latitude, pos.longitude);
         // particleFilter.addObservation(en[0], en[1], accuracyMetres);
         addObservation(pos, OBSERVATION_TYPE_GNSS, accuracyMetres);

@@ -21,8 +21,7 @@ import org.json.JSONObject;
  * WiFiPositioning#request(JSONObject)}. The WiFi position coordinates and floor are updated when
  * the response of the POST request is obtained.
  *
- * <p>TODO - This entire class should be replaced with using {@link
- * com.openpositioning.PositionMe.data.remote.ServerCommunications ServerCommunications} for API
+ * <p>com.openpositioning.PositionMe.data.remote.ServerCommunications ServerCommunications} for API
  * calls
  *
  * @author Arun Gopalakrishnan
@@ -70,7 +69,6 @@ public class WiFiPositioning {
         return floor;
     }
 
-    // TODO - Reduce these two functions into a single function (code duplication)
     /**
      * Creates a POST request using the WiFi fingerprint to obtain user's location. The POST request
      * is issued to the OpenPositioning API with the Wi-Fi fingerprint passed as the parameter.

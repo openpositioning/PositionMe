@@ -922,7 +922,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    // TODO - Replace normal orientation with LPF version when it's ready
     public float getKalmanFilterOrientation() {
         if (!Float.isNaN(kalmanFilterOrientation)) {
             return kalmanFilterOrientation;
