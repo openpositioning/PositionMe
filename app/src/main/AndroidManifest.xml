@@ -99,7 +99,7 @@
     <!-- Google Maps API key metadata -->
     <meta-data
         android:name="com.google.android.geo.API_KEY"
-        android:value="AIzaSyBwFMzduNUH5ekN0NJllLh72u28teUvcGo"/>
+        android:value="${GOOGLE_MAPS_API_KEY}"/>
 
     <activity
         android:name="com.openpositioning.PositionMe.presentation.activity.MainActivity"

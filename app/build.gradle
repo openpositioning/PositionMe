@@ -41,6 +41,11 @@ android {
                 "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
         buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
                 "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+
+            // Add this for manifest placeholders
+        manifestPlaceholders = [
+                GOOGLE_MAPS_API_KEY: localProperties['MAPS_API_KEY'] ?: ""
+        ]
     }
 
     buildFeatures {
