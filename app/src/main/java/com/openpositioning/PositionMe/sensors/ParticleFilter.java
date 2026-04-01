@@ -90,8 +90,6 @@ public class ParticleFilter {
             // Apply this particle's estimated heading bias before adding step noise.
             // Based on: Woodman, O.J. & Harle, R. (2008). "Pedestrian localisation for
             // indoor environments." UbiComp 2008, pp. 114-123.
-            // The bias corrects systematic compass error so particles that are aligned
-            // with the true walking direction accumulate higher weights over time.
             float correctedHeading = heading + particles[i][2];
             float noisyHeading = correctedHeading + (float) (random.nextGaussian() * HEADING_NOISE_STD);
             float noisyStride  = stride + (float) (random.nextGaussian() * STRIDE_LENGTH_NOISE_STD);
@@ -102,7 +100,36 @@ public class ParticleFilter {
             float newY = oldY + noisyStride * (float) Math.sin(noisyHeading);
 
             if (intersectsWall(oldX, oldY, newX, newY)) {
-                // Stop at old position — can't pass through a wall.
+                // Wall hit: slide along the first blocking wall's tangent instead of freezing.
+                // Frozen particles cluster at wall boundaries and pull the weighted mean (fused
+                // position) towards walls even as the user walks forward.  Sliding lets particles
+                // continue moving in the corridor direction, keeping the cloud well-distributed.
+                boolean moved = false;
+                for (float[] wall : walls) {
+                    if (!doIntersect(oldX, oldY, newX, newY,
+                                     wall[0], wall[1], wall[2], wall[3])) continue;
+                    // Wall tangent unit vector
+                    float wx = wall[2] - wall[0];
+                    float wy = wall[3] - wall[1];
+                    float wLen = (float) Math.sqrt(wx * wx + wy * wy);
+                    if (wLen < 1e-6f) break;
+                    wx /= wLen;
+                    wy /= wLen;
+                    // Project desired step onto the wall tangent
+                    float dx = newX - oldX;
+                    float dy = newY - oldY;
+                    float proj = dx * wx + dy * wy;
+                    float slideX = oldX + proj * wx;
+                    float slideY = oldY + proj * wy;
+                    // Accept only if the slide itself is wall-free
+                    if (!intersectsWall(oldX, oldY, slideX, slideY)) {
+                        particles[i][0] = slideX;
+                        particles[i][1] = slideY;
+                        moved = true;
+                    }
+                    break; // handle only the first blocking wall
+                }
+                // If no valid slide found, keep at old position (fallback)
             } else {
                 particles[i][0] = newX;
                 particles[i][1] = newY;

@@ -425,7 +425,7 @@ public class SensorFusion implements SensorEventListener {
         stepDetectionSensor.sensorManager.registerListener(this,
                 stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this,
-                rotationSensor.sensor, (int) 1e6);
+                rotationSensor.sensor, 10000); // 100 Hz — heading must update faster than step rate
         // Foreground service owns WiFi/BLE scanning during recording.
         if (!recorder.isRecording()) {
             startWirelessCollectors();

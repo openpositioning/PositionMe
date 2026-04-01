@@ -113,8 +113,8 @@ public class RecordingFragment extends Fragment {
         @Override
         public void run() {
             updateUIandPosition();
-            // Loop again
-            refreshDataHandler.postDelayed(refreshDataTask, 200);
+            // Loop again — 16 ms ≈ 60 fps for smooth marker and camera animation
+            refreshDataHandler.postDelayed(refreshDataTask, 16);
         }
     };
 

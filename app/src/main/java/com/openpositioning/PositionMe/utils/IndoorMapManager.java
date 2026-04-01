@@ -174,6 +174,32 @@ public class IndoorMapManager {
 
     /**
      * Returns true if the last known location is within the given radius (meters)
+     * of a <strong>lift</strong> feature on the current floor.
+     * Used by auto-floor logic to restrict barometric floor changes to lift areas only.
+     *
+     * @param radiusMeters proximity threshold in meters
+     * @return true when near a lift; false otherwise or when data missing
+     */
+    public boolean isNearLift(float radiusMeters) {
+        if (lastLocation == null || currentFloorShapes == null) return false;
+        if (currentFloor < 0 || currentFloor >= currentFloorShapes.size()) return false;
+        FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(currentFloor);
+        if (floor == null || floor.getFeatures() == null) return false;
+        for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+            if (!"lift".equals(feature.getIndoorType())) continue;
+            for (List<LatLng> part : feature.getParts()) {
+                for (LatLng point : part) {
+                    if (UtilFunctions.distanceBetweenPoints(lastLocation, point) <= radiusMeters) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the last known location is within the given radius (meters)
      * of any stairs or lift feature on the current floor.
      *
      * @param radiusMeters proximity threshold in meters
@@ -486,17 +512,24 @@ public class IndoorMapManager {
 
     /**
      * Returns the stroke colour for a given indoor feature type.
+     * Feature colours are fixed regardless of the user's trajectory colour choice:
+     *   wall   → red   (impassable boundary)
+     *   stairs → yellow (cross-floor via stairs)
+     *   lift   → green  (cross-floor via lift)
+     *   room   → current trajectory colour (neutral room outline)
      *
      * @param indoorType the indoor_type property value
      * @return ARGB colour value
      */
     private int getStrokeColor(String indoorType) {
+        if ("wall".equals(indoorType))   return Color.argb(220, 220,  30,  30); // red
+        if ("stairs".equals(indoorType)) return Color.argb(220, 220, 180,   0); // yellow
+        if ("lift".equals(indoorType))   return Color.argb(220,  30, 180,  30); // green
+        // room / other — use the user-chosen trajectory colour
         int r = Color.red(floorPlanColor);
         int g = Color.green(floorPlanColor);
         int b = Color.blue(floorPlanColor);
-        if ("wall".equals(indoorType)) return Color.argb(220, r, g, b);
-        if ("room".equals(indoorType)) return Color.argb(160, r, g, b);
-        return Color.argb(180, r, g, b);
+        return Color.argb(160, r, g, b);
     }
 
     /**
@@ -506,10 +539,15 @@ public class IndoorMapManager {
      * @return ARGB colour value
      */
     private int getFillColor(String indoorType) {
-        int r = Color.red(floorPlanColor);
-        int g = Color.green(floorPlanColor);
-        int b = Color.blue(floorPlanColor);
-        if ("room".equals(indoorType)) return Color.argb(40, r, g, b);
+        if ("wall".equals(indoorType))   return Color.argb( 60, 220,  30,  30); // faint red
+        if ("stairs".equals(indoorType)) return Color.argb( 60, 220, 180,   0); // faint yellow
+        if ("lift".equals(indoorType))   return Color.argb( 60,  30, 180,  30); // faint green
+        if ("room".equals(indoorType)) {
+            int r = Color.red(floorPlanColor);
+            int g = Color.green(floorPlanColor);
+            int b = Color.blue(floorPlanColor);
+            return Color.argb(40, r, g, b);
+        }
         return Color.TRANSPARENT;
     }
 

@@ -101,6 +101,15 @@ public class TrajectoryMapFragment extends Fragment {
 
     private final MapMatchingConfig mapMatchingConfig = new MapMatchingConfig();
     private LatLng wallOrigin;
+    // Tracks the particle-filter origin that was used for the last wall build.
+    // Walls must be rebuilt whenever the PF origin changes so both share the same ENU frame.
+    private LatLng lastWallBuildOrigin = null;
+
+    // The last position that was ACTUALLY added to the polyline.
+    // Used as the "from" point in the wall-crossing check so that the anchor never
+    // advances through a wall: if a segment is rejected, the anchor stays at the last
+    // good point and the next segment is checked from there instead.
+    private LatLng lastPolylinePoint = null;
 
     // UI
     private Spinner switchMapSpinner;
@@ -733,24 +742,43 @@ public class TrajectoryMapFragment extends Fragment {
             points.add(newLocation);
             polyline.setPoints(points);
         }*/
-        // Extend polyline
+        // Rebuild wall geometry if the particle-filter origin has changed since the last build.
+        // Both the wall segments and wouldCrossWall() must use the same ENU origin; if the
+        // filter was reset (WiFi anchor, GNSS fix, setStartGNSSLatitude) the origin shifts and
+        // the old walls are misaligned, causing segments to pass through them undetected.
+        if (sensorFusion != null && indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+            LatLng pfOrigin = sensorFusion.getParticleFilter().getOrigin();
+            if (pfOrigin != null && !pfOrigin.equals(lastWallBuildOrigin)) {
+                updateWallsForPdr();
+            }
+        }
+
+        // Extend polyline.
+        // IMPORTANT: use lastPolylinePoint (not currentLocation / oldLocation) as the
+        // "from" anchor for the wall check.  currentLocation always advances to displayLocation
+        // (so the marker and camera stay correct), but lastPolylinePoint only advances when a
+        // point is actually drawn.  This prevents the anchor from moving to the wrong side of
+        // a wall: once a segment is rejected, the next check still starts from the last valid
+        // drawn point, so the trajectory can resume as soon as the fused position re-enters
+        // valid territory — it never gets permanently stuck.
         if (polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
 
-            // First position fix: add the first polyline point
-            if (oldLocation == null) {
+            if (lastPolylinePoint == null) {
+                // First drawn point — no wall check needed.
                 points.add(displayLocation);
                 polyline.setPoints(points);
-            } else if (!oldLocation.equals(displayLocation)) {
-                // Wall guard: never draw a trajectory segment that crosses a floorplan wall.
-                // The particle filter holds the same wall geometry used to constrain particles,
-                // so we reuse its intersection test here before committing the point.
+                lastPolylinePoint = displayLocation;
+            } else if (!lastPolylinePoint.equals(displayLocation)) {
                 boolean crossesWall = sensorFusion != null
-                        && sensorFusion.getParticleFilter().wouldCrossWall(oldLocation, displayLocation);
+                        && sensorFusion.getParticleFilter()
+                                       .wouldCrossWall(lastPolylinePoint, displayLocation);
                 if (!crossesWall) {
                     points.add(displayLocation);
                     polyline.setPoints(points);
+                    lastPolylinePoint = displayLocation;
                 }
+                // else: lastPolylinePoint stays at the last good anchor
             }
         }
 
@@ -961,6 +989,8 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation  = null;
+        lastPolylinePoint = null;
+        lastWallBuildOrigin = null;
         floorplanFetchAttempted = false;
         wasIndoorMapSet = false;
 
@@ -1132,14 +1162,8 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Applies the sensor-authoritative floor immediately without debounce.
-     * Called once when auto-floor is re-enabled so the map display snaps back
-     * to the floor the sensors believe the user is on, regardless of any
-     * manual floor browsing the user did while auto-floor was off.
-     *
-     * <p>Priority: WiFi floor (if fresh) → PDR/barometric floor.
-     * Unlike {@link #evaluateAutoFloor()}, this path has no elevation-magnitude
-     * or proximity guards — those guards exist to avoid jittery periodic changes,
-     * but here we always want an immediate, unconditional sync.</p>
+     * Uses the PDR/barometric floor counter — WiFi floor is intentionally excluded
+     * because near staircases WiFi fingerprints bleed across floors and cause false triggers.
      */
     private void applyImmediateFloor() {
         if (sensorFusion == null || indoorMapManager == null) return;
@@ -1147,16 +1171,9 @@ public class TrajectoryMapFragment extends Fragment {
 
         updateWallsForPdr();
 
-        int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null && sensorFusion.isWifiPositionFresh()) {
-            // WiFi gives the most reliable absolute floor when a fresh fix is available
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            // Fall back to the PDR pipeline's continuously-maintained floor counter.
-            // This already incorporates every barometric transition since recording started,
-            // so it is correct even when the current elevation delta is near zero (e.g. ground floor).
-            candidateFloor = sensorFusion.getPdrCurrentFloor();
-        }
+        // Barometer-only: use the PDR pipeline's continuously-maintained floor counter
+        // which is already gated on lift proximity and 5.5 m snap tolerance in SensorFusion.
+        int candidateFloor = sensorFusion.getPdrCurrentFloor();
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
         updateFloorLabel();
@@ -1180,9 +1197,12 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Evaluates the current floor using WiFi positioning (priority) or
-     * barometric elevation (fallback). Applies a 3-second debounce window
-     * to prevent jittery floor switching.
+     * Evaluates the current floor using barometric elevation only.
+     * Floor changes are permitted ONLY when the user is physically near a lift AND
+     * the barometer shows a change that is a whole multiple of the building's floor height
+     * (5.5 m for Nucleus). WiFi floor is intentionally excluded: near staircases the WiFi
+     * fingerprints from adjacent floors cause false triggers that move the map to the wrong
+     * floor and break the wall-collision geometry.
      */
     private void evaluateAutoFloor() {
         if (sensorFusion == null || indoorMapManager == null) return;
@@ -1190,52 +1210,32 @@ public class TrajectoryMapFragment extends Fragment {
 
         updateWallsForPdr();
 
-        int candidateFloor;
+        // Barometric elevation from the PDR pipeline
+        float elevation = sensorFusion.getElevation();
 
-        // Priority 1: WiFi floor — only when a fresh fix is available (within 30 s).
-        // Stale WiFi data must not permanently suppress the barometric path.
-        if (sensorFusion.getLatLngWifiPositioning() != null && sensorFusion.isWifiPositionFresh()) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            // Fallback: barometric elevation estimate with map-matching guards
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) {
-                floorHeight = mapMatchingConfig.baroHeightThreshold;
-            }
-            if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
-                return; // Ignore small height changes
-            }
-            boolean nearFeature = indoorMapManager.isNearCrossFloorFeature(mapMatchingConfig.crossFeatureProximity);
-            if (!nearFeature) {
-                return;
-            }
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
+        // Use the building's known floor height (5.5 m for Nucleus)
+        float floorHeight = indoorMapManager.getFloorHeight();
+        if (floorHeight <= 0) floorHeight = IndoorMapManager.NUCLEUS_FLOOR_HEIGHT;
 
-            // Use real horizontal acceleration so LIFT (low horiz) vs STAIRS (high horiz) is distinguished
-            float horizAccel = sensorFusion.getHorizontalAccelMagnitude();
+        // Guard 1: ignore trivially small elevation changes (noise / gentle ramp)
+        if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) return;
 
-            // Lift snap guard: while inside a lift (near-zero horizontal movement) only commit
-            // once the barometer is within 15% of floor height from the exact target level,
-            // preventing false triggers mid-ascent/descent.
-            if (horizAccel < 0.3f) {
-                float targetElev = candidateFloor * floorHeight;
-                if (Math.abs(elevation - targetElev) > floorHeight * 0.15f) {
-                    return;
-                }
-            }
+        // Guard 2: only commit near a lift — not near stairs, not in the middle of a corridor.
+        // This is the key fix: staircase proximity must NOT trigger floor changes.
+        if (!indoorMapManager.isNearLift(mapMatchingConfig.crossFeatureProximity)) return;
 
-            CrossFloorClassifier.Mode mode =
-                    CrossFloorClassifier.classify(horizAccel, elevation, 0.0, mapMatchingConfig);
-            Log.d(TAG, "Auto-floor (baro) mode=" + mode + " elevation=" + elevation
-                    + " horizAccel=" + horizAccel);
+        // Guard 3: require low horizontal movement (lift ≈ still, stairs ≈ walking)
+        float horizAccel = sensorFusion.getHorizontalAccelMagnitude();
+        if (horizAccel >= 0.3f) return; // user is walking — probably stairs, not lift
 
-            // Reject UNKNOWN — not enough movement signal to commit to a floor change
-            if (mode == CrossFloorClassifier.Mode.UNKNOWN) {
-                return;
-            }
-        }
+        // Guard 4: snap-to-floor — barometer must be within 15 % of an exact floor level.
+        // Prevents committing a floor change mid-ascent when the lift is between floors.
+        int candidateFloor = Math.round(elevation / floorHeight);
+        float targetElev = candidateFloor * floorHeight;
+        if (Math.abs(elevation - targetElev) > floorHeight * 0.15f) return;
+
+        Log.d(TAG, "Auto-floor (baro/lift) elevation=" + elevation
+                + " candidate=" + candidateFloor + " horizAccel=" + horizAccel);
 
         // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
         long now = SystemClock.elapsedRealtime();
@@ -1330,5 +1330,6 @@ public class TrajectoryMapFragment extends Fragment {
 
         List<List<PointF>> walls = WallGeometryBuilder.buildWalls(floor, wallOrigin);
         sensorFusion.setPdrWalls(walls);
+        lastWallBuildOrigin = wallOrigin;
     }
 }
