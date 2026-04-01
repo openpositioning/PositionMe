@@ -103,7 +103,7 @@
             app:summary="Controls number of recent GNSS, WiFi, and PDR points shown"
             app:defaultValue="5"
             android:min="2"
-            android:max="15"
+            android:max="30"
             app:showSeekBarValue="true"
             app:dependency="overwrite_constants"/>
 
