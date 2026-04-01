@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -20,6 +21,8 @@ import androidx.core.app.ActivityCompat;
  * @author Mate Stodulka
  */
 public class GNSSDataProcessor {
+    private static final String TAG = "GNSS_DEBUG";
+
     // Application context for handling permissions and locationManager instances
     private final Context context;
     // Locations manager to enable access to GNSS and cellular location data via the android system
@@ -49,21 +52,32 @@ public class GNSSDataProcessor {
 
         // Check for permissions
         boolean permissionsGranted = checkLocationPermissions();
+        Log.e(TAG, "Location permissions granted: " + permissionsGranted);
 
         //Location manager and listener
         this.locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
         this.locationListener = locationListener;
 
+        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        Log.e(TAG, "GPS provider enabled: " + gpsEnabled);
+        Log.e(TAG, "Network provider enabled: " + networkEnabled);
+
         // Turn on gps if it is currently disabled
-        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        if (!gpsEnabled) {
+            Log.e(TAG, "WARNING: GPS provider is DISABLED");
             Toast.makeText(context, "Open GPS", Toast.LENGTH_SHORT).show();
         }
-        if (!locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+        if (!networkEnabled) {
+            Log.e(TAG, "WARNING: Network provider is DISABLED");
             Toast.makeText(context, "Enable Cellular", Toast.LENGTH_SHORT).show();
         }
         // Start location updates
         if (permissionsGranted) {
+            Log.e(TAG, "Starting location updates from GPS + Network providers");
             startLocationUpdates();
+        } else {
+            Log.e(TAG, "WARNING: Cannot start location updates - permissions not granted");
         }
     }
 
@@ -98,18 +112,23 @@ public class GNSSDataProcessor {
      */
     @SuppressLint("MissingPermission")
     public void startLocationUpdates() {
-        //if (sharedPreferences.getBoolean("location", true)) {
         boolean permissionGranted = checkLocationPermissions();
-        if (permissionGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
+        boolean gpsOn = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        boolean netOn = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        Log.e(TAG, "startLocationUpdates() - permission=" + permissionGranted
+                + " GPS=" + gpsOn + " Network=" + netOn);
 
+        if (permissionGranted && gpsOn && netOn) {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
             locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+            Log.e(TAG, "Registered for GPS + Network location updates (minTime=0, minDist=0)");
         }
-        else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
+        else if(permissionGranted && !gpsOn){
+            Log.e(TAG, "WARNING: GPS provider not available, cannot register");
             Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
         }
-        else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
+        else if(permissionGranted && !netOn){
+            Log.e(TAG, "WARNING: Network provider not available, cannot register");
             Toast.makeText(context, "Turn on WiFi", Toast.LENGTH_LONG).show();
         }
     }
@@ -118,6 +137,7 @@ public class GNSSDataProcessor {
      * Stops updates to the location listener via the location manager.
      */
     public void stopUpdating() {
+        Log.e(TAG, "Stopping GNSS location updates");
         locationManager.removeUpdates(locationListener);
     }
 

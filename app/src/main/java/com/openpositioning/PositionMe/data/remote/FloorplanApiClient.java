@@ -14,6 +14,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
@@ -372,12 +373,55 @@ public class FloorplanApiClient {
             while (it.hasNext()) {
                 keys.add(it.next());
             }
-            Collections.sort(keys);
+            // Sort floor keys in building-logical order:
+            // Basement levels (B*) first, then Ground (G*), then upper floors (F1, F2, ...)
+            Collections.sort(keys, new Comparator<String>() {
+                @Override
+                public int compare(String a, String b) {
+                    return floorKeyOrder(a) - floorKeyOrder(b);
+                }
 
-            for (String key : keys) {
+                private int floorKeyOrder(String key) {
+                    String upper = key.toUpperCase();
+                    // Basement levels: B1=-2, B2=-3, etc.
+                    if (upper.startsWith("B")) {
+                        try {
+                            return -Integer.parseInt(upper.substring(1)) - 1;
+                        } catch (NumberFormatException e) {
+                            return -1;
+                        }
+                    }
+                    // Ground floor
+                    if (upper.startsWith("G")) return 0;
+                    // Upper floors: F1=1, F2=2, etc.
+                    if (upper.startsWith("F")) {
+                        try {
+                            return Integer.parseInt(upper.substring(1));
+                        } catch (NumberFormatException e) {
+                            return 100;
+                        }
+                    }
+                    // Pure numeric keys
+                    try {
+                        return Integer.parseInt(upper);
+                    } catch (NumberFormatException e) {
+                        return 100;
+                    }
+                }
+            });
+
+            Log.e(TAG, "FLOOR_PARSE: building floor keys (sorted): " + keys);
+
+            for (int idx = 0; idx < keys.size(); idx++) {
+                String key = keys.get(idx);
                 JSONObject floorCollection = root.getJSONObject(key);
                 String displayName = floorCollection.optString("name", key);
                 JSONArray features = floorCollection.optJSONArray("features");
+
+                Log.e(TAG, "FLOOR_PARSE: index=" + idx
+                        + " | key=\"" + key + "\""
+                        + " | displayName=\"" + displayName + "\""
+                        + " | features=" + (features != null ? features.length() : 0));
 
                 List<MapShapeFeature> shapeFeatures = new ArrayList<>();
                 if (features != null) {

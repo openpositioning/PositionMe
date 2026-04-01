@@ -38,10 +38,23 @@
                 android:text="@string/gnssSwitch" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/wifiSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wifiSwitch" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/auto_floor" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/smoothSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/smoothSwitch"
+                android:checked="true" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
@@ -62,6 +75,38 @@
                 android:spinnerMode="dropdown"
                 app:layout_constraintTop_toTopOf="parent"
                 android:elevation="5dp"/>
+
+            <!-- Color Legend -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="● GNSS"
+                    android:textColor="#0078FF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="● WiFi"
+                    android:textColor="#00C800"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="● Trajectory"
+                    android:textColor="#FF0000"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

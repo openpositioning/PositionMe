@@ -9,8 +9,10 @@ import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
+import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -39,6 +41,8 @@ import java.util.TimerTask;
  * @author Virginia Cangelosi
  */
 public class WifiDataProcessor implements Observable {
+
+    private static final String TAG = "WIFI_SCAN_DEBUG";
 
     //Time over which a new scan will be initiated
     private static final long scanInterval = 5000;
@@ -122,13 +126,32 @@ public class WifiDataProcessor implements Observable {
         public void onReceive(Context context, Intent intent) {
 
             if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                // Unregister this listener
+                Log.e(TAG, "WiFi scan aborted - FINE_LOCATION permission not granted");
                 stopListening();
                 return;
             }
 
             //Collect the list of nearby wifis
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
+            Log.e(TAG, "=== WiFi Scan Completed ===");
+            Log.e(TAG, "Total scan results: " + wifiScanList.size());
+
+            // Log current WiFi connection status
+            WifiInfo connInfo = wifiManager.getConnectionInfo();
+            if (connInfo != null) {
+                Log.e(TAG, "Current WiFi connection: SSID=" + connInfo.getSSID()
+                        + " BSSID=" + connInfo.getBSSID()
+                        + " RSSI=" + connInfo.getRssi() + "dBm"
+                        + " linkSpeed=" + connInfo.getLinkSpeed() + "Mbps"
+                        + " freq=" + connInfo.getFrequency() + "MHz");
+            } else {
+                Log.e(TAG, "No current WiFi connection");
+            }
+
+            // Check network connectivity
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo netInfo = cm.getActiveNetworkInfo();
+            Log.e(TAG, "Network connectivity: " + (netInfo != null ? netInfo.getTypeName() + " connected=" + netInfo.isConnected() : "NO NETWORK"));
             //Stop receiver as scan is complete
             try {
                 context.unregisterReceiver(this);
@@ -384,12 +407,16 @@ public class WifiDataProcessor implements Observable {
             long intMacAddress = convertBssidToLong(wifiMacAddress);
             currentWifi.setBssid(intMacAddress);
             currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
+            Log.e(TAG, "Current WiFi: SSID=" + currentWifi.getSsid()
+                    + " BSSID=" + wifiMacAddress
+                    + " freq=" + currentWifi.getFrequency() + "MHz");
         }
         else{
             //Store standard information if not connected
             currentWifi.setSsid("Not connected");
             currentWifi.setBssid(0);
             currentWifi.setFrequency(0);
+            Log.e(TAG, "WARNING: WiFi not connected - positioning API may fail");
         }
         return currentWifi;
     }
