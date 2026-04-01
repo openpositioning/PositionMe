@@ -49,12 +49,11 @@ public class IndoorMapManager {
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
 
-    // Fine-tune these to shift the PNG floor-plan overlay without affecting building detection.
-    // +0.00005 ≈ +5 m north,  -0.00001 ≈ -1 m west  (1 deg lat ≈ 111 km, 1 deg lng ≈ 70 km here)
-    private static final double OVERLAY_SHIFT_LAT = 0.0001;
-    private static final double OVERLAY_SHIFT_LNG = 0.0;
+
 
     // Lat/lng bounds for positioning ground overlay images on the map
+    static final float OVERLAY_SHIFT_LAT = 0;
+    static final float OVERLAY_SHIFT_LNG = 0;
     private static final LatLngBounds NUCLEUS_BOUNDS = new LatLngBounds(
             new LatLng(BuildingPolygon.NUCLEUS_SW.latitude  + OVERLAY_SHIFT_LAT,
                        BuildingPolygon.NUCLEUS_SW.longitude + OVERLAY_SHIFT_LNG),
@@ -89,11 +88,14 @@ public class IndoorMapManager {
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
 
-    // Colours for different indoor feature types
-    private static final int WALL_STROKE = Color.argb(200, 80, 80, 80);
-    private static final int ROOM_STROKE = Color.argb(180, 33, 150, 243);
-    private static final int ROOM_FILL = Color.argb(40, 33, 150, 243);
-    private static final int DEFAULT_STROKE = Color.argb(150, 100, 100, 100);
+    // Active trajectory color — set by the user via the color toggle button.
+    // Floor plan shapes are drawn in this color so they stay visually consistent.
+    private int floorPlanColor = Color.RED; // default matches the default polyline color
+
+    /** Call this whenever the user changes the trajectory polyline color. */
+    public void setFloorPlanColor(int color) {
+        this.floorPlanColor = color;
+    }
 
     // Last known user location (lat/lng on map)
     private LatLng lastLocation;
@@ -291,6 +293,13 @@ public class IndoorMapManager {
      * <p>Detection priority: floorplan API real polygon outlines first,
      * then legacy hard-coded rectangular boundaries as fallback.</p>
      */
+    /** Redraws the current floor with the latest color settings. */
+    public void redrawCurrentFloor() {
+        if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+            drawFloorShapes(currentFloor);
+        }
+    }
+
     private void setBuildingOverlay() {
         try {
             int detected = detectCurrentBuilding();
@@ -482,9 +491,12 @@ public class IndoorMapManager {
      * @return ARGB colour value
      */
     private int getStrokeColor(String indoorType) {
-        if ("wall".equals(indoorType)) return WALL_STROKE;
-        if ("room".equals(indoorType)) return ROOM_STROKE;
-        return DEFAULT_STROKE;
+        int r = Color.red(floorPlanColor);
+        int g = Color.green(floorPlanColor);
+        int b = Color.blue(floorPlanColor);
+        if ("wall".equals(indoorType)) return Color.argb(220, r, g, b);
+        if ("room".equals(indoorType)) return Color.argb(160, r, g, b);
+        return Color.argb(180, r, g, b);
     }
 
     /**
@@ -494,7 +506,10 @@ public class IndoorMapManager {
      * @return ARGB colour value
      */
     private int getFillColor(String indoorType) {
-        if ("room".equals(indoorType)) return ROOM_FILL;
+        int r = Color.red(floorPlanColor);
+        int g = Color.green(floorPlanColor);
+        int b = Color.blue(floorPlanColor);
+        if ("room".equals(indoorType)) return Color.argb(40, r, g, b);
         return Color.TRANSPARENT;
     }
 

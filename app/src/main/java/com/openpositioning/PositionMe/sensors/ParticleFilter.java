@@ -69,7 +69,7 @@ public class ParticleFilter {
     // Small positional noise added to each particle after resampling.
     // Prevents sample impoverishment: without roughening, particles copied from the
     // same parent are identical and provide no extra information on the next step.
-    private static final float ROUGHENING_STD = 0.3f; // metres
+    private static final float ROUGHENING_STD = 0.08f; // metres — reduced to limit stationary drift
 
     public void predict(float deltaEasting, float deltaNorthing) {
         if (!initialized) return; // ignore if not initialized
@@ -99,14 +99,9 @@ public class ParticleFilter {
             float newY = oldY + noisyStride * (float) Math.sin(noisyHeading);
 
             if (intersectsWall(oldX, oldY, newX, newY)) {
-                // Simple reflection: reverse direction and reduce stride (simulate energy loss)
-                float reflectedHeading = (float) (noisyHeading + Math.PI); // reverse direction
-                float reducedStride = noisyStride * 0.5f; // reduce stride to simulate energy loss
-
-                particles[i][0] = oldX + reducedStride * (float) Math.cos(reflectedHeading);
-                particles[i][1] = oldY + reducedStride * (float) Math.sin(reflectedHeading);
-
-                //weights[i] = 0f; could also delete the particle
+                // Stop at old position — can't pass through a wall.
+                // Keeping oldX/oldY is more stable than reversing direction,
+                // which can send the particle into an opposite wall.
             } else {
                 particles[i][0] = newX;
                 particles[i][1] = newY;
@@ -117,7 +112,22 @@ public class ParticleFilter {
         // exclusively in updateGNSS() and updateWiFi() when a new observation arrives.
     }
 
-    private boolean intersectsWall(float x1, float y1, float x2, float y2) { 
+    /**
+     * Returns true if the straight line between two geographic positions would
+     * cross any loaded wall segment.  Used by the map layer to prevent the
+     * trajectory polyline from being drawn through floorplan walls.
+     *
+     * @param from start of the candidate segment (WGS-84)
+     * @param to   end   of the candidate segment (WGS-84)
+     */
+    public boolean wouldCrossWall(LatLng from, LatLng to) {
+        if (origin == null || walls == null || walls.isEmpty()) return false;
+        float[] fromENU = UtilFunctions.convertWGS84ToENU(origin, from);
+        float[] toENU   = UtilFunctions.convertWGS84ToENU(origin, to);
+        return intersectsWall(fromENU[0], fromENU[1], toENU[0], toENU[1]);
+    }
+
+    private boolean intersectsWall(float x1, float y1, float x2, float y2) {
         // Check if the line segment from (x1, y1) to (x2, y2) intersects any wall segment
         if (walls == null || walls.isEmpty()) return false;
         for (float[] wall : walls) {
@@ -183,10 +193,17 @@ public class ParticleFilter {
         }
         particles = newParticles;
 
-        // Roughening: add small noise so copied particles diverge on the next step
+        // Roughening: add small noise so copied particles diverge on the next step.
+        // Wall-check each jitter so roughening doesn't land particles inside walls.
         for (int i = 0; i < NUM_PARTICLES; i++) {
-            particles[i][0] += (float) (random.nextGaussian() * ROUGHENING_STD);
-            particles[i][1] += (float) (random.nextGaussian() * ROUGHENING_STD);
+            float rx = (float) (random.nextGaussian() * ROUGHENING_STD);
+            float ry = (float) (random.nextGaussian() * ROUGHENING_STD);
+            float roughenedX = particles[i][0] + rx;
+            float roughenedY = particles[i][1] + ry;
+            if (!intersectsWall(particles[i][0], particles[i][1], roughenedX, roughenedY)) {
+                particles[i][0] = roughenedX;
+                particles[i][1] = roughenedY;
+            }
         }
 
         // Reset to uniform weights after resampling
@@ -204,7 +221,11 @@ public class ParticleFilter {
         float mx = mesurementENU[0]; //easting value of the measurement
         float my = mesurementENU[1]; //northing value of the measurement
 
-        float variance = gnssAccuracy * gnssAccuracy; // Convert accuracy to variance sigma^2
+        // Indoors, GPS signals reflect off ceilings and walls, giving fixes several
+        // metres off and often on the wrong side of a wall.  Inflate the uncertainty
+        // so the GNSS observation cannot drag particles through wall segments.
+        float effectiveAccuracy = walls.isEmpty() ? gnssAccuracy : gnssAccuracy * 3.0f;
+        float variance = effectiveAccuracy * effectiveAccuracy; // Convert accuracy to variance sigma^2
 
 
         //gaussian likelihood function
@@ -297,8 +318,28 @@ public class ParticleFilter {
 
         // Convert mean ENU back to WGS84 coordinates
         return UtilFunctions.convertENUToWGS84(origin, new float[]{meanEasting, meanNorthing, 0f});
+    }
 
-
+    /**
+     * Returns the RMS spread of particles around their weighted mean, in metres.
+     * Provides a live estimate of position uncertainty — large when particles are
+     * spread out, small when they are tightly clustered.
+     */
+    public float getPositionUncertaintyMeters() {
+        if (!initialized) return Float.MAX_VALUE;
+        float meanE = 0f, meanN = 0f;
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            meanE += particles[i][0] * weights[i];
+            meanN += particles[i][1] * weights[i];
+        }
+        float varE = 0f, varN = 0f;
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            float dE = particles[i][0] - meanE;
+            float dN = particles[i][1] - meanN;
+            varE += weights[i] * dE * dE;
+            varN += weights[i] * dN * dN;
+        }
+        return (float) Math.sqrt(varE + varN);
     }
 
 }

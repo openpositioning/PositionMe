@@ -105,6 +105,14 @@ public class SensorFusion implements SensorEventListener {
     // the device is still, which drags particles out of the building.
     private LatLng lastGnssForFilter = null;
 
+    // Stationary detection — rolling variance of linear-acceleration magnitude.
+    // When variance stays below the threshold the phone is considered stationary,
+    // and both step-prediction and WiFi particle updates are suppressed.
+    private static final int   STATIONARY_WINDOW    = 20;
+    private static final float STATIONARY_THRESHOLD = 0.015f; // m²/s⁴
+    private final List<Float> linearAccelWindow = new ArrayList<>();
+    private boolean isStationary = false;
+
 
 
     // Floorplan API cache (latest result from start-location step)
@@ -183,7 +191,7 @@ public class SensorFusion implements SensorEventListener {
 
         //particle filter
         eventHandler.setStepListener((deltaEasting, deltaNorthing) -> {
-            if (particleFilter.isInitialized()) {
+            if (particleFilter.isInitialized() && !isStationary) {
                 particleFilter.predict(deltaEasting, deltaNorthing);
             }
         });
@@ -222,17 +230,20 @@ public class SensorFusion implements SensorEventListener {
         }
 
         wifiProcessor.registerObserver(objects -> {
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();
-            if (wifiPosition != null) { // Check for null to avoid errors when no WiFi position is available
-                if (!particleFilter.isInitialized()) {
-                    particleFilter.initialise(wifiPosition, 20f); // Initial spread of 20 meters, can be tuned based on expected WiFi accuracy
-                } else {
-                    particleFilter.updateWiFi(wifiPosition, 20f);
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();
+                if (wifiPosition != null) {
+                    if (!particleFilter.isInitialized()) {
+                        particleFilter.initialise(wifiPosition, 20f);
+                    } else if (!isStationary) {
+                        // Suppress WiFi-driven particle updates while stationary —
+                        // indoor WiFi fluctuates 5-20 m even with no movement, which
+                        // would drag particles around and make the dot drift on screen.
+                        particleFilter.updateWiFi(wifiPosition, 20f);
+                    }
                 }
-            }
-        }, 1000);
-    });
+            }, 1000);
+        });
     }
 
     //endregion
@@ -249,9 +260,36 @@ public class SensorFusion implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         eventHandler.handleSensorEvent(sensorEvent);
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+            updateStationaryState(sensorEvent.values[0], sensorEvent.values[1], sensorEvent.values[2]);
+        }
         if (sensorEvent.sensor.getType() == Sensor.TYPE_PRESSURE && recorder.isRecording()) {
             updateFloorLogic();
         }
+    }
+
+    /**
+     * Maintains a rolling variance of linear-acceleration magnitude.
+     * Sets {@code isStationary = true} when variance drops below the threshold,
+     * meaning the phone has been essentially still for the last STATIONARY_WINDOW samples.
+     */
+    private void updateStationaryState(float x, float y, float z) {
+        float mag = (float) Math.sqrt(x * x + y * y + z * z);
+        linearAccelWindow.add(mag);
+        if (linearAccelWindow.size() > STATIONARY_WINDOW) {
+            linearAccelWindow.remove(0);
+        }
+        if (linearAccelWindow.size() < STATIONARY_WINDOW) return;
+
+        float mean = 0f;
+        for (float v : linearAccelWindow) mean += v;
+        mean /= STATIONARY_WINDOW;
+
+        float variance = 0f;
+        for (float v : linearAccelWindow) variance += (v - mean) * (v - mean);
+        variance /= STATIONARY_WINDOW;
+
+        isStationary = variance < STATIONARY_THRESHOLD;
     }
 
     private void updateFloorLogic() {
@@ -780,6 +818,25 @@ public class SensorFusion implements SensorEventListener {
 
     public ParticleFilter getParticleFilter() {
         return particleFilter;
+    }
+
+    /** Returns true when the device has been stationary for the last sensor window. */
+    public boolean isStationary() {
+        return isStationary;
+    }
+
+    /**
+     * Returns the floor number currently tracked by the PDR/barometric pipeline.
+     * This is the sensor-authoritative floor — updated continuously by barometric
+     * transitions in {@link #updateFloorLogic()}, independent of what the map display shows.
+     */
+    public int getPdrCurrentFloor() {
+        return pdrProcessing.getCurrentFloor();
+    }
+
+    /** Returns the RMS particle-cloud spread in metres (live position uncertainty). */
+    public float getPositionUncertaintyMeters() {
+        return particleFilter.getPositionUncertaintyMeters();
     }
 
     // Inject wall polylines (meters) into PDR for collision correction.

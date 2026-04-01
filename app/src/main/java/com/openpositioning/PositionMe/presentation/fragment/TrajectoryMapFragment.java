@@ -73,6 +73,9 @@ public class TrajectoryMapFragment extends Fragment {
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = true; // Tracks if GNSS tracking is enabled (matches default android:checked="true")
 
+    // Accuracy circle drawn around the position marker (radius = particle-cloud RMS spread)
+    private Circle accuracyCircle;
+
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
@@ -285,6 +288,11 @@ public class TrajectoryMapFragment extends Fragment {
                     polyline.setColor(Color.RED);
                     isRed = true;
                 }
+                // Keep floorplan lines in sync with trajectory color
+                if (indoorMapManager != null) {
+                    indoorMapManager.setFloorPlanColor(isRed ? Color.RED : Color.BLACK);
+                    indoorMapManager.redrawCurrentFloor();
+                }
             }
         });
 
@@ -361,14 +369,14 @@ public class TrajectoryMapFragment extends Fragment {
         for (int i = 0; i < history.size(); i++) {
             LatLng point = history.get(i);
 
-            int alpha = (int) (255f * (i + 1) / history.size());
+            // Fade oldest→newest but keep alpha high (150–255) so dots are always visible
+            int alpha = 150 + (int) (105f * (i + 1) / history.size());
             int fadedColor = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
 
             Circle circle = gMap.addCircle(new CircleOptions()
                     .center(point)
-                    .radius(1.5)
-                    .strokeWidth(2f)
-                    .strokeColor(fadedColor)
+                    .radius(0.6)
+                    .strokeWidth(0f)
                     .fillColor(fadedColor));
 
             rendered.add(circle);
@@ -662,6 +670,13 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng oldLocation = this.currentLocation;
         this.currentLocation = displayLocation;
 
+        // Determine visual state from sensor fusion
+        boolean stationary = (sensorFusion != null) && sensorFusion.isStationary();
+        float uncertainty = (sensorFusion != null)
+                ? sensorFusion.getPositionUncertaintyMeters() : 2f;
+        // Cap displayed radius: show at least 1 m, at most 15 m
+        double circleRadius = Math.min(Math.max(uncertainty, 1f), 15f);
+
         // If no marker, create it
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
@@ -672,13 +687,38 @@ public class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
+            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
         } else {
-            // Update marker position + orientation
             orientationMarker.setPosition(displayLocation);
             orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(displayLocation));
+            // Smooth pan — animateCamera avoids the jarring jump of moveCamera
+            gMap.animateCamera(CameraUpdateFactory.newLatLng(displayLocation));
+        }
+
+        // Fade the marker when stationary so the user can clearly see the lock state
+        if (orientationMarker != null) {
+            orientationMarker.setAlpha(stationary ? 0.55f : 1.0f);
+        }
+
+        // Draw / update the accuracy circle around the position marker
+        if (accuracyCircle == null) {
+            accuracyCircle = gMap.addCircle(new CircleOptions()
+                    .center(displayLocation)
+                    .radius(circleRadius)
+                    .strokeWidth(1.5f)
+                    .strokeColor(Color.argb(180, 33, 150, 243))   // blue outline
+                    .fillColor(Color.argb(40, 33, 150, 243)));    // faint blue fill
+        } else {
+            accuracyCircle.setCenter(displayLocation);
+            accuracyCircle.setRadius(circleRadius);
+            // Tint the circle green when stationary to give instant visual feedback
+            if (stationary) {
+                accuracyCircle.setStrokeColor(Color.argb(180, 76, 175, 80));
+                accuracyCircle.setFillColor(Color.argb(40, 76, 175, 80));
+            } else {
+                accuracyCircle.setStrokeColor(Color.argb(180, 33, 150, 243));
+                accuracyCircle.setFillColor(Color.argb(40, 33, 150, 243));
+            }
         }
 
         // Extend polyline if movement occurred
@@ -696,9 +736,15 @@ public class TrajectoryMapFragment extends Fragment {
                 points.add(displayLocation);
                 polyline.setPoints(points);
             } else if (!oldLocation.equals(displayLocation)) {
-                // Subsequent movement: append a new polyline point
-                points.add(displayLocation);
-                polyline.setPoints(points);
+                // Wall guard: never draw a trajectory segment that crosses a floorplan wall.
+                // The particle filter holds the same wall geometry used to constrain particles,
+                // so we reuse its intersection test here before committing the point.
+                boolean crossesWall = sensorFusion != null
+                        && sensorFusion.getParticleFilter().wouldCrossWall(oldLocation, displayLocation);
+                if (!crossesWall) {
+                    points.add(displayLocation);
+                    polyline.setPoints(points);
+                }
             }
         }
 
@@ -890,6 +936,10 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker.remove();
             gnssMarker = null;
         }
+        if (accuracyCircle != null) {
+            accuracyCircle.remove();
+            accuracyCircle = null;
+        }
         lastGnssLocation = null;
         currentLocation  = null;
         floorplanFetchAttempted = false;
@@ -1062,9 +1112,15 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Applies the best-guess floor immediately without debounce.
-     * Called once when auto-floor is first toggled on, so the user
-     * sees an instant correction after manually browsing wrong floors.
+     * Applies the sensor-authoritative floor immediately without debounce.
+     * Called once when auto-floor is re-enabled so the map display snaps back
+     * to the floor the sensors believe the user is on, regardless of any
+     * manual floor browsing the user did while auto-floor was off.
+     *
+     * <p>Priority: WiFi floor (if fresh) → PDR/barometric floor.
+     * Unlike {@link #evaluateAutoFloor()}, this path has no elevation-magnitude
+     * or proximity guards — those guards exist to avoid jittery periodic changes,
+     * but here we always want an immediate, unconditional sync.</p>
      */
     private void applyImmediateFloor() {
         if (sensorFusion == null || indoorMapManager == null) return;
@@ -1073,44 +1129,21 @@ public class TrajectoryMapFragment extends Fragment {
         updateWallsForPdr();
 
         int candidateFloor;
-        // Use WiFi floor only when the last fix is fresh (within 30 s); otherwise fall through
-        // to the barometric path so stale WiFi data does not permanently override it.
         if (sensorFusion.getLatLngWifiPositioning() != null && sensorFusion.isWifiPositionFresh()) {
+            // WiFi gives the most reliable absolute floor when a fresh fix is available
             candidateFloor = sensorFusion.getWifiFloor();
         } else {
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) {
-                floorHeight = mapMatchingConfig.baroHeightThreshold;
-            }
-            if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
-                return; // Ignore small height changes
-            }
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
-
-            // Require proximity to stairs/lift before changing floors
-            boolean nearFeature = indoorMapManager.isNearCrossFloorFeature(mapMatchingConfig.crossFeatureProximity);
-            if (!nearFeature) {
-                return;
-            }
-
-            // Use real horizontal acceleration to distinguish lift from stairs
-            float horizAccel = sensorFusion.getHorizontalAccelMagnitude();
-            CrossFloorClassifier.Mode mode =
-                    CrossFloorClassifier.classify(horizAccel, elevation, 0.0, mapMatchingConfig);
-            Log.d(TAG, "Auto-floor (baro) mode=" + mode + " elevation=" + elevation
-                    + " horizAccel=" + horizAccel);
-
-            // Only accept LIFT or STAIRS; UNKNOWN means not enough signal to change floor
-            if (mode == CrossFloorClassifier.Mode.UNKNOWN) {
-                return;
-            }
+            // Fall back to the PDR pipeline's continuously-maintained floor counter.
+            // This already incorporates every barometric transition since recording started,
+            // so it is correct even when the current elevation delta is near zero (e.g. ground floor).
+            candidateFloor = sensorFusion.getPdrCurrentFloor();
         }
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
         updateFloorLabel();
-        // Seed the debounce state so subsequent checks don't re-trigger immediately
+        Log.d(TAG, "applyImmediateFloor -> floor=" + candidateFloor);
+
+        // Seed the debounce state so the first periodic evaluation doesn't re-trigger immediately
         lastCandidateFloor = candidateFloor;
         lastCandidateTime = SystemClock.elapsedRealtime();
     }

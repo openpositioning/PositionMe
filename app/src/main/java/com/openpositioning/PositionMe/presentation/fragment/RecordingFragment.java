@@ -88,14 +88,11 @@ public class RecordingFragment extends Fragment {
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
-    // Update fused trajectory at least every 1 second
-    private static final long FUSED_UPDATE_INTERVAL_MS = 1000;
+    // Minimum displacement before the displayed point is moved.
+    // Keeps the marker locked while stationary; particle-filter noise is ~0.1-0.15 m
+    // per resample so 0.5 m gives comfortable headroom above the noise floor.
+    private static final double MOVEMENT_THRESHOLD_METERS = 0.5;
 
-    // Also update immediately when movement exceeds this threshold
-    private static final double MOVEMENT_THRESHOLD_METERS = 0.75;
-
-    // Last time a fused point was sent to the map
-    private long lastFusedUpdateTimeMs = 0L;
 
     // Last fused point that was actually rendered
     private LatLng lastSentFusedPosition = null;
@@ -307,50 +304,31 @@ public class RecordingFragment extends Fragment {
         // 2. The map fragment is ready to receive updates
         if (fusedPosition != null && trajectoryMapFragment != null) {
 
-            // Get the current system time in milliseconds
-            long now = System.currentTimeMillis();
-
             // --- CONDITION 1: First point ---
             // If no previous fused point has been sent to the map,
             // this is the very first update → must display it
             boolean isFirstPoint = (lastSentFusedPosition == null);
 
-            // --- CONDITION 2: Time-based update ---
-            // Check if at least 1 second has passed since the last update
-            boolean oneSecondElapsed =
-                    (now - lastFusedUpdateTimeMs) >= FUSED_UPDATE_INTERVAL_MS;
-
-            // --- CONDITION 3: Movement-based update ---
-            // Check if the user has moved a meaningful distance
+            // --- CONDITION 2: Movement-based update ---
+            // Only move the displayed point when the fused position has shifted
+            // at least MOVEMENT_THRESHOLD_METERS from the last displayed position.
+            // Time-based unconditional updates are intentionally omitted here —
+            // they caused the dot to drift every second even when stationary.
             boolean movementDetected = false;
-
-            // Store how far the user moved (for debugging/logging)
             double movedDistance = 0.0;
 
-            // Only compute movement if we have a previous point
             if (lastSentFusedPosition != null) {
-
-                // Calculate distance between last displayed point and current fused position
                 movedDistance = UtilFunctions.distanceBetweenPoints(
                         lastSentFusedPosition,
                         fusedPosition
                 );
-
-                // If movement exceeds threshold (e.g., 0.75m), trigger update
                 movementDetected = movedDistance >= MOVEMENT_THRESHOLD_METERS;
             }
 
-            // --- FINAL DECISION ---
-            // Update the map if ANY of the following is true:
-            // - first point
-            // - 1 second passed
-            // - significant movement detected
-            if (isFirstPoint || oneSecondElapsed || movementDetected) {
+            if (isFirstPoint || movementDetected) {
 
-                // Log that we are updating the map (useful for debugging)
                 Log.d("FUSED_TEST", "MAP UPDATE -> "
                         + "first=" + isFirstPoint
-                        + ", oneSecondElapsed=" + oneSecondElapsed
                         + ", movementDetected=" + movementDetected
                         + ", movedDistance=" + movedDistance
                         + ", lat=" + fusedPosition.latitude
@@ -368,15 +346,8 @@ public class RecordingFragment extends Fragment {
                 // Save this position as the last displayed one
                 lastSentFusedPosition = fusedPosition;
 
-                // Save the time of this update
-                lastFusedUpdateTimeMs = now;
-
             } else {
-
-                // Log that this update was skipped (for debugging performance)
-                Log.d("FUSED_TEST", "SKIPPED -> "
-                        + "movedDistance=" + movedDistance
-                        + ", elapsedMs=" + (now - lastFusedUpdateTimeMs));
+                Log.d("FUSED_TEST", "SKIPPED -> movedDistance=" + movedDistance);
             }
         }
 
