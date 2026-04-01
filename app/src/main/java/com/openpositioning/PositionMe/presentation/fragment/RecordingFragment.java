@@ -213,7 +213,7 @@ public class RecordingFragment extends Fragment {
 
         // Start the 1-second fused position + trajectory update loop
         fusedTrajectoryHandler.postDelayed(fusedTrajectoryTask, 1000);
- 
+
         // Start the timed or indefinite UI refresh
         if (this.settings.getBoolean("split_trajectory", false)) {
             // A maximum recording time is set
@@ -249,7 +249,7 @@ public class RecordingFragment extends Fragment {
         LatLng cur = trajectoryMapFragment.getCurrentLocation();
         if (cur == null) {
             Toast.makeText(requireContext(), "" +
-                    "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
+                            "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
                     Toast.LENGTH_SHORT).show();
             return;
         }
@@ -349,7 +349,7 @@ public class RecordingFragment extends Fragment {
         }
 
         // --- Colour-coded observation markers ---
- 
+
         // GNSS observation: add a blue marker whenever the raw GNSS fix changes
         float[] gnssRaw = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnssRaw != null) {
@@ -360,7 +360,7 @@ public class RecordingFragment extends Fragment {
                 lastGnssObsPos = gnssObs;
             }
         }
- 
+
         // WiFi observation: add an orange marker and correct the particle filter
         // whenever a new WiFi fix arrives
         LatLng wifiObs = sensorFusion.getLatLngWifiPositioning();
@@ -370,13 +370,13 @@ public class RecordingFragment extends Fragment {
             sensorFusion.correctWithWifiPosition(wifiObs);
             lastWifiObsPos = wifiObs;
         }
- 
+
         // PDR observation: add a red marker whenever PDR position has moved ≥ 1 m
         LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
         if (currentLoc != null) {
             double pdrDelta = Math.sqrt(
                     Math.pow(pdrValues[0] - previousObsPosX, 2)
-                    + Math.pow(pdrValues[1] - previousObsPosY, 2));
+                            + Math.pow(pdrValues[1] - previousObsPosY, 2));
             if (pdrDelta >= 1.0) {
                 trajectoryMapFragment.addObservationMarker(currentLoc,
                         TrajectoryMapFragment.ObservationSource.PDR);
@@ -384,7 +384,7 @@ public class RecordingFragment extends Fragment {
                 previousObsPosY = pdrValues[1];
             }
         }
- 
+
 
         // Update previous
         previousPosX = pdrValues[0];

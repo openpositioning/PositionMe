@@ -745,11 +745,9 @@ public class SensorFusion implements SensorEventListener {
             return;
         }
 
-        // Bullet 4 (Map Matcher): check accumulated barometer elevation change against the building's
-        // floor height. Only accept a floor change if the user is physically near a
-        // staircase or lift centroid (from the map). Floor changes in the middle of an
-        // open room are ignored.
-        // Rule 2: Barometer - divide elapsed elevation by the building's floor height
+        // Rule 2: Barometer - checks accumulated elevation change against the building's floor
+        // height. Only accepts a floor change if the user is physically near a staircase or
+        // lift from the map. Floor changes in the middle of a room are ignored.
         float floorHeight = mapMatcher.getFloorHeight();
         float elevationDelta = elevation - lastFloorElevation;
         int floorsToMove = (int) (Math.abs(elevationDelta) / floorHeight);
@@ -767,11 +765,9 @@ public class SensorFusion implements SensorEventListener {
             Log.d("SensorFusion", "Barometer floor change skipped: not near a lift or stairs");
             return;
         }
-        // Bullet 5 (Map Matcher): use state.elevator (the PDR movement model) together with proximity
-        // to decide whether the user is in a lift or on stairs. state.elevator is true
-        // when vertical acceleration dominates and step activity is low - the lift pattern.
-        // state.elevator is true when vertical acceleration dominates and step activity is low.
-        // Use it alongside proximity to decide lift vs stairs.
+        // Uses state.elevator (the PDR movement model) together with proximity to decide
+        // whether the user is in a lift or on stairs. state.elevator is true when vertical
+        // acceleration dominates and step activity is low - the lift pattern.
         boolean movementModelSaysLift = state.elevator;
         String transitionType;
         if (nearLift && movementModelSaysLift) {

@@ -6,13 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Geometry utility class for the map matcher. All methods are static - no instances are created.
- *
- * Provides a point-in-polygon test used to detect which building the user is in, and a
- * segment-crossing test used by ParticleFilter to check whether a particle's movement
- * crosses a wall. Also runs a self-test on load to verify both work correctly.
- *
- * All coordinates are local ENU metres matching the frame used by ParticleFilter and MapMatcher.
+ * Seperated in a different class for modularity.
+ * Static geometry helpers used by MapMatcher and ParticleFilter.
+ * Handles point-in-polygon checks and wall-crossing detection.
+ * Coordinates are local metres, same frame as ParticleFilter.
  */
 class MapGeometry {
 
@@ -30,8 +27,8 @@ class MapGeometry {
      * edges it crosses. An odd count means inside, even means outside.
      * Returns false for null or degenerate polygons (fewer than 3 vertices).
      *
-     * @param x       easting in local ENU metres
-     * @param y       northing in local ENU metres
+     * @param x       easting in local metres
+     * @param y       northing in local metres
      * @param polygon list of float[]{eastingM, northingM} vertices in order
      * @return true if the point is inside the polygon
      */
@@ -60,10 +57,6 @@ class MapGeometry {
     /**
      * Returns true if the segment from (x1,y1) to (x2,y2) crosses any edge of the polygon.
      *
-     * Bullet 3 (Map Matcher): this is the core wall-crossing test. ParticleFilter.predict() calls this
-     * for every particle after it is displaced. If the move segment crosses a wall edge,
-     * the particle is snapped back, correcting any estimate that would pass through a wall.
-     *
      * Called by ParticleFilter.predict() after each particle is displaced. If the move
      * segment crosses a wall edge, the particle is snapped back to its previous position.
      * Iterates all consecutive vertex pairs of the polygon and checks each edge with
@@ -71,10 +64,10 @@ class MapGeometry {
      *
      * Returns false for null or single-point polygons.
      *
-     * @param x1      start easting in local ENU metres
-     * @param y1      start northing in local ENU metres
-     * @param x2      end easting in local ENU metres
-     * @param y2      end northing in local ENU metres
+     * @param x1      start easting in local metres
+     * @param y1      start northing in local metres
+     * @param x2      end easting in local metres
+     * @param y2      end northing in local metres
      * @param polygon wall vertices as float[]{eastingM, northingM}
      */
     static boolean doesSegmentCrossPolygon(
@@ -93,14 +86,8 @@ class MapGeometry {
     }
 
     /**
-     * Tests whether segment AB and segment CD intersect.
-     *
-     * Uses the parametric cross-product method. Each segment is expressed as a
-     * start point plus a direction vector. The scalar parameters t and u represent
-     * how far along each segment the potential crossing point lies. If both t and u
-     * are in [0, 1], the crossing point is within both segment lengths, so they
-     * intersect. If the cross product of the two direction vectors is near zero,
-     * the segments are parallel and cannot intersect.
+     * Returns true if segment AB and segment CD intersect.
+     * Uses parametric cross-product; returns false for parallel/collinear segments.
      *
      * @param ax start of segment A - easting
      * @param ay start of segment A - northing
@@ -123,9 +110,7 @@ class MapGeometry {
         return t >= 0f && t <= 1f && u >= 0f && u <= 1f;
     }
 
-    // -------------------------------------------------------------------------
-    // Self-test (Step 2)
-    // -------------------------------------------------------------------------
+
 
     /**
      * Runs a set of known-answer checks against isPointInsidePolygon and
@@ -148,7 +133,6 @@ class MapGeometry {
                 isPointInsidePolygon(15f, 5f, square), false);
 
         // Segment crossing the left edge of the square (x=-2 to x=5, y=5): should cross
-        // Segment entering the square through the left edge - should cross
         check("doesSegmentCrossPolygon(-2,5 -> 5,5) == true",
                 doesSegmentCrossPolygon(-2f, 5f, 5f, 5f, square), true);
 

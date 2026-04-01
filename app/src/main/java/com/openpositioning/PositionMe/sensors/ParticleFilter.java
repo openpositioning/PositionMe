@@ -138,9 +138,6 @@ public class ParticleFilter {
     /**
      * Sets the MapMatcher used for wall-crossing checks in predict().
      * Called once from SensorFusion after both objects are created.
-     *
-     * Bullet 1 (Map Matcher): wires the map data into the particle filter so position estimates
-     * are constrained by the building's floor geometry.
      */
     public void setMapMatcher(MapMatcher mm) {
         this.mapMatcher = mm;
@@ -184,8 +181,6 @@ public class ParticleFilter {
             return;
         }
 
-        // Bullet 3 (Map Matcher): save each particle's position before it is displaced so we have
-        // a valid rollback point if the move crosses a wall.
         // Save positions before the move so we can snap back any particle that crosses a wall
         float[] oldX = new float[Num_Particles];
         float[] oldY = new float[Num_Particles];
@@ -202,11 +197,7 @@ public class ParticleFilter {
             particles[i].y += deltaNorth + noiseY;
         }
 
-        // Bullet 3 (Map Matcher): use the movement (PDR displacement) and the wall geometry from the map
-        // to reject any particle whose move segment crossed a wall. That particle is snapped
-        // back to its pre-move position, keeping the estimate inside walkable space.
-        // If MapMatcher is loaded, check each particle's move segment against walls on the
-        // current floor. Any particle that crossed a wall is snapped back to its old position.
+        // If MapMatcher is loaded, snap back any particle whose move crosses a wall on the current floor.
         if (mapMatcher != null && mapMatcher.isInitialised()) {
             int floorIndex = mapMatcher.getLikelyFloorIndex();
             List<MapMatcher.WallFeature> walls = mapMatcher.getWallsForFloor(floorIndex);

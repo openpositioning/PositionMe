@@ -12,13 +12,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Loads and stores the floorplan geometry for the current building. Used by the rest of the
- * system for three purposes: supplying per-floor wall data to ParticleFilter so particles
- * cannot pass through walls, storing stair and lift centroids so SensorFusion can check
- * whether the user is near a transition point before accepting a floor change, and resolving
- * the current floor index by combining the WiFi floor reading with any barometer-confirmed
- * override. Handles buildings where the API floor list is stored in non-physical order
- * (e.g. Nucleus stores GF at index 4 rather than index 0).
+ * Seperated in a different class for modularity.
+ * Loads and stores floorplan geometry for the current building.
+ * Provides wall data to ParticleFilter, stair/lift centroids to SensorFusion,
+ * and floor index resolution combining WiFi with barometer overrides.
+ * Handles buildings where the API floor list is not in physical order
+ * (e.g. Nucleus stores GF at index 4).
  *
  * Call tryLoadBuilding() once at the start of a recording to initialise.
  */
@@ -31,11 +30,11 @@ class MapMatcher {
 
 
 
-    // A single wall polygon or polyline from the floorplan API, converted to local ENU metres.
+    // A single wall polygon or polyline from the floorplan API, converted to local metres.
     static class WallFeature {
         // Vertices as {eastingM, northingM} relative to the particle filter origin
         final List<float[]> localPoints;
-        // True for filled Polygon/MultiPolygon shapes; false for LineString wall segments
+        // True for filled Polygon/MultiPolygon shapes, false for LineString wall segments
         final boolean isPolygon;
 
         WallFeature(List<float[]> pts, boolean isPolygon) {
@@ -61,7 +60,7 @@ class MapMatcher {
     @SuppressWarnings("unchecked")
     private List<WallFeature>[] wallsByFloor = null;
 
-    // Centroids of staircase and lift features on each floor, in local ENU metres.
+    // Centroids of staircase and lift features on each floor, in local metres.
     // Used by SensorFusion.isNearTransition() to gate barometer floor changes.
     @SuppressWarnings("unchecked")
     private List<float[]>[] stairCentersByFloor = null;
@@ -72,17 +71,15 @@ class MapMatcher {
     // store the confirmed API index here. -1 means no override, fall back to WiFi.
     private int currentFloorOverride = -1;
 
-    // Physical floor number (LG=-1, GF=0, F1=1 ...) -> API floorShapes list index.
+    // Physical floor number (LG=-1, GF=0, F1=1 etc...) -> API floorShapes list index.
     // Built at load time. Needed because some buildings store floors out of physical order
-    // (e.g. Nucleus: [LG, F1, F2, F3, GF] so GF is at index 4, not 0).
+    // (e.g. Nucleus: (LG, F1, F2, F3, GF) so GF is at index 4, not 0).
     private Map<Integer, Integer> physicalToApiIndex = null;
 
 
 
     /**
      * Creates a MapMatcher. No geometry is loaded until tryLoadBuilding() is called.
-     *
-     * @param sf the SensorFusion singleton used to access the floorplan cache
      */
     MapMatcher(SensorFusion sf) {
         this.sensorFusion = sf;
@@ -92,17 +89,13 @@ class MapMatcher {
     /**
      * Loads wall, stair, and lift features from the floorplan cache for the current building.
      *
-     * Building selection works in order: preferred name first (if provided), then
+     * Building is selected in order: preferred name first (if provided), then
      * point-in-polygon check against all cached building outlines, then closest center
-     * as a last resort. Returns early without loading if origin is null or no building
-     * is found in the cache.
+     * as fallback. Returns early if origin is null or no building is found in the cache.
      *
      * On success, builds the displayName and physicalFloor index lookup maps, converts
-     * every floor's wall/stair/lift geometry to local ENU metres, and runs
-     * MapGeometry.selfTest() to verify the geometry helpers.
+     * all floor geometry to local metres, and runs MapGeometry.selfTest().
      *
-     * @param preferredBuildingId building name from floorplan API (e.g. "nucleus_building"); null to auto-detect
-     * @param origin              local frame origin from ParticleFilter
      */
     @SuppressWarnings("unchecked")
     void tryLoadBuilding(String preferredBuildingId, LatLng origin) {
@@ -111,7 +104,7 @@ class MapMatcher {
             return;
         }
 
-        // 1. Preferred building by name
+        // Preferred building by name
         FloorplanApiClient.BuildingInfo building = null;
         if (preferredBuildingId != null && !preferredBuildingId.isEmpty()) {
             building = sensorFusion.getFloorplanBuilding(preferredBuildingId);
@@ -120,7 +113,7 @@ class MapMatcher {
             }
         }
 
-        // 2. Polygon detection against all cached buildings
+        // Polygon detection against all cached buildings
         if (building == null) {
             for (FloorplanApiClient.BuildingInfo b : sensorFusion.getFloorplanBuildings()) {
                 List<LatLng> outline = b.getOutlinePolygon();
@@ -133,7 +126,7 @@ class MapMatcher {
             }
         }
 
-        // 3. Closest center fallback
+        // Closest center fallback
         if (building == null) {
             building = closestBuilding(origin);
             if (building != null) {
@@ -157,8 +150,8 @@ class MapMatcher {
         mapOrigin = origin;
         loadedBuildingId = building.getName();
 
-        // Build both lookup maps: displayName -> index (for adjacent-floor arithmetic)
-        // and physicalFloor -> index (for WiFi floor conversion)
+        // Build both lookup maps: displayName to index (for adjacent-floor arithmetic)
+        // and physicalFloor to index (for WiFi floor conversion)
         displayNameToIndex = new HashMap<>();
         physicalToApiIndex = new HashMap<>();
         for (int f = 0; f < numFloors; f++) {
@@ -180,14 +173,8 @@ class MapMatcher {
             liftCentersByFloor[f]  = new ArrayList<>();
 
             FloorplanApiClient.FloorShapes floor = floorShapes.get(f);
-            // Bullet 2 (Map Matcher): the floorplan API gives each feature an indoor_type. We sort every
-            // feature on this floor into one of the three required categories:
-            //   "wall"            -> stored as WallFeature for wall-crossing checks (Bullet 3, Map Matcher)
-            //   "stairs"/"staircase" -> centroid stored for proximity gating (Bullets 4 & 5, Map Matcher)
-            //   "lift"/"elevator"    -> centroid stored for proximity gating (Bullets 4 & 5, Map Matcher)
-            // Walk every feature on this floor and sort it into walls, stairs, or lifts.
-            // Wall parts are stored as WallFeature objects (polygon or polyline).
-            // Stair and lift parts have their centroid computed and stored for proximity checks.
+            // Sort features into walls (for crossing checks) and
+            // stairs/lifts (centroid stored for proximity gating).
             for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
                 String type = feature.getIndoorType();
 
@@ -234,7 +221,6 @@ class MapMatcher {
 
     /**
      * Returns true once tryLoadBuilding() has successfully parsed at least one floor.
-     * All other public methods guard against being called before this returns true.
      */
     boolean isInitialised() {
         return loadedBuildingId != null && mapOrigin != null && numFloors > 0;
@@ -257,20 +243,12 @@ class MapMatcher {
     }
 
     /**
-     * Returns the best guess for which API floorShapes index the user is currently on.
-     * Index 0 matches floorShapesList[0], index 1 matches floorShapesList[1], and so on.
+     * Returns the current API floorShapes index. Index 0 = floorShapesList[0], etc.
      *
-     * Bullet 1 (Map Matcher): combines WiFi and barometer data to give the rest of the system a single
-     * reliable floor number, accounting for buildings where the API list is in non-physical
-     * order (e.g. Nucleus stores GF at index 4).
-     *
-     * A barometer-confirmed override (set by SensorFusion when near lift) takes
-     * priority over the WiFi reading. When no override is set, the WiFi floor integer is
-     * converted to an API index via physicalToApiIndex. Falls back to the bias formula
-     * if the lookup map is not ready yet (Nucleus/Murchison: WiFi 0 maps to index 1;
-     * other buildings: WiFi 0 maps to index 0).
-     *
-     * Result is clamped to [0, numFloors-1].
+     * A barometer-confirmed override set by SensorFusion takes priority over the WiFi
+     * reading. When no override is set, the WiFi floor integer is converted to an API
+     * index via physicalToApiIndex. Falls back to the bias formula if the lookup map
+     * is not ready yet (Nucleus/Murchison: WiFi 0 maps to index 1; others: index 0).
      */
     int getLikelyFloorIndex() {
         // Barometer override beats WiFi when SensorFusion has confirmed a floor change
@@ -280,7 +258,7 @@ class MapMatcher {
         }
         int wifiFloor = sensorFusion.getWifiFloor();
         // physicalToApiIndex handles buildings where the API list is not in physical order
-        // (e.g. Nucleus: [LG, F1, F2, F3, GF] - WiFi 0 = GF = API index 4, not index 1).
+        // (e.g. Nucleus: (LG, F1, F2, F3, GF) - WiFi 0 = GF = API index 4, not index 1).
         // Falls back to the bias formula when the map has not loaded yet.
         Integer apiIdx = (physicalToApiIndex != null) ? physicalToApiIndex.get(wifiFloor) : null;
         int result = (apiIdx != null)
@@ -293,9 +271,8 @@ class MapMatcher {
 
     /**
      * Returns the index offset between WiFi floor 0 (GF) and its position in the API floor list.
-     * Nucleus and Murchison store LG at index 0, so GF sits at index 1 (bias = 1).
-     * All other buildings place GF at index 0, so no offset is needed (bias = 0).
-     * Kept in sync with IndoorMapManager.getAutoFloorBias().
+     * Nucleus and Murchison store LG at index 0, so GF is at index 1 (bias = 1).
+     * All other buildings place GF at index 0 (bias = 0).
      */
     int getAutoFloorBias() {
         if ("nucleus_building".equals(loadedBuildingId)
@@ -306,12 +283,12 @@ class MapMatcher {
     }
 
     /**
-     * Returns the approximate floor-to-floor height in metres for the loaded building.
-     * SensorFusion divides accumulated elevation change by this value to decide how many
-     * floors the user has moved. Kept in sync with IndoorMapManager's per-building constants.
+     * Returns the floor-to-floor height in metres for the loaded building.
+     * SensorFusion divides the accumulated barometer elevation change by this value
+     * to determine how many floors the user has moved.
      */
     float getFloorHeight() {
-        if ("nucleus_building".equals(loadedBuildingId)) return 4.2f;
+        if ("nucleus_building".equals(loadedBuildingId)) return 5.0f;
         if ("murchison_house".equals(loadedBuildingId)) return 4.0f;
         if ("library".equals(loadedBuildingId)) return 3.6f;
         return 4.0f; // generic fallback
@@ -326,20 +303,20 @@ class MapMatcher {
         currentFloorOverride = floor;
     }
 
-    // Returns the staircase centroids in local ENU metres for floor f, or an empty list.
+    // Returns the staircase centroids in local metres for floor f, or an empty list.
     List<float[]> getStairCentersForFloor(int f) {
         if (stairCentersByFloor == null || f < 0 || f >= numFloors) return new ArrayList<>();
         return stairCentersByFloor[f];
     }
 
-    // Returns the lift centroids in local ENU metres for floor f, or an empty list.
+    // Returns the lift centroids in local metres for floor f, or an empty list.
     List<float[]> getLiftCentersForFloor(int f) {
         if (liftCentersByFloor == null || f < 0 || f >= numFloors) return new ArrayList<>();
         return liftCentersByFloor[f];
     }
 
     /**
-     * Converts a physical floor number (LG=-1, GF=0, F1=1, F2=2, ...) to its
+     * Converts a physical floor number (LG=-1, GF=0, F1=1, F2=2, etc ...) to its
      * position in the API floorShapes list. Returns -1 if not found.
      *
      * SensorFusion calls this when WiFi changes floor rather than going through
@@ -380,17 +357,11 @@ class MapMatcher {
 
 
     /**
-     * Returns the API floorShapes index that is physicalDelta floors above (positive) or
-     * below (negative) currentApiIndex in physical building height (LG=-1, GF=0, F1=1, ...).
-     *
-     * A simple +/-1 on the index would be wrong for buildings with non-physical API ordering
-     * (e.g. Nucleus: GF is at index 4, so going up one floor from GF must land on index 3 for
-     * F1, not index 5 which does not exist). Instead, we reverse-lookup the current floor's
-     * display name, convert it to a physical number, add the delta, then look up the resulting
-     * physical floor in physicalToApiIndex.
-     * Issue with being on GF and F1 is showed in auto-floor feature so this fixes that issue.
-     *
-     * Returns currentApiIndex unchanged if the target floor does not exist in the list.
+     * Returns the API index that is physicalDelta floors above/below currentApiIndex.
+     * Can't just do +/-1 on the index for buildings with non-physical API ordering
+     * (e.g. Nucleus GF is at index 4, not 0), so we convert via display name instead.
+     * Fixes the GF/F1 off-by-one seen in the auto-floor feature.
+     * Returns currentApiIndex unchanged if the target floor doesn't exist.
      */
     int getAdjacentFloorIndex(int currentApiIndex, int physicalDelta) {
         if (physicalToApiIndex == null || displayNameToIndex == null) return currentApiIndex;
@@ -427,7 +398,7 @@ class MapMatcher {
     }
 
     /**
-     * Computes the centroid of a set of LatLng points in local ENU metres.
+     * Computes the centroid of a set of LatLng points in local metres.
      * Used to get a single representative point for stairs/lift polygons.
      * Returns null if pts is null or empty.
      */
