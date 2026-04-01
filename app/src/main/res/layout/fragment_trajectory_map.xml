@@ -35,10 +35,13 @@
                 android:id="@+id/settingsButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@android:color/white"
                 android:text="Settings"
+                android:backgroundTint="#FFCDD2"
                 android:textColor="@android:color/black"
                 android:textStyle="bold"
+                app:icon="@android:drawable/ic_menu_manage"
+                app:iconTint="@android:color/black"
+                app:iconPadding="6dp"
                 app:elevation="5dp" />
 
             <LinearLayout
