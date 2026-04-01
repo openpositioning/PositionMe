@@ -118,14 +118,13 @@
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minWidth="150dp"
             android:orientation="vertical"
-            android:padding="8dp">
+            android:padding="6dp">
 
             <!-- Header row: title + toggle arrow always visible -->
             <LinearLayout
                 android:id="@+id/rightPanelHeader"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
@@ -133,18 +132,17 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:background="@drawable/switch_label_bg"
-                android:paddingStart="6dp"
-                android:paddingEnd="6dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp">
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp">
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="Data Points"
                     android:textStyle="bold"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:textColor="@color/glass_text" />
 
                 <TextView
@@ -152,17 +150,17 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="▲"
-                    android:textSize="14sp"
+                    android:textSize="12sp"
                     android:textStyle="bold"
                     android:textColor="@color/glass_text"
-                    android:layout_marginStart="8dp"
-                    android:padding="4dp"
+                    android:layout_marginStart="6dp"
+                    android:padding="2dp"
                     android:background="@android:color/transparent"
                     android:contentDescription="Toggle legend panel" />
 
             </LinearLayout>
 
-            <!-- Collapsible legend content -->
+            <!-- Collapsible legend content — each row is a toggle switch -->
             <LinearLayout
                 android:id="@+id/rightPanelContent"
                 android:layout_width="wrap_content"
@@ -170,84 +168,87 @@
                 android:orientation="vertical"
                 android:layout_marginTop="6dp">
 
-                <!-- PDR Legend Entry -->
+                <!-- PDR toggle -->
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="32dp"
                     android:orientation="horizontal"
-                    android:layout_marginBottom="4dp"
+                    android:layout_marginBottom="2dp"
                     android:gravity="center_vertical"
                     android:background="@drawable/switch_label_bg"
-                    android:paddingStart="6dp"
-                    android:paddingEnd="6dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp">
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp">
 
                     <View
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
                         android:background="@drawable/legend_circle_orange"
-                        android:layout_marginEnd="8dp" />
+                        android:layout_marginEnd="6dp" />
 
-                    <TextView
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/pdrPointsSwitch"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="32dp"
+                        android:checked="true"
                         android:text="PDR"
-                        android:textSize="12sp"
-                        android:textColor="@color/glass_text" />
+                        android:textSize="11sp"
+                        android:textColor="@color/glass_text"
+                        android:background="@android:color/transparent" />
                 </LinearLayout>
 
-                <!-- GNSS Legend Entry -->
+                <!-- GNSS toggle -->
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="32dp"
                     android:orientation="horizontal"
-                    android:layout_marginBottom="4dp"
+                    android:layout_marginBottom="2dp"
                     android:gravity="center_vertical"
                     android:background="@drawable/switch_label_bg"
-                    android:paddingStart="6dp"
-                    android:paddingEnd="6dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp">
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp">
 
                     <View
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
                         android:background="@drawable/legend_circle_blue"
-                        android:layout_marginEnd="8dp" />
+                        android:layout_marginEnd="6dp" />
 
-                    <TextView
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/gnssPointsSwitch"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="32dp"
+                        android:checked="true"
                         android:text="GNSS"
-                        android:textSize="12sp"
-                        android:textColor="@color/glass_text" />
+                        android:textSize="11sp"
+                        android:textColor="@color/glass_text"
+                        android:background="@android:color/transparent" />
                 </LinearLayout>
 
-                <!-- WiFi Legend Entry -->
+                <!-- WiFi toggle -->
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="32dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
                     android:background="@drawable/switch_label_bg"
-                    android:paddingStart="6dp"
-                    android:paddingEnd="6dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp">
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp">
 
                     <View
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
                         android:background="@drawable/legend_circle_green"
-                        android:layout_marginEnd="8dp" />
+                        android:layout_marginEnd="6dp" />
 
-                    <TextView
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/wifiPointsSwitch"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="32dp"
+                        android:checked="true"
                         android:text="WiFi"
-                        android:textSize="12sp"
-                        android:textColor="@color/glass_text" />
+                        android:textSize="11sp"
+                        android:textColor="@color/glass_text"
+                        android:background="@android:color/transparent" />
                 </LinearLayout>
 
             </LinearLayout>
