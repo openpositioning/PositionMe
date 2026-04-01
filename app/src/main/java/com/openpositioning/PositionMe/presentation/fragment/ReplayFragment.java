@@ -235,6 +235,9 @@ public class ReplayFragment extends Fragment {
      * Checks if any ReplayPoint contains a non-null gnssLocation.
      */
     private boolean hasAnyGnssData(List<TrajParser.ReplayPoint> data) {
+        if (data == null || data.isEmpty()) {
+            return false;
+        }
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
                 return true;
@@ -256,6 +259,7 @@ public class ReplayFragment extends Fragment {
                 .setPositiveButton("Use File's GNSS", (dialog, which) -> {
                     LatLng firstGnss = getFirstGnssLocation(replayData);
                     if (firstGnss != null) {
+                        reanchorReplayToGnss(firstGnss);
                         setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
                     } else {
                         // Fallback if no valid GNSS found
@@ -272,7 +276,7 @@ public class ReplayFragment extends Fragment {
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }
@@ -283,10 +287,45 @@ public class ReplayFragment extends Fragment {
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return point.gnssLocation;
             }
         }
         return null; // None found
+    }
+
+    /**
+     * Re-anchor replayed PDR points so playback starts at the chosen GNSS origin.
+     * This avoids stale initial-position metadata forcing trajectories to a wrong building.
+     */
+    private void reanchorReplayToGnss(@NonNull LatLng targetStartGnss) {
+        if (replayData == null || replayData.isEmpty()) {
+            return;
+        }
+
+        TrajParser.ReplayPoint firstPoint = replayData.get(0);
+        if (firstPoint.pdrLocation == null) {
+            return;
+        }
+
+        double deltaLat = targetStartGnss.latitude - firstPoint.pdrLocation.latitude;
+        double deltaLng = targetStartGnss.longitude - firstPoint.pdrLocation.longitude;
+
+        // Skip tiny floating-point differences.
+        if (Math.abs(deltaLat) < 1e-9 && Math.abs(deltaLng) < 1e-9) {
+            return;
+        }
+
+        for (TrajParser.ReplayPoint point : replayData) {
+            if (point.pdrLocation == null) {
+                continue;
+            }
+            point.pdrLocation = new LatLng(
+                    point.pdrLocation.latitude + deltaLat,
+                    point.pdrLocation.longitude + deltaLng);
+        }
+
+        Log.i(TAG, "Re-anchored replay to file GNSS start: dLat=" + deltaLat
+                + " dLng=" + deltaLng + " points=" + replayData.size());
     }
 
 
