@@ -45,114 +45,114 @@ import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
 
 public class RecordingActivity extends AppCompatActivity {
 
-    @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_recording);
+  @Override
+  protected void onCreate(@Nullable Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_recording);
 
-        if (savedInstanceState == null) {
-            // Show trajectory name input dialog before proceeding to start location
-            showTrajectoryNameDialog();
-        }
-
-        // Keep screen on
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    if (savedInstanceState == null) {
+      // Show trajectory name input dialog before proceeding to start location
+      showTrajectoryNameDialog();
     }
 
-    /**
-     * {@inheritDoc}
-     * Re-registers sensor listeners so that IMU, step detection, barometer and other
-     * movement sensors remain active while this activity is in the foreground.
-     * Without this, sensors are unregistered when {@link MainActivity#onPause()} fires
-     * during the activity transition, leaving PDR and elevation updates dead.
-     */
-    @Override
-    protected void onResume() {
-        super.onResume();
-        SensorFusion.getInstance().resumeListening();
-    }
+    // Keep screen on
+    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+  }
 
-    /**
-     * {@inheritDoc}
-     * Stops sensor listeners when this activity is no longer visible, unless
-     * the foreground {@link SensorCollectionService} is running (recording in progress).
-     */
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (!SensorCollectionService.isRunning()) {
-            SensorFusion.getInstance().stopListening();
-        }
-    }
+  /**
+   * {@inheritDoc}
+   * Re-registers sensor listeners so that IMU, step detection, barometer and other
+   * movement sensors remain active while this activity is in the foreground.
+   * Without this, sensors are unregistered when {@link MainActivity#onPause()} fires
+   * during the activity transition, leaving PDR and elevation updates dead.
+   */
+  @Override
+  protected void onResume() {
+    super.onResume();
+    SensorFusion.getInstance().resumeListening();
+  }
 
-    /**
-     * Shows an AlertDialog prompting the user to enter a trajectory name.
-     * The name is stored in SensorFusion as trajectory_id and later written to the protobuf.
-     * After input, proceeds to StartLocationFragment.
-     */
-    private void showTrajectoryNameDialog() {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setHint("e.g. Nucleus_Walk_01");
-        input.setPadding(48, 24, 48, 24);
-
-        new AlertDialog.Builder(this)
-                .setTitle("Trajectory Name")
-                .setMessage("Enter a name for this recording session:")
-                .setView(input)
-                .setCancelable(false)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    String name = input.getText().toString().trim();
-                    if (name.isEmpty()) {
-                        // Default name based on timestamp
-                        name = "traj_" + System.currentTimeMillis();
-                    }
-                    SensorFusion.getInstance().setTrajectoryId(name);
-                    showStartLocationScreen();
-                })
-                .setNegativeButton("Skip", (dialog, which) -> {
-                    // Use default name
-                    SensorFusion.getInstance().setTrajectoryId(
-                            "traj_" + System.currentTimeMillis());
-                    showStartLocationScreen();
-                })
-                .show();
+  /**
+   * {@inheritDoc}
+   * Stops sensor listeners when this activity is no longer visible, unless
+   * the foreground {@link SensorCollectionService} is running (recording in progress).
+   */
+  @Override
+  protected void onPause() {
+    super.onPause();
+    if (!SensorCollectionService.isRunning()) {
+      SensorFusion.getInstance().stopListening();
     }
+  }
 
-    /**
-     * Show the StartLocationFragment (beginning of flow).
-     */
-    public void showStartLocationScreen() {
-        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
-        ft.replace(R.id.mainFragmentContainer, new StartLocationFragment());
-        ft.commit();
-    }
+  /**
+   * Shows an AlertDialog prompting the user to enter a trajectory name.
+   * The name is stored in SensorFusion as trajectory_id and later written to the protobuf.
+   * After input, proceeds to StartLocationFragment.
+   */
+  private void showTrajectoryNameDialog() {
+    EditText input = new EditText(this);
+    input.setInputType(InputType.TYPE_CLASS_TEXT);
+    input.setHint("e.g. Nucleus_Walk_01");
+    input.setPadding(48, 24, 48, 24);
 
-    /**
-     * Show the RecordingFragment, which contains the TrajectoryMapFragment internally.
-     */
-    public void showRecordingScreen() {
-        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
-        ft.replace(R.id.mainFragmentContainer, new RecordingFragment());
-        ft.addToBackStack(null);
-        ft.commit();
-    }
+    new AlertDialog.Builder(this)
+        .setTitle("Trajectory Name")
+        .setMessage("Enter a name for this recording session:")
+        .setView(input)
+        .setCancelable(false)
+        .setPositiveButton("Save", (dialog, which) -> {
+          String name = input.getText().toString().trim();
+          if (name.isEmpty()) {
+            // Default name based on timestamp
+            name = "traj_" + System.currentTimeMillis();
+          }
+          SensorFusion.getInstance().setTrajectoryId(name);
+          showStartLocationScreen();
+        })
+        .setNegativeButton("Skip", (dialog, which) -> {
+          // Use default name
+          SensorFusion.getInstance().setTrajectoryId(
+              "traj_" + System.currentTimeMillis());
+          showStartLocationScreen();
+        })
+        .show();
+  }
 
-    /**
-     * Show the CorrectionFragment after the user stops recording.
-     */
-    public void showCorrectionScreen() {
-        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
-        ft.replace(R.id.mainFragmentContainer, new CorrectionFragment());
-        ft.addToBackStack(null);
-        ft.commit();
-    }
+  /**
+   * Show the StartLocationFragment (beginning of flow).
+   */
+  public void showStartLocationScreen() {
+    FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
+    ft.replace(R.id.mainFragmentContainer, new StartLocationFragment());
+    ft.commit();
+  }
 
-    /**
-     * Finish the Activity (or do any final steps) once corrections are done.
-     */
-    public void finishFlow() {
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        finish();
-    }
+  /**
+   * Show the RecordingFragment, which contains the TrajectoryMapFragment internally.
+   */
+  public void showRecordingScreen() {
+    FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
+    ft.replace(R.id.mainFragmentContainer, new RecordingFragment());
+    ft.addToBackStack(null);
+    ft.commit();
+  }
+
+  /**
+   * Show the CorrectionFragment after the user stops recording.
+   */
+  public void showCorrectionScreen() {
+    FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
+    ft.replace(R.id.mainFragmentContainer, new CorrectionFragment());
+    ft.addToBackStack(null);
+    ft.commit();
+  }
+
+  /**
+   * Finish the Activity (or do any final steps) once corrections are done.
+   */
+  public void finishFlow() {
+    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    finish();
+  }
 }

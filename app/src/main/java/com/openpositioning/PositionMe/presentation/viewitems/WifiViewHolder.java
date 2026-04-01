@@ -18,18 +18,18 @@ import com.openpositioning.PositionMe.R;
  */
 public class WifiViewHolder extends RecyclerView.ViewHolder {
 
-    TextView bssid;
-    TextView level;
+  TextView bssid;
+  TextView level;
 
-    /**
-     * {@inheritDoc}
-     * Assign TextView fields corresponding to Wifi attributes.
-     *
-     * @see com.openpositioning.PositionMe.sensors.Wifi the data class
-     */
-    public WifiViewHolder(@NonNull View itemView) {
-        super(itemView);
-        bssid = itemView.findViewById(R.id.wifiNameItem);
-        level = itemView.findViewById(R.id.wifiLevelItem);
-    }
+  /**
+   * {@inheritDoc}
+   * Assign TextView fields corresponding to Wifi attributes.
+   *
+   * @see com.openpositioning.PositionMe.sensors.Wifi the data class
+   */
+  public WifiViewHolder(@NonNull View itemView) {
+    super(itemView);
+    bssid = itemView.findViewById(R.id.wifiNameItem);
+    level = itemView.findViewById(R.id.wifiLevelItem);
+  }
 }

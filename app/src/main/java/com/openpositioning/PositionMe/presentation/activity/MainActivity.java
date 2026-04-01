@@ -64,339 +64,340 @@ import java.util.Objects;
 public class MainActivity extends AppCompatActivity implements Observer {
 
 
-    //region Instance variables
-    private NavController navController;
-    private ActivityResultLauncher<String> locationPermissionLauncher;
-    private ActivityResultLauncher<String[]> multiplePermissionsLauncher;
+  //region Instance variables
+  private NavController navController;
+  private ActivityResultLauncher<String> locationPermissionLauncher;
+  private ActivityResultLauncher<String[]> multiplePermissionsLauncher;
 
-    private SharedPreferences settings;
-    private SensorFusion sensorFusion;
-    private Handler httpResponseHandler;
+  private SharedPreferences settings;
+  private SensorFusion sensorFusion;
+  private Handler httpResponseHandler;
 
-    private PermissionManager permissionManager;
+  private PermissionManager permissionManager;
 
-    private static final int PERMISSION_REQUEST_CODE = 100;
+  private static final int PERMISSION_REQUEST_CODE = 100;
 
-    //endregion
+  //endregion
 
-    //region Activity Lifecycle
+  //region Activity Lifecycle
 
-    /**
-     * {@inheritDoc}
-     * Forces light mode, sets up the navigation graph, initialises the toolbar with back action on
-     * the nav controller, loads the shared preferences and checks for all permissions necessary.
-     * Sets up a Handler for displaying messages from other classes.
-     */
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-        setContentView(R.layout.activity_main);
+  /**
+   * {@inheritDoc}
+   * Forces light mode, sets up the navigation graph, initialises the toolbar with back action on
+   * the nav controller, loads the shared preferences and checks for all permissions necessary.
+   * Sets up a Handler for displaying messages from other classes.
+   */
+  @Override
+  protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+    setContentView(R.layout.activity_main);
 
-        // Set up navigation and fragments
-        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.nav_host_fragment);
-        navController = Objects.requireNonNull(navHostFragment).getNavController();
+    // Set up navigation and fragments
+    NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
+        .findFragmentById(R.id.nav_host_fragment);
+    navController = Objects.requireNonNull(navHostFragment).getNavController();
 
-        // Set action bar
-        Toolbar toolbar = findViewById(R.id.main_toolbar);
-        setSupportActionBar(toolbar);
-        toolbar.showOverflowMenu();
-        toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.md_theme_light_surface));
-        toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.black));
-        toolbar.setNavigationIcon(R.drawable.ic_baseline_back_arrow);
+    // Set action bar
+    Toolbar toolbar = findViewById(R.id.main_toolbar);
+    setSupportActionBar(toolbar);
+    toolbar.showOverflowMenu();
+    toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.md_theme_light_surface));
+    toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.black));
+    toolbar.setNavigationIcon(R.drawable.ic_baseline_back_arrow);
 
-        // Set up back action with NavigationUI
-        AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(navController.getGraph()).build();
-        NavigationUI.setupWithNavController(toolbar, navController, appBarConfiguration);
+    // Set up back action with NavigationUI
+    AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(navController.getGraph()).build();
+    NavigationUI.setupWithNavController(toolbar, navController, appBarConfiguration);
 
-        // Get handle for settings
-        this.settings = PreferenceManager.getDefaultSharedPreferences(this);
-        settings.edit().putBoolean("permanentDeny", false).apply();
+    // Get handle for settings
+    this.settings = PreferenceManager.getDefaultSharedPreferences(this);
+    settings.edit().putBoolean("permanentDeny", false).apply();
 
-        // Initialize SensorFusion early so that its context is set
-        this.sensorFusion = SensorFusion.getInstance();
-        this.sensorFusion.setContext(getApplicationContext());
+    // Initialize SensorFusion early so that its context is set
+    this.sensorFusion = SensorFusion.getInstance();
+    this.sensorFusion.setContext(getApplicationContext());
 
-        // Register multiple permissions launcher
-        multiplePermissionsLauncher = registerForActivityResult(
-                new ActivityResultContracts.RequestMultiplePermissions(),
-                result -> {
-                    boolean locationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
-                    boolean activityGranted = result.getOrDefault(Manifest.permission.ACTIVITY_RECOGNITION, false);
+    // Register multiple permissions launcher
+    multiplePermissionsLauncher = registerForActivityResult(
+        new ActivityResultContracts.RequestMultiplePermissions(),
+        result -> {
+          boolean locationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+          boolean activityGranted = result.getOrDefault(Manifest.permission.ACTIVITY_RECOGNITION, false);
 
-                    // Core permissions (location + activity) are essential
-                    if (locationGranted && activityGranted) {
-                        allPermissionsObtained();
-                    } else {
-                        Toast.makeText(this,
-                                "Location or Physical Activity permission denied. Some features may not work.",
-                                Toast.LENGTH_LONG).show();
-                    }
+          // Core permissions (location + activity) are essential
+          if (locationGranted && activityGranted) {
+            allPermissionsObtained();
+          } else {
+            Toast.makeText(this,
+                "Location or Physical Activity permission denied. Some features may not work.",
+                Toast.LENGTH_LONG).show();
+          }
 
-                    // BLE permissions are non-blocking; warn if denied
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        boolean bleScan = result.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, true);
-                        boolean bleConn = result.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, true);
-                        if (!bleScan || !bleConn) {
-                            Toast.makeText(this,
-                                    "Bluetooth permission denied. BLE scanning will be unavailable.",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                }
-        );
-
-        // Handler for global toasts and popups from other classes
-        this.httpResponseHandler = new Handler();
-    }
-
-
-
-
-    /**
-     * {@inheritDoc}
-     * Stops sensor listeners when the activity pauses, unless the foreground service is running
-     * (i.e. a recording is in progress and sensors must continue in the background).
-     */
-    @Override
-    public void onPause() {
-        super.onPause();
-
-        if (sensorFusion != null && !SensorCollectionService.isRunning()) {
-            sensorFusion.stopListening();
-        }
-    }
-
-    /**
-     * {@inheritDoc}
-     * Checks for activities in case the app was closed without granting them, or if they were
-     * granted through the settings page. Repeats the startup checks done in
-     * {@link MainActivity#onCreate(Bundle)}. Starts listening in the SensorFusion class.
-     *
-     * @see SensorFusion the main data processing class.
-     */
-    @Override
-    public void onResume() {
-        super.onResume();
-
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().show();
-        }
-
-        // Delay permission check slightly to ensure the Activity is in the foreground
-        new Handler().postDelayed(() -> {
-            if (isActivityVisible()) {
-                // Check if both permissions are granted
-                boolean locationGranted = ContextCompat.checkSelfPermission(
-                        this, Manifest.permission.ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED;
-
-                boolean activityGranted = ContextCompat.checkSelfPermission(
-                        this, Manifest.permission.ACTIVITY_RECOGNITION
-                ) == PackageManager.PERMISSION_GRANTED;
-
-                // BLE permissions (Android 12+)
-                boolean bleGranted = true;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    bleGranted = ContextCompat.checkSelfPermission(
-                            MainActivity.this, Manifest.permission.BLUETOOTH_SCAN
-                    ) == PackageManager.PERMISSION_GRANTED
-                    && ContextCompat.checkSelfPermission(
-                            MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED;
-                }
-
-                // Notification permission (Android 13+)
-                boolean notifGranted = true;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    notifGranted = ContextCompat.checkSelfPermission(
-                            MainActivity.this, Manifest.permission.POST_NOTIFICATIONS
-                    ) == PackageManager.PERMISSION_GRANTED;
-                }
-
-                if (!locationGranted || !activityGranted || !bleGranted || !notifGranted) {
-                    // Build a list of permissions that still need to be requested
-                    java.util.List<String> permsToRequest = new java.util.ArrayList<>();
-                    if (!locationGranted) permsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION);
-                    if (!activityGranted) permsToRequest.add(Manifest.permission.ACTIVITY_RECOGNITION);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !bleGranted) {
-                        permsToRequest.add(Manifest.permission.BLUETOOTH_SCAN);
-                        permsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT);
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifGranted) {
-                        permsToRequest.add(Manifest.permission.POST_NOTIFICATIONS);
-                    }
-                    multiplePermissionsLauncher.launch(permsToRequest.toArray(new String[0]));
-                } else {
-                    // Both permissions are already granted
-                    allPermissionsObtained();
-                }
+          // BLE permissions are non-blocking; warn if denied
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            boolean bleScan = result.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, true);
+            boolean bleConn = result.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, true);
+            if (!bleScan || !bleConn) {
+              Toast.makeText(this,
+                  "Bluetooth permission denied. BLE scanning will be unavailable.",
+                  Toast.LENGTH_SHORT).show();
             }
-        }, 300); // Delay ensures activity is fully visible before requesting permissions
-
-        if (sensorFusion != null) {
-            sensorFusion.resumeListening();
+          }
         }
+    );
+
+    // Handler for global toasts and popups from other classes
+    this.httpResponseHandler = new Handler();
+  }
+
+
+
+
+  /**
+   * {@inheritDoc}
+   * Stops sensor listeners when the activity pauses, unless the foreground service is running
+   * (i.e. a recording is in progress and sensors must continue in the background).
+   */
+  @Override
+  public void onPause() {
+    super.onPause();
+
+    if (sensorFusion != null && !SensorCollectionService.isRunning()) {
+      sensorFusion.stopListening();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   * Checks for activities in case the app was closed without granting them, or if they were
+   * granted through the settings page. Repeats the startup checks done in
+   * {@link MainActivity#onCreate(Bundle)}. Starts listening in the SensorFusion class.
+   *
+   * @see SensorFusion the main data processing class.
+   */
+  @Override
+  public void onResume() {
+    super.onResume();
+
+    if (getSupportActionBar() != null) {
+      getSupportActionBar().show();
     }
 
-    private boolean isActivityVisible() {
-        return !isFinishing() && !isDestroyed();
-    }
+    // Delay permission check slightly to ensure the Activity is in the foreground
+    new Handler().postDelayed(() -> {
+      if (isActivityVisible()) {
+        // Check if both permissions are granted
+        boolean locationGranted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED;
 
+        boolean activityGranted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACTIVITY_RECOGNITION
+        ) == PackageManager.PERMISSION_GRANTED;
 
-
-    /**
-     * Unregisters sensor listeners when the app closes, unless the foreground service is active
-     * (recording in progress).
-     *
-     * @see SensorFusion the main data processing class.
-     * @see SensorCollectionService
-     */
-    @Override
-    protected void onDestroy() {
-        if (sensorFusion != null && !SensorCollectionService.isRunning()) {
-            sensorFusion.stopListening();
+        // BLE permissions (Android 12+)
+        boolean bleGranted = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+          bleGranted = ContextCompat.checkSelfPermission(
+              MainActivity.this, Manifest.permission.BLUETOOTH_SCAN
+          ) == PackageManager.PERMISSION_GRANTED
+          && ContextCompat.checkSelfPermission(
+              MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT
+          ) == PackageManager.PERMISSION_GRANTED;
         }
-        super.onDestroy();
-    }
 
-
-    //endregion
-
-    //region Permissions
-
-    /**
-     * Prepares global resources when all permissions are granted.
-     * Resets the permissions tracking boolean in shared preferences, and initialises the
-     * {@link SensorFusion} class with the application context, and registers the main activity to
-     * listen for server responses that SensorFusion receives.
-     *
-     * @see SensorFusion the main data processing class.
-     * @see ServerCommunications the communication class sending and recieving data from the server.
-     */
-    private void allPermissionsObtained() {
-        // Reset any permission denial flag in SharedPreferences if needed.
-        settings.edit().putBoolean("permanentDeny", false).apply();
-
-        // Ensure SensorFusion is initialized with a valid context.
-        if (this.sensorFusion == null) {
-            this.sensorFusion = SensorFusion.getInstance();
-            this.sensorFusion.setContext(getApplicationContext());
+        // Notification permission (Android 13+)
+        boolean notifGranted = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          notifGranted = ContextCompat.checkSelfPermission(
+              MainActivity.this, Manifest.permission.POST_NOTIFICATIONS
+          ) == PackageManager.PERMISSION_GRANTED;
         }
-        sensorFusion.registerForServerUpdate(this);
-    }
 
-
-
-
-    //endregion
-
-    //region Navigation
-
-    /**
-     * {@inheritDoc}
-     * Sets desired animations and navigates to {@link SettingsFragment}
-     * when the settings wheel in the action bar is clicked.
-     */
-    @Override
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if(Objects.requireNonNull(navController.getCurrentDestination()).getId() == item.getItemId())
-            return super.onOptionsItemSelected(item);
-        else {
-            NavOptions options = new NavOptions.Builder()
-                    .setLaunchSingleTop(true)
-                    .setEnterAnim(R.anim.slide_in_bottom)
-                    .setExitAnim(R.anim.slide_out_top)
-                    .setPopEnterAnim(R.anim.slide_in_top)
-                    .setPopExitAnim(R.anim.slide_out_bottom).build();
-            navController.navigate(R.id.action_global_settingsFragment, null, options);
-            return true;
-        }
-    }
-
-    /**
-     * {@inheritDoc}
-     * Enables navigating back between fragments.
-     */
-    @Override
-    public boolean onSupportNavigateUp() {
-        return navController.navigateUp() || super.onSupportNavigateUp();
-    }
-
-    /**
-     * {@inheritDoc}
-     * Inflate the designed menu view.
-     *
-     * @see com.openpositioning.PositionMe.R.menu for the xml file.
-     */
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_items, menu);
-        return true;
-    }
-
-    /**
-     * {@inheritDoc}
-     * Handles the back button press. If the current fragment is the HomeFragment, a dialog is
-     * displayed to confirm the exit. If not, the default back navigation is performed.
-     */
-    @Override
-    public void onBackPressed() {
-        // Check if the current destination is HomeFragment (assumed to be the root)
-        if (navController.getCurrentDestination() != null &&
-                navController.getCurrentDestination().getId() == R.id.homeFragment) {
-            new AlertDialog.Builder(this)
-                    .setTitle("Confirm Exit")
-                    .setMessage("Are you sure you want to exit the app?")
-                    .setPositiveButton("Yes", (dialog, which) -> {
-                        dialog.dismiss();
-                        finish(); // Close the activity (exit the app)
-                    })
-                    .setNegativeButton("No", (dialog, which) -> dialog.dismiss())
-                    .create()
-                    .show();
+        if (!locationGranted || !activityGranted || !bleGranted || !notifGranted) {
+          // Build a list of permissions that still need to be requested
+          java.util.List<String> permsToRequest = new java.util.ArrayList<>();
+          if (!locationGranted) permsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION);
+          if (!activityGranted) permsToRequest.add(Manifest.permission.ACTIVITY_RECOGNITION);
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !bleGranted) {
+            permsToRequest.add(Manifest.permission.BLUETOOTH_SCAN);
+            permsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT);
+          }
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifGranted) {
+            permsToRequest.add(Manifest.permission.POST_NOTIFICATIONS);
+          }
+          multiplePermissionsLauncher.launch(permsToRequest.toArray(new String[0]));
         } else {
-            // If not on the root destination, perform the default back navigation.
-            super.onBackPressed();
+          // Both permissions are already granted
+          allPermissionsObtained();
         }
+      }
+    }, 300); // Delay ensures activity is fully visible before requesting permissions
+
+    if (sensorFusion != null) {
+      sensorFusion.resumeListening();
     }
+  }
+
+  private boolean isActivityVisible() {
+    return !isFinishing() && !isDestroyed();
+  }
 
 
 
-    //endregion
-
-    //region Global toasts
-
-    /**
-     * {@inheritDoc}
-     * Calls the corresponding handler that runs a toast on the Main UI thread.
-     */
-    @Override
-    public void update(Object[] objList) {
-        assert objList[0] instanceof Boolean;
-        if((Boolean) objList[0]) {
-            this.httpResponseHandler.post(displayToastTaskSuccess);
-        }
-        else {
-            this.httpResponseHandler.post(displayToastTaskFailure);
-        }
+  /**
+   * Unregisters sensor listeners when the app closes, unless the foreground service is active
+   * (recording in progress).
+   *
+   * @see SensorFusion the main data processing class.
+   * @see SensorCollectionService
+   */
+  @Override
+  protected void onDestroy() {
+    if (sensorFusion != null && !SensorCollectionService.isRunning()) {
+      sensorFusion.stopListening();
     }
+    super.onDestroy();
+  }
 
-    /**
-     * Task that displays positive toast on the main UI thread.
-     * Called when {@link ServerCommunications} successfully uploads a trajectory.
-     */
-    private final Runnable displayToastTaskSuccess = () -> Toast.makeText(MainActivity.this,
-            "Trajectory uploaded", Toast.LENGTH_SHORT).show();
 
-    /**
-     * Task that displays negative toast on the main UI thread.
-     * Called when {@link ServerCommunications} fails to upload a trajectory.
-     */
-    private final Runnable displayToastTaskFailure = () -> {
-//            Toast.makeText(MainActivity.this, "Failed to complete trajectory upload", Toast.LENGTH_SHORT).show();
-    };
+  //endregion
 
-    //endregion
+  //region Permissions
+
+  /**
+   * Prepares global resources when all permissions are granted.
+   * Resets the permissions tracking boolean in shared preferences, and initialises the
+   * {@link SensorFusion} class with the application context, and registers the main activity to
+   * listen for server responses that SensorFusion receives.
+   *
+   * @see SensorFusion the main data processing class.
+   * @see ServerCommunications the communication class sending and recieving data from the server.
+   */
+  private void allPermissionsObtained() {
+    // Reset any permission denial flag in SharedPreferences if needed.
+    settings.edit().putBoolean("permanentDeny", false).apply();
+
+    // Ensure SensorFusion is initialized with a valid context.
+    if (this.sensorFusion == null) {
+      this.sensorFusion = SensorFusion.getInstance();
+      this.sensorFusion.setContext(getApplicationContext());
+    }
+    sensorFusion.registerForServerUpdate(this);
+  }
+
+
+
+
+  //endregion
+
+  //region Navigation
+
+  /**
+   * {@inheritDoc}
+   * Sets desired animations and navigates to {@link SettingsFragment}
+   * when the settings wheel in the action bar is clicked.
+   */
+  @Override
+  public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+    if(Objects.requireNonNull(navController.getCurrentDestination()).getId() == item.getItemId())
+      return super.onOptionsItemSelected(item);
+    else {
+      NavOptions options = new NavOptions.Builder()
+          .setLaunchSingleTop(true)
+          .setEnterAnim(R.anim.slide_in_bottom)
+          .setExitAnim(R.anim.slide_out_top)
+          .setPopEnterAnim(R.anim.slide_in_top)
+          .setPopExitAnim(R.anim.slide_out_bottom).build();
+      navController.navigate(R.id.action_global_settingsFragment, null, options);
+      return true;
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   * Enables navigating back between fragments.
+   */
+  @Override
+  public boolean onSupportNavigateUp() {
+    return navController.navigateUp() || super.onSupportNavigateUp();
+  }
+
+  /**
+   * {@inheritDoc}
+   * Inflate the designed menu view.
+   *
+   * @see com.openpositioning.PositionMe.R.menu for the xml file.
+   */
+  @Override
+  public boolean onCreateOptionsMenu(Menu menu) {
+    getMenuInflater().inflate(R.menu.menu_items, menu);
+    return true;
+  }
+
+  /**
+   * {@inheritDoc}
+   * Handles the back button press. If the current fragment is the HomeFragment, a dialog is
+   * displayed to confirm the exit. If not, the default back navigation is performed.
+   */
+  @Override
+  public void onBackPressed() {
+    // Check if the current destination is HomeFragment (assumed to be the root)
+    if (navController.getCurrentDestination() != null &&
+        navController.getCurrentDestination().getId() == R.id.homeFragment) {
+      new AlertDialog.Builder(this)
+          .setTitle("Confirm Exit")
+          .setMessage("Are you sure you want to exit the app?")
+          .setPositiveButton("Yes", (dialog, which) -> {
+            dialog.dismiss();
+            finish(); // Close the activity (exit the app)
+          })
+          .setNegativeButton("No", (dialog, which) -> dialog.dismiss())
+          .create()
+          .show();
+    } else {
+      // If not on the root destination, perform the default back navigation.
+      super.onBackPressed();
+    }
+  }
+
+
+
+  //endregion
+
+  //region Global toasts
+
+  /**
+   * {@inheritDoc}
+   * Calls the corresponding handler that runs a toast on the Main UI thread.
+   */
+  @Override
+  public void update(Object[] objList) {
+    assert objList[0] instanceof Boolean;
+    if((Boolean) objList[0]) {
+      this.httpResponseHandler.post(displayToastTaskSuccess);
+    }
+    else {
+      this.httpResponseHandler.post(displayToastTaskFailure);
+    }
+  }
+
+  /**
+   * Task that displays positive toast on the main UI thread.
+   * Called when {@link ServerCommunications} successfully uploads a trajectory.
+   */
+  private final Runnable displayToastTaskSuccess = () -> Toast.makeText(MainActivity.this,
+      "Trajectory uploaded", Toast.LENGTH_SHORT).show();
+
+  /**
+   * Task that displays negative toast on the main UI thread.
+   * Called when {@link ServerCommunications} fails to upload a trajectory.
+   */
+  private final Runnable displayToastTaskFailure = () -> {
+    Toast.makeText(MainActivity.this, "Failed to complete trajectory upload",
+        Toast.LENGTH_SHORT).show();
+  };
+
+  //endregion
 }

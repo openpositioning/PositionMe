@@ -22,106 +22,106 @@ import java.util.stream.Stream;
  */
 public class WifiPositionManager implements Observer {
 
-    private static final String WIFI_FINGERPRINT = "wf";
+  private static final String WIFI_FINGERPRINT = "wf";
 
-    private final WiFiPositioning wiFiPositioning;
-    private final TrajectoryRecorder recorder;
-    private List<Wifi> wifiList;
+  private final WiFiPositioning wiFiPositioning;
+  private final TrajectoryRecorder recorder;
+  private List<Wifi> wifiList;
 
-    /**
-     * Creates a new WifiPositionManager.
-     *
-     * @param wiFiPositioning WiFi positioning API client
-     * @param recorder        trajectory recorder for writing WiFi fingerprints
-     */
-    public WifiPositionManager(WiFiPositioning wiFiPositioning,
+  /**
+   * Creates a new WifiPositionManager.
+   *
+   * @param wiFiPositioning WiFi positioning API client
+   * @param recorder        trajectory recorder for writing WiFi fingerprints
+   */
+  public WifiPositionManager(WiFiPositioning wiFiPositioning,
                                TrajectoryRecorder recorder) {
-        this.wiFiPositioning = wiFiPositioning;
-        this.recorder = recorder;
-    }
+    this.wiFiPositioning = wiFiPositioning;
+    this.recorder = recorder;
+  }
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Receives updates from {@link WifiDataProcessor}. Converts the raw object array
-     * to a typed list, delegates fingerprint recording to {@link TrajectoryRecorder},
-     * and triggers a WiFi positioning request.</p>
-     */
-    @Override
-    public void update(Object[] wifiList) {
-        this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
-        recorder.addWifiFingerprint(this.wifiList);
-        createWifiPositioningRequest();
-    }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Receives updates from {@link WifiDataProcessor}. Converts the raw object array
+   * to a typed list, delegates fingerprint recording to {@link TrajectoryRecorder},
+   * and triggers a WiFi positioning request.</p>
+   */
+  @Override
+  public void update(Object[] wifiList) {
+    this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
+    recorder.addWifiFingerprint(this.wifiList);
+    createWifiPositioningRequest();
+  }
 
-    /**
-     * Creates a request to obtain a WiFi location for the obtained WiFi fingerprint.
-     */
-    private void createWifiPositioningRequest() {
-        try {
-            JSONObject wifiAccessPoints = new JSONObject();
-            for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
-            }
-            JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
-        } catch (JSONException e) {
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
+  /**
+   * Creates a request to obtain a WiFi location for the obtained WiFi fingerprint.
+   */
+  private void createWifiPositioningRequest() {
+    try {
+      JSONObject wifiAccessPoints = new JSONObject();
+      for (Wifi data : this.wifiList) {
+        wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+      }
+      JSONObject wifiFingerPrint = new JSONObject();
+      wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+      this.wiFiPositioning.request(wifiFingerPrint);
+    } catch (JSONException e) {
+      Log.e("jsonErrors", "Error creating json object" + e.toString());
+    }
+  }
+
+  /**
+   * Creates a WiFi positioning request using the Volley callback pattern.
+   */
+  private void createWifiPositionRequestCallback() {
+    try {
+      JSONObject wifiAccessPoints = new JSONObject();
+      for (Wifi data : this.wifiList) {
+        wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+      }
+      JSONObject wifiFingerPrint = new JSONObject();
+      wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+      this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+        @Override
+        public void onSuccess(LatLng wifiLocation, int floor) {
+          // Handle the success response
         }
-    }
 
-    /**
-     * Creates a WiFi positioning request using the Volley callback pattern.
-     */
-    private void createWifiPositionRequestCallback() {
-        try {
-            JSONObject wifiAccessPoints = new JSONObject();
-            for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
-            }
-            JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
-                @Override
-                public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
-                }
-
-                @Override
-                public void onError(String message) {
-                    // Handle the error response
-                }
-            });
-        } catch (JSONException e) {
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
+        @Override
+        public void onError(String message) {
+          // Handle the error response
         }
+      });
+    } catch (JSONException e) {
+      Log.e("jsonErrors", "Error creating json object" + e.toString());
     }
+  }
 
-    /**
-     * Returns the user position obtained using WiFi positioning.
-     *
-     * @return {@link LatLng} corresponding to the user's position
-     */
-    public LatLng getLatLngWifiPositioning() {
-        return this.wiFiPositioning.getWifiLocation();
-    }
+  /**
+   * Returns the user position obtained using WiFi positioning.
+   *
+   * @return {@link LatLng} corresponding to the user's position
+   */
+  public LatLng getLatLngWifiPositioning() {
+    return this.wiFiPositioning.getWifiLocation();
+  }
 
-    /**
-     * Returns the current floor the user is on, obtained using WiFi positioning.
-     *
-     * @return current floor number
-     */
-    public int getWifiFloor() {
-        return this.wiFiPositioning.getFloor();
-    }
+  /**
+   * Returns the current floor the user is on, obtained using WiFi positioning.
+   *
+   * @return current floor number
+   */
+  public int getWifiFloor() {
+    return this.wiFiPositioning.getFloor();
+  }
 
-    /**
-     * Returns the most recent list of WiFi scan results.
-     *
-     * @return list of {@link Wifi} objects
-     */
-    public List<Wifi> getWifiList() {
-        return this.wifiList;
-    }
+  /**
+   * Returns the most recent list of WiFi scan results.
+   *
+   * @return list of {@link Wifi} objects
+   */
+  public List<Wifi> getWifiList() {
+    return this.wifiList;
+  }
 }
