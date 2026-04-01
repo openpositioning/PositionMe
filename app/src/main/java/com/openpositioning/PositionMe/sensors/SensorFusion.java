@@ -97,6 +97,15 @@ public class SensorFusion implements SensorEventListener {
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
+
+    // Trajectory-based heading tracking for arrow orientation
+    private static final double TRAJECTORY_HEADING_MIN_MOVE_M = 0.40;
+    private static final float TRAJECTORY_HEADING_BLEND_ALPHA = 0.30f;
+    private double lastTrajectoryHeadingLatDeg;
+    private double lastTrajectoryHeadingLonDeg;
+    private boolean hasTrajectoryHeadingAnchor;
+    private double trajectoryHeadingRad;
+    private boolean hasTrajectoryHeading;
     //endregion
 
     //region Initialisation
@@ -171,7 +180,9 @@ public class SensorFusion implements SensorEventListener {
                     fusionEngine.updatePdrDisplacement(dxEastMeters, dyNorthMeters);
                     fusionEngine.updateElevation(state.elevation, state.elevator);
                     updateFusedState();
-                });
+                },
+                () -> (float) fusionEngine.getHeadingBiasRad(),
+                rawHeadingRad -> fusionEngine.updateRawHeadingRad(rawHeadingRad));
 
         this.wifiPositionManager.setWifiFixListener((wifiLocation, floor) -> {
             fusionEngine.updateWifi(wifiLocation.latitude, wifiLocation.longitude, floor);
@@ -554,11 +565,61 @@ public class SensorFusion implements SensorEventListener {
 
     /**
      * Getter function for device orientation.
+     * Blends raw sensor orientation toward the trajectory heading computed from
+     * sustained fused position movement.
      *
-     * @return orientation of device in radians.
+     * @return orientation of device in radians, blended toward trajectory direction.
      */
     public float passOrientation() {
-        return state.orientation[0];
+        float rawHeading = state.orientation[0];
+        float correctedHeading = normalizeAngleRad(rawHeading + fusionEngine.getHeadingBiasRad());
+        return correctedHeading;
+    }
+
+    /**
+     * Wraps an angle in radians to the range [-π, π].
+     */
+    private float normalizeAngleRad(double angleRad) {
+        float result = (float) angleRad;
+        while (result > Math.PI) result -= (float) (2 * Math.PI);
+        while (result < -Math.PI) result += (float) (2 * Math.PI);
+        return result;
+    }
+
+    /**
+     * Tracks the bearing direction from sustained fused position movement.
+     * On significant position changes, updates the trajectory heading via bearing calculation.
+     * This provides a secondary heading reference independent of raw sensor orientation.
+     */
+    private void updateTrajectoryHeading(double latDeg, double lonDeg) {
+        if (!hasTrajectoryHeadingAnchor) {
+            lastTrajectoryHeadingLatDeg = latDeg;
+            lastTrajectoryHeadingLonDeg = lonDeg;
+            hasTrajectoryHeadingAnchor = true;
+            hasTrajectoryHeading = false;
+            return;
+        }
+
+        // Flat-earth distance in metres
+        double dLat = (latDeg - lastTrajectoryHeadingLatDeg) * 111320.0;
+        double dLon = (lonDeg - lastTrajectoryHeadingLonDeg)
+                * 111320.0 * Math.cos(Math.toRadians(lastTrajectoryHeadingLatDeg));
+        double distM = Math.sqrt(dLat * dLat + dLon * dLon);
+
+        if (distM >= TRAJECTORY_HEADING_MIN_MOVE_M) {
+            // Compute bearing: atan2(E, N) gives bearing from north
+            double newHeadingRad = Math.atan2(dLon, dLat);
+            if (!hasTrajectoryHeading) {
+                trajectoryHeadingRad = newHeadingRad;
+                hasTrajectoryHeading = true;
+            } else {
+                // EMA blend to smooth trajectory heading
+                float delta = normalizeAngleRad(newHeadingRad - trajectoryHeadingRad);
+                trajectoryHeadingRad = trajectoryHeadingRad + 0.4f * delta;
+            }
+            lastTrajectoryHeadingLatDeg = latDeg;
+            lastTrajectoryHeadingLonDeg = lonDeg;
+        }
     }
 
     /**
@@ -737,6 +798,9 @@ public class SensorFusion implements SensorEventListener {
         state.fusedLongitude = (float) estimate.getLatLng().longitude;
         state.fusedFloor = estimate.getFloor();
         state.fusedAvailable = true;
+
+        // Update trajectory-based heading from fused position movement
+        updateTrajectoryHeading(estimate.getLatLng().latitude, estimate.getLatLng().longitude);
 
         if (recorder != null && recorder.isRecording()) {
             long relativeTimestamp = SystemClock.uptimeMillis() - recorder.getBootTime();

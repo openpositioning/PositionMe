@@ -26,6 +26,14 @@ public class SensorEventHandler {
         void onPdrStep(float dxEastMeters, float dyNorthMeters, long relativeTimestampMs);
     }
 
+    public interface HeadingBiasProvider {
+        float getHeadingBiasRad();
+    }
+
+    public interface RawHeadingListener {
+        void onRawHeading(float rawHeadingRad);
+    }
+
     private static final float ALPHA = 0.8f;
     private static final long LARGE_GAP_THRESHOLD_MS = 500;
 
@@ -34,6 +42,8 @@ public class SensorEventHandler {
     private final PathView pathView;
     private final TrajectoryRecorder recorder;
     private final PdrStepListener pdrStepListener;
+    private final HeadingBiasProvider headingBiasProvider;
+    private final RawHeadingListener rawHeadingListener;
 
     // Timestamp tracking
     private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -59,13 +69,17 @@ public class SensorEventHandler {
     public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
                               PathView pathView, TrajectoryRecorder recorder,
                               long bootTime,
-                              PdrStepListener pdrStepListener) {
+                              PdrStepListener pdrStepListener,
+                              HeadingBiasProvider headingBiasProvider,
+                              RawHeadingListener rawHeadingListener) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
         this.pathView = pathView;
         this.recorder = recorder;
         this.bootTime = bootTime;
         this.pdrStepListener = pdrStepListener;
+        this.headingBiasProvider = headingBiasProvider;
+        this.rawHeadingListener = rawHeadingListener;
     }
 
     /**
@@ -153,6 +167,9 @@ public class SensorEventHandler {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, state.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, state.orientation);
+                if (rawHeadingListener != null) {
+                    rawHeadingListener.onRawHeading(state.orientation[0]);
+                }
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -175,10 +192,15 @@ public class SensorEventHandler {
                                         + accelMagnitude.size());
                     }
 
-                    float[] newCords = this.pdrProcessing.updatePdr(
+                        float headingForPdr = state.orientation[0];
+                        if (headingBiasProvider != null) {
+                        headingForPdr += headingBiasProvider.getHeadingBiasRad();
+                        }
+
+                        float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
-                            state.orientation[0]
+                            headingForPdr
                     );
 
                     float dx = 0f;

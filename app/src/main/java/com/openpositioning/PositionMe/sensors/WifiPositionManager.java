@@ -32,7 +32,7 @@ public class WifiPositionManager implements Observer {
     // Exponential moving average smoothing for WiFi positions.
     // Prevents sudden large jumps from individual noisy scan results bugging out the trajectory.
     private static final double EMA_ALPHA = 0.80;          // stronger pull to newest WiFi fix
-    private static final double JUMP_THRESHOLD_M = 18.0;   // allow larger corrections before dampening
+    private static final double JUMP_THRESHOLD_M = 10.0;   // dampen very large jumps
     private static final long WIFI_TIME_DECAY_HALF_LIFE_MS = 10000L;
 
     private final WiFiPositioning wiFiPositioning;
@@ -177,9 +177,10 @@ public class WifiPositionManager implements Observer {
 
     /**
      * Applies exponential moving average smoothing to consecutive WiFi positions.
-     * Large jumps (beyond JUMP_THRESHOLD_M) are dampened so a single bad scan cannot
-     * cause the position to bug out across the map. The floor resets the smoothed
-     * position when the user changes floor so cross-floor averaging is avoided.
+        * Large jumps (beyond JUMP_THRESHOLD_M) are dampened to avoid abrupt spikes.
+        * Smaller jumps use EMA blending with time decay.
+     * The floor resets the smoothed position when the user changes floor so cross-floor
+     * averaging is avoided.
      */
     private LatLng smoothWifiPosition(LatLng raw, int floor) {
         long nowMs = SystemClock.elapsedRealtime();
@@ -196,14 +197,13 @@ public class WifiPositionManager implements Observer {
                 * 111320.0 * Math.cos(Math.toRadians(smoothedWifiPosition.latitude));
         double distM = Math.sqrt(dLat * dLat + dLon * dLon);
 
-        // Dampen large jumps proportionally — a 20 m jump gets half the normal weight
-        double alpha = (distM > JUMP_THRESHOLD_M)
-                ? EMA_ALPHA * (JUMP_THRESHOLD_M / distM)
-                : EMA_ALPHA;
-
         // Age-based decay: older WiFi fixes fade faster, newer fixes retain more weight.
         long ageMs = Math.max(0L, nowMs - lastSmoothedWifiFixMs);
         double timeDecay = Math.pow(0.5, ageMs / (double) WIFI_TIME_DECAY_HALF_LIFE_MS);
+        double alpha = EMA_ALPHA;
+        if (distM > JUMP_THRESHOLD_M) {
+            alpha *= JUMP_THRESHOLD_M / distM;
+        }
         alpha *= timeDecay;
 
         double smoothLat = smoothedWifiPosition.latitude

@@ -35,6 +35,7 @@ public class PositionFusionEngine {
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 3;
+    private static final double WIFI_HARD_SNAP_DISTANCE_M = 5.0;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
     private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 20.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
@@ -45,17 +46,25 @@ public class PositionFusionEngine {
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
-    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.32;
+    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.3;
     private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(7.0);
-    private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(60.0);
+    private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(170.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
     private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.30;
+    private static final double WIFI_PATTERN_HEADING_MIN_MOVE_M = 1.2;
+    private static final int WIFI_SNAP_HISTORY_POINTS = 5;
+    private static final int WIFI_SNAP_MIN_HISTORY_POINTS = 1;
+    private static final double WIFI_SNAP_MIN_VECTOR_M = 0.80;
+    private static final double WIFI_SNAP_DIRECTION_MIN_MOVE_M = 0.50;
+    private static final double ORIENTATION_BIAS_WIFI_PATTERN_LEARN_RATE = 0.8;
+    private static final double ORIENTATION_BIAS_WIFI_PATTERN_MAX_STEP_RAD = Math.toRadians(10.0);
+    private static final double ORIENTATION_BIAS_WIFI_SNAP_MAX_STEP_RAD = Math.toRadians(60.0);
     private static final boolean ENABLE_WALL_SLIDE = true;
     private static final double WALL_STOP_MARGIN_RATIO = 0.02;
     private static final double MAX_WALL_SLIDE_M = 0.60;
-    private static final double WALL_PENALTY_HIT_INCREMENT = .5;
+    private static final double WALL_PENALTY_HIT_INCREMENT = 1;
     private static final double WALL_PENALTY_DECAY_ON_FREE_MOVE = 0.65;
-    private static final double WALL_PENALTY_STRENGTH = 0.2;
+    private static final double WALL_PENALTY_STRENGTH = 0.35;
     private static final double WALL_PENALTY_SCORE_MAX = 8.0;
     private static final double FIX_WALL_CROSS_PROB_GNSS = 0.35;
     private static final double FIX_WALL_CROSS_PROB_WIFI = 0.60;
@@ -81,6 +90,15 @@ public class PositionFusionEngine {
     private double smoothedEastMeters;
     private double smoothedNorthMeters;
     private boolean hasSmoothedEstimate;
+    private double lastWifiFixEastMeters;
+    private double lastWifiFixNorthMeters;
+    private int lastWifiFixFloor;
+    private boolean hasLastWifiFix;
+    private final List<WifiFixSample> wifiFixHistory = new ArrayList<>();
+    private boolean hasSnapOrientationOverride;
+    private double snapOrientationOverrideRad;
+    private double latestRawHeadingRad;
+    private boolean hasLatestRawHeading;
 
     private static final class Particle {
         double xEast;
@@ -126,6 +144,18 @@ public class PositionFusionEngine {
         final List<Point2D> lifts = new ArrayList<>();
     }
 
+    private static final class WifiFixSample {
+        final double east;
+        final double north;
+        final int floor;
+
+        WifiFixSample(double east, double north, int floor) {
+            this.east = east;
+            this.north = north;
+            this.floor = floor;
+        }
+    }
+
     public PositionFusionEngine(float floorHeightMeters) {
         this.floorHeightMeters = floorHeightMeters > 0f ? floorHeightMeters : 4f;
     }
@@ -144,6 +174,10 @@ public class PositionFusionEngine {
         recentStepNorthMeters = 0.0;
         recentStepMotionMeters = 0.0;
         hasSmoothedEstimate = false;
+        hasLastWifiFix = false;
+        wifiFixHistory.clear();
+        hasSnapOrientationOverride = false;
+        hasLatestRawHeading = false;
         initParticlesAtOrigin(initialFloor);
         if (DEBUG_LOGS) {
             Log.i(TAG, String.format(Locale.US,
@@ -167,9 +201,8 @@ public class PositionFusionEngine {
         recentStepEastMeters = dxEastMeters;
         recentStepNorthMeters = dyNorthMeters;
         recentStepMotionMeters = Math.hypot(dxEastMeters, dyNorthMeters);
-        double[] correctedStep = rotateVector(dxEastMeters, dyNorthMeters, headingBiasRad);
-        double correctedDx = correctedStep[0];
-        double correctedDy = correctedStep[1];
+        double correctedDx = dxEastMeters;
+        double correctedDy = dyNorthMeters;
         int blockedByWall = 0;
         int slidAlongWall = 0;
         int stoppedAtWall = 0;
@@ -484,6 +517,38 @@ public class PositionFusionEngine {
         double innovationEast = z[0] - priorMeanEast;
         double innovationNorth = z[1] - priorMeanNorth;
         double innovationDistance = Math.hypot(innovationEast, innovationNorth);
+
+        // If WiFi is clearly far from the displayed mean, hard-snap particles to the WiFi fix.
+        if (floorHint != null && innovationDistance >= WIFI_HARD_SNAP_DISTANCE_M) {
+            recalculateOrientationBiasOnWifiSnap(
+                z[0],
+                z[1],
+                floorHint,
+                innovationEast,
+                innovationNorth);
+            recordWifiFix(z[0], z[1], floorHint);
+            Log.d(TAG, String.format(Locale.US,
+                    "WiFi hard-snap innovation=%.2fm drift detected, resetting to fix",
+                    innovationDistance));
+            for (Particle p : particles) {
+                p.xEast = z[0] + random.nextGaussian() * (ROUGHEN_STD_M * 0.5);
+                p.yNorth = z[1] + random.nextGaussian() * (ROUGHEN_STD_M * 0.5);
+                p.floor = floorHint;
+                p.weight = 1.0 / particles.size();
+                p.wallPenaltyScore = 0.0;
+            }
+            smoothedEastMeters = z[0];
+            smoothedNorthMeters = z[1];
+            hasSmoothedEstimate = true;
+            updateCounter++;
+            return;
+        }
+
+        if (floorHint != null) {
+            updateOrientationBiasFromWifiPattern(z[0], z[1], floorHint);
+            recordWifiFix(z[0], z[1], floorHint);
+        }
+
         double gateSigmaMultiplier = floorHint == null
                 ? OUTLIER_GATE_SIGMA_MULT_GNSS
                 : OUTLIER_GATE_SIGMA_MULT_WIFI;
@@ -650,6 +715,230 @@ public class PositionFusionEngine {
         }
     }
 
+    /**
+     * Learns heading bias from consecutive WiFi fixes, even when no hard snap is triggered.
+     */
+    private void updateOrientationBiasFromWifiPattern(double wifiEast,
+                                                      double wifiNorth,
+                                                      int wifiFloor) {
+        if (!hasLastWifiFix || wifiFloor != lastWifiFixFloor) {
+            lastWifiFixEastMeters = wifiEast;
+            lastWifiFixNorthMeters = wifiNorth;
+            lastWifiFixFloor = wifiFloor;
+            hasLastWifiFix = true;
+            return;
+        }
+
+        double wifiDeltaEast = wifiEast - lastWifiFixEastMeters;
+        double wifiDeltaNorth = wifiNorth - lastWifiFixNorthMeters;
+        double wifiMoveMeters = Math.hypot(wifiDeltaEast, wifiDeltaNorth);
+
+        lastWifiFixEastMeters = wifiEast;
+        lastWifiFixNorthMeters = wifiNorth;
+
+        if (wifiMoveMeters < WIFI_PATTERN_HEADING_MIN_MOVE_M
+                || recentStepMotionMeters < ORIENTATION_BIAS_MIN_STEP_M) {
+            return;
+        }
+
+        double stepNorm2 = recentStepEastMeters * recentStepEastMeters
+                + recentStepNorthMeters * recentStepNorthMeters;
+        if (stepNorm2 < 1e-6) {
+            return;
+        }
+
+        double cross = recentStepEastMeters * wifiDeltaNorth
+                - recentStepNorthMeters * wifiDeltaEast;
+        double rawBiasDelta = ORIENTATION_BIAS_WIFI_PATTERN_LEARN_RATE * (cross / stepNorm2);
+        double boundedBiasDelta = clamp(rawBiasDelta,
+                -ORIENTATION_BIAS_WIFI_PATTERN_MAX_STEP_RAD,
+                ORIENTATION_BIAS_WIFI_PATTERN_MAX_STEP_RAD);
+
+        headingBiasRad = clamp(headingBiasRad + boundedBiasDelta,
+                -ORIENTATION_BIAS_MAX_ABS_RAD,
+                ORIENTATION_BIAS_MAX_ABS_RAD);
+
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "WiFi-pattern heading move=(%.2fE,%.2fN)|%.2fm step=(%.2fE,%.2fN)|%.2fm deltaDeg=%.2f biasDeg=%.2f",
+                    wifiDeltaEast,
+                    wifiDeltaNorth,
+                    wifiMoveMeters,
+                    recentStepEastMeters,
+                    recentStepNorthMeters,
+                    recentStepMotionMeters,
+                    Math.toDegrees(boundedBiasDelta),
+                    Math.toDegrees(headingBiasRad)));
+        }
+    }
+
+    /**
+     * Recalculates heading bias at WiFi hard-snap time using previous WiFi fix direction.
+     */
+    private void recalculateOrientationBiasOnWifiSnap(double wifiEast,
+                                                      double wifiNorth,
+                                                      int wifiFloor,
+                                                      double innovationEast,
+                                                      double innovationNorth) {
+        if (!hasLastWifiFix || wifiFloor != lastWifiFixFloor) {
+            lastWifiFixEastMeters = wifiEast;
+            lastWifiFixNorthMeters = wifiNorth;
+            lastWifiFixFloor = wifiFloor;
+            hasLastWifiFix = true;
+            return;
+        }
+
+        HeadingMetric wifiHeadingMetric = buildWifiSnapHeadingMetric(wifiEast, wifiNorth, wifiFloor);
+
+        lastWifiFixEastMeters = wifiEast;
+        lastWifiFixNorthMeters = wifiNorth;
+
+        if (wifiHeadingMetric == null) {
+            return;
+        }
+
+        // Publish hard heading override for UI orientation at snap time.
+        snapOrientationOverrideRad = Math.atan2(wifiHeadingMetric.east, wifiHeadingMetric.north);
+        hasSnapOrientationOverride = true;
+
+        double wifiHeadingRad = Math.atan2(wifiHeadingMetric.east, wifiHeadingMetric.north);
+        double previousBiasRad = headingBiasRad;
+
+        if (hasLatestRawHeading) {
+            // Direct snap alignment: corrected heading = raw heading + bias -> WiFi heading.
+            double desiredBiasRad = normalizeAngleRad(wifiHeadingRad - latestRawHeadingRad);
+            headingBiasRad = clamp(desiredBiasRad,
+                    -ORIENTATION_BIAS_MAX_ABS_RAD,
+                    ORIENTATION_BIAS_MAX_ABS_RAD);
+        } else {
+            // Fallback when no recent raw heading is available.
+            double refEast;
+            double refNorth;
+            if (recentStepMotionMeters >= ORIENTATION_BIAS_MIN_STEP_M) {
+                refEast = recentStepEastMeters;
+                refNorth = recentStepNorthMeters;
+            } else {
+                refEast = innovationEast;
+                refNorth = innovationNorth;
+            }
+
+            double refNorm2 = refEast * refEast + refNorth * refNorth;
+            if (refNorm2 < 1e-6) {
+                return;
+            }
+            double refHeadingRad = Math.atan2(refEast, refNorth);
+            double desiredBiasRad = normalizeAngleRad(wifiHeadingRad - refHeadingRad);
+            headingBiasRad = clamp(desiredBiasRad,
+                    -ORIENTATION_BIAS_MAX_ABS_RAD,
+                    ORIENTATION_BIAS_MAX_ABS_RAD);
+        }
+        double appliedBiasDeltaRad = normalizeAngleRad(headingBiasRad - previousBiasRad);
+
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "WiFi snap heading recalc metric=(%.2fE,%.2fN)|%.2fm hist=%d rel=%.2f rawHeadingDeg=%.2f deltaDeg=%.2f biasDeg=%.2f",
+                    wifiHeadingMetric.east,
+                    wifiHeadingMetric.north,
+                    wifiHeadingMetric.magnitude,
+                    wifiHeadingMetric.samples,
+                    wifiHeadingMetric.reliability,
+                    Math.toDegrees(hasLatestRawHeading ? latestRawHeadingRad : Double.NaN),
+                    Math.toDegrees(appliedBiasDeltaRad),
+                    Math.toDegrees(headingBiasRad)));
+        }
+    }
+
+    private void recordWifiFix(double wifiEast, double wifiNorth, int wifiFloor) {
+        wifiFixHistory.add(new WifiFixSample(wifiEast, wifiNorth, wifiFloor));
+        while (wifiFixHistory.size() > WIFI_SNAP_HISTORY_POINTS) {
+            wifiFixHistory.remove(0);
+        }
+    }
+
+    private static final class HeadingMetric {
+        final double east;
+        final double north;
+        final double magnitude;
+        final int samples;
+        final double reliability;
+
+        HeadingMetric(double east, double north, double magnitude, int samples, double reliability) {
+            this.east = east;
+            this.north = north;
+            this.magnitude = magnitude;
+            this.samples = samples;
+            this.reliability = reliability;
+        }
+    }
+
+    private HeadingMetric buildWifiSnapHeadingMetric(double snappedEast,
+                                                     double snappedNorth,
+                                                     int wifiFloor) {
+        double sumUnitEast = 0.0;
+        double sumUnitNorth = 0.0;
+        double sumRawEast = 0.0;
+        double sumRawNorth = 0.0;
+        int used = 0;
+
+        for (int i = wifiFixHistory.size() - 1;
+             i >= 0 && used < WIFI_SNAP_HISTORY_POINTS;
+             i--) {
+            WifiFixSample sample = wifiFixHistory.get(i);
+            if (sample.floor != wifiFloor) {
+                continue;
+            }
+
+            double vEast = snappedEast - sample.east;
+            double vNorth = snappedNorth - sample.north;
+            double vMag = Math.hypot(vEast, vNorth);
+            if (vMag < WIFI_SNAP_DIRECTION_MIN_MOVE_M) {
+                continue;
+            }
+
+            sumUnitEast += vEast / vMag;
+            sumUnitNorth += vNorth / vMag;
+            sumRawEast += vEast;
+            sumRawNorth += vNorth;
+            used++;
+        }
+
+        if (used < WIFI_SNAP_MIN_HISTORY_POINTS) {
+            return null;
+        }
+
+        double meanEast = sumRawEast / used;
+        double meanNorth = sumRawNorth / used;
+        double meanMag = Math.hypot(meanEast, meanNorth);
+        if (meanMag < WIFI_SNAP_MIN_VECTOR_M) {
+            return null;
+        }
+
+        double concentration = Math.hypot(sumUnitEast, sumUnitNorth) / used;
+        return new HeadingMetric(meanEast, meanNorth, meanMag, used, concentration);
+    }
+
+    /**
+     * Returns and clears a pending snap-orientation override, if any.
+     */
+    public synchronized Double consumeSnapOrientationOverrideRad() {
+        if (!hasSnapOrientationOverride) {
+            return null;
+        }
+        hasSnapOrientationOverride = false;
+        return snapOrientationOverrideRad;
+    }
+
+    /** Returns the current PDR heading-bias correction (radians). */
+    public synchronized double getHeadingBiasRad() {
+        return headingBiasRad;
+    }
+
+    /** Updates the latest raw sensor heading (radians, Android azimuth frame). */
+    public synchronized void updateRawHeadingRad(float rawHeadingRad) {
+        latestRawHeadingRad = rawHeadingRad;
+        hasLatestRawHeading = true;
+    }
+
     private void initParticlesAtOrigin(int initialFloor) {
         particles.clear();
         double w = 1.0 / PARTICLE_COUNT;
@@ -801,6 +1090,13 @@ public class PositionFusionEngine {
 
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static double normalizeAngleRad(double angleRad) {
+        double result = angleRad;
+        while (result > Math.PI) result -= 2.0 * Math.PI;
+        while (result < -Math.PI) result += 2.0 * Math.PI;
+        return result;
     }
 
     /**
