@@ -22,9 +22,15 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.MapMatchingConfig;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.openpositioning.PositionMe.utils.CrossFloorClassifier;
+import com.openpositioning.PositionMe.utils.WallGeometryBuilder;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
+import android.graphics.PointF;
+import java.util.List;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
@@ -88,6 +94,9 @@ public class TrajectoryMapFragment extends Fragment {
     private Runnable autoFloorTask;
     private int lastCandidateFloor = Integer.MIN_VALUE;
     private long lastCandidateTime = 0;
+
+    private final MapMatchingConfig mapMatchingConfig = new MapMatchingConfig();
+    private LatLng wallOrigin;
 
     // UI
     private Spinner switchMapSpinner;
@@ -217,6 +226,11 @@ public class TrajectoryMapFragment extends Fragment {
                     }
 
                     drawBuildingPolygon();
+
+                    // Draw green outlines around buildings that have indoor map data
+                    if (indoorMapManager != null) {
+                        indoorMapManager.setIndicationOfIndoorMap();
+                    }
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
 
@@ -918,6 +932,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     //region Auto-floor logic
+    // Uses WiFi floor when available; otherwise barometric elevation divided by floor height (meters).
+    // Behavior unchanged; proximity to stairs/lift will be added in later steps.
 
     /**
      * Starts the periodic auto-floor evaluation task. Checks every second
@@ -954,14 +970,34 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
+        updateWallsForPdr();
+
         int candidateFloor;
         if (sensorFusion.getLatLngWifiPositioning() != null) {
             candidateFloor = sensorFusion.getWifiFloor();
         } else {
             float elevation = sensorFusion.getElevation();
             float floorHeight = indoorMapManager.getFloorHeight();
+            if (floorHeight <= 0) {
+                // Fallback to config default if building metadata is missing
+                floorHeight = mapMatchingConfig.baroHeightThreshold;
+            }
+            if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
+                return; // Ignore small height changes
+            }
             if (floorHeight <= 0) return;
             candidateFloor = Math.round(elevation / floorHeight);
+
+            // Require proximity to stairs/lift when using barometer path
+            boolean nearFeature = indoorMapManager.isNearCrossFloorFeature(mapMatchingConfig.crossFeatureProximity);
+            if (!nearFeature) {
+                return;
+            }
+
+            CrossFloorClassifier.Mode mode =
+                    CrossFloorClassifier.classify(0.0, elevation, 0.0, mapMatchingConfig);
+            Log.d(TAG, "Auto-floor (baro) mode=" + mode + " elevation=" + elevation
+                    + " floorHeight=" + floorHeight);
         }
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
@@ -992,6 +1028,8 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
+        updateWallsForPdr();
+
         int candidateFloor;
 
         // Priority 1: WiFi-based floor (only if WiFi positioning has returned data)
@@ -1001,8 +1039,24 @@ public class TrajectoryMapFragment extends Fragment {
             // Fallback: barometric elevation estimate
             float elevation = sensorFusion.getElevation();
             float floorHeight = indoorMapManager.getFloorHeight();
+            if (floorHeight <= 0) {
+                // Fallback to config default if building metadata is missing
+                floorHeight = mapMatchingConfig.baroHeightThreshold;
+            }
+            if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) {
+                return; // Ignore small height changes
+            }
+            boolean nearFeature = indoorMapManager.isNearCrossFloorFeature(mapMatchingConfig.crossFeatureProximity);
+            if (!nearFeature) {
+                return;
+            }
             if (floorHeight <= 0) return;
             candidateFloor = Math.round(elevation / floorHeight);
+
+            CrossFloorClassifier.Mode mode =
+                    CrossFloorClassifier.classify(0.0, elevation, 0.0, mapMatchingConfig);
+            Log.d(TAG, "Auto-floor (baro) mode=" + mode + " elevation=" + elevation
+                    + " floorHeight=" + floorHeight);
         }
 
         // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
@@ -1022,4 +1076,22 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     //endregion
+
+    private void updateWallsForPdr() {
+        if (sensorFusion == null || indoorMapManager == null) return;
+        if (!indoorMapManager.getIsIndoorMapSet()) return;
+        LatLng current = indoorMapManager.getLastLocation();
+        if (current == null) return;
+
+        if (wallOrigin == null) {
+            wallOrigin = current;
+        }
+
+        FloorplanApiClient.FloorShapes floor = indoorMapManager.getCurrentFloorShape();
+        if (floor == null) return;
+
+        List<List<PointF>> walls = WallGeometryBuilder.buildWalls(
+                floor, wallOrigin);
+        sensorFusion.setPdrWalls(walls);
+    }
 }

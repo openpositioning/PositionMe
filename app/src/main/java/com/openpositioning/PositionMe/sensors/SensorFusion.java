@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.PointF;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -12,6 +13,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.widget.Toast;
+// import android.graphics.PointF;
+//import com.openpositioning.PositionMe.utils.WiFiPositioning;
+import com.openpositioning.PositionMe.utils.WallGeometryBuilder;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -24,6 +28,8 @@ import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
+import com.openpositioning.PositionMe.utils.BuildingPolygon;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -233,9 +239,67 @@ public class SensorFusion implements SensorEventListener {
      *
      * <p>Delegates to {@link SensorEventHandler#handleSensorEvent(SensorEvent)}.</p>
      */
+
+    //floor updates particle fusion
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         eventHandler.handleSensorEvent(sensorEvent);
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_PRESSURE && recorder.isRecording()) {
+            updateFloorLogic();
+        }
+    }
+
+    private void updateFloorLogic() {
+        if (!pdrProcessing.getElevationList().isFull()) return;
+        
+        float finishAvg = (float) pdrProcessing.getElevationList().getListCopy().stream()
+                .mapToDouble(f -> f).average().orElse(0.0);
+        float diff = finishAvg - pdrProcessing.getStartElevation();
+        int floorHeight = pdrProcessing.getFloorHeightValue();
+
+        if (Math.abs(diff) > floorHeight) {
+            int targetFloor = pdrProcessing.getCurrentFloor() + (int)(diff / floorHeight);
+            LatLng pos = getFusedPosition();
+            if (pos == null) return;
+
+            FloorplanApiClient.BuildingInfo building = getFloorplanBuilding(getSelectedBuildingId());
+            if (building == null) return;
+
+            int currentFloorIdx = pdrProcessing.getCurrentFloor() + 1; // Assuming bias 1 for Nucleus/Murchison
+            if (currentFloorIdx < 0 || currentFloorIdx >= building.getFloorShapesList().size()) return;
+
+            FloorplanApiClient.FloorShapes floorShapes = building.getFloorShapesList().get(currentFloorIdx);
+            boolean nearTransition = false;
+            String type = "unknown";
+
+            for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
+                String fType = feature.getIndoorType();
+                if ("lift".equals(fType) || "stairs".equals(fType)) {
+                    for (List<LatLng> part : feature.getParts()) {
+                        if (BuildingPolygon.pointInPolygon(pos, part)) {
+                            nearTransition = true;
+                            type = fType;
+                            break;
+                        }
+                    }
+                }
+                if (nearTransition) break;
+            }
+
+            if (nearTransition) {
+                // Classification logic: lift vs stairs
+                // We check if the user is moving horizontally during the elevation change
+                float horizontalMovement = (float) Math.sqrt(
+                    Math.pow(state.filteredAcc[0], 2) + Math.pow(state.filteredAcc[1], 2)
+                );
+                
+                boolean isLift = horizontalMovement < 0.2f; // threshold for "near zero" horizontal stride/acceleration
+                
+                if (("lift".equals(type) && isLift) || ("stairs".equals(type) && !isLift)) {
+                    pdrProcessing.setCurrentFloor(targetFloor);
+                }
+            }
+        }
     }
 
     /** {@inheritDoc} */
@@ -365,6 +429,15 @@ public class SensorFusion implements SensorEventListener {
             SensorCollectionService.start(appContext);
         }
     }
+
+    // /**
+    //  * Inject wall polylines (meters) into PDR for collision correction.
+    //  */
+    // public void setPdrWalls(List<List<PointF>> walls) {
+    //     if (pdrProcessing != null) {
+    //         pdrProcessing.setWalls(walls);
+    //     }
+    // }
 
     /**
      * Disables saving sensor values to the trajectory object.
@@ -666,6 +739,24 @@ public class SensorFusion implements SensorEventListener {
      */
     public void logSensorFrequencies() {
         eventHandler.logSensorFrequencies();
+    }
+
+    public ParticleFilter getParticleFilter() {
+        return particleFilter;
+    }
+
+    // Inject wall polylines (meters) into PDR for collision correction.
+  
+    public void setPdrWalls(List<List<PointF>> wallPolylines) { //JAPJOT -- i have added this function to convert wall polylines into segments and pass to particle
+        List<float[]> segments = new ArrayList<>();
+        for (List<PointF> polyline : wallPolylines) {
+            for (int i = 0; i < polyline.size() - 1; i++) {
+                PointF p1 = polyline.get(i);
+                PointF p2 = polyline.get(i + 1); //convert each pair of consecutive points into a line segment represented as [x1, y1, x2, y2]
+                segments.add(new float[]{p1.x, p1.y, p2.x, p2.y});
+            }
+        }
+        particleFilter.setWalls(segments);
     }
 
     //endregion
