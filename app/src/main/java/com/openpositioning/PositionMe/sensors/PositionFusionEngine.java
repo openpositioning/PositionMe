@@ -29,14 +29,14 @@ public class PositionFusionEngine {
 
     private static final double EARTH_RADIUS_M = 6378137.0;
 
-    private static final int PARTICLE_COUNT = 500;
+    private static final int PARTICLE_COUNT = 300;
     private static final double RESAMPLE_RATIO = 0.5;
     private static final double PDR_NOISE_STD_M = 0.55;
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
-    private static final double WIFI_SIGMA_M = 4.5;
+    private static final double WIFI_SIGMA_M = 3.5;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
-    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 6.0;
+    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 10.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
     private static final double MAX_OUTLIER_SIGMA_SCALE = 4.0;
     private static final double OUTPUT_SMOOTHING_ALPHA = 0.25;
