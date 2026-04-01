@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe;
+package com.openpositioning.PositionMe;
 
 import android.content.Context;
 
