@@ -56,8 +56,6 @@ android {
         // Example of referencing secrets (if you use secrets.properties):
         buildConfigField "String", "MAPS_API_KEY",
                 "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
-        buildConfigField "String", "OPENPOSITIONING_API_KEY",
-                "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
         buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
                 "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
 
