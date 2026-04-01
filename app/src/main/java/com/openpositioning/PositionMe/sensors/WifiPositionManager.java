@@ -65,6 +65,7 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            Log.d("WiFiDebug", "Sending fingerprint: " + wifiFingerPrint.toString());
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());
@@ -82,6 +83,7 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {

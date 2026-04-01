@@ -35,7 +35,20 @@
                 android:id="@+id/gnssSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:text="@string/gnssSwitch"/>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/wifiSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wifiSwitch"/>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/pdrSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/pdrSwitch" />
+
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
@@ -51,6 +64,15 @@
                 android:textColor="@color/md_theme_onPrimary"
                 android:text="@string/color"
                 app:elevation="5dp"/>
+
+            <Spinner
+                android:id="@+id/smoothingSpinner"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:background="@android:color/white"
+                android:spinnerMode="dropdown"
+                android:elevation="5dp"/>
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"

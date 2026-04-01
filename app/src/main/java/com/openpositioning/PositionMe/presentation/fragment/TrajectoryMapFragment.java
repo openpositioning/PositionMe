@@ -33,6 +33,9 @@ import com.google.android.gms.maps.model.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
+
 
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
@@ -92,11 +95,74 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
 
+    private SwitchMaterial smoothingSwitch;
+
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
     private Button switchColorButton;
     private Polygon buildingPolygon;
 
+    // --- Last N observation display state ---
+    private static final int MAX_OBSERVATIONS = 20;
+
+    // Rolling histories of absolute position updates
+    private final List<LatLng> gnssHistory = new ArrayList<>();
+    private final List<LatLng> wifiHistory = new ArrayList<>();
+    private final List<LatLng> pdrHistory = new ArrayList<>();
+
+    // Rendered map circles for each source, so they can be removed/redrawn cleanly
+    private final List<Circle> gnssCircles = new ArrayList<>();
+    private final List<Circle> wifiCircles = new ArrayList<>();
+    private final List<Circle> pdrCircles = new ArrayList<>();
+
+    // Optional UI switches for visibility control
+    private SwitchMaterial wifiSwitch;
+    private SwitchMaterial pdrSwitch;
+
+    // --- Display smoothing state ---
+
+    // Types of smoothing filters available for display
+    private enum SmoothingType {
+        RAW,               // No smoothing
+        MOVING_AVERAGE,    // Average over last N points
+        EXPONENTIAL        // Exponential smoothing
+    }
+    private Spinner smoothingSpinner;
+
+    // Current selected smoothing mode (default = RAW)
+    private SmoothingType smoothingType = SmoothingType.RAW;
+
+    // For exponential smoothing
+    private LatLng smoothedDisplayLocation = null;
+
+    // For moving average
+    private static final int SMOOTHING_WINDOW = 5;
+    private final List<LatLng> smoothingBuffer = new ArrayList<>();
+
+    // Exponential smoothing strength
+    private static final double ALPHA = 0.25;
+
+    /**
+     * Adds a new position observation to a rolling history list.
+     * Maintains only the most recent MAX_OBSERVATIONS points.
+     *
+     * @param history The list storing past observations (GNSS, WiFi, or PDR)
+     * @param point   The new LatLng position to add
+     */
+    private void addObservation(List<LatLng> history, LatLng point) {
+
+        // Ignore null points (e.g., when a sensor has no valid reading)
+        if (point == null) return;
+
+        // Add the new observation to the history
+        history.add(point);
+
+        // If we exceed the maximum allowed observations,
+        // remove the oldest point (FIFO behaviour)
+        if (history.size() > MAX_OBSERVATIONS) {
+            history.remove(0);
+        }
+    }
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -119,6 +185,9 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        wifiSwitch = view.findViewById(R.id.wifiSwitch);
+        pdrSwitch = view.findViewById(R.id.pdrSwitch);
+        smoothingSpinner = view.findViewById(R.id.smoothingSpinner);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -155,7 +224,8 @@ public class TrajectoryMapFragment extends Fragment {
                 }
             });
         }
-
+        // Smoothing type spinner setup
+        initSmoothingSpinner();
         // Map type spinner setup
         initMapTypeSpinner();
 
@@ -166,7 +236,17 @@ public class TrajectoryMapFragment extends Fragment {
                 gnssMarker.remove();
                 gnssMarker = null;
             }
+            redrawObservationOverlays();
         });
+
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            redrawObservationOverlays();
+        });
+
+        pdrSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            redrawObservationOverlays();
+        });
+
 
         // Color switch
         switchColorButton.setOnClickListener(v -> {
@@ -209,6 +289,77 @@ public class TrajectoryMapFragment extends Fragment {
                 updateFloorLabel();
             }
         });
+    }
+
+    /**
+     * Redraws the colour-coded observation circles for GNSS, WiFi, and PDR.
+     * Only sources enabled by their switches are displayed.
+     */
+    private void redrawObservationOverlays() {
+        if (gMap == null) return;
+
+        clearObservationCircles();
+
+        if (gnssSwitch != null && gnssSwitch.isChecked()) {
+            drawHistory(gnssHistory, gnssCircles, Color.BLUE);
+        }
+
+        if (wifiSwitch != null && wifiSwitch.isChecked()) {
+            drawHistory(wifiHistory, wifiCircles, Color.GREEN);
+        }
+
+        if (pdrSwitch != null && pdrSwitch.isChecked()) {
+            drawHistory(pdrHistory, pdrCircles, Color.RED);
+        }
+    }
+
+    /**
+     * Draws one rolling history of observations on the map as circles.
+     * Older observations are faded, newer ones are more visible.
+     *
+     * @param history  The observation points to render
+     * @param rendered The list of Circle references currently on the map
+     * @param color    The base colour for this data source
+     */
+    private void drawHistory(List<LatLng> history, List<Circle> rendered, int color) {
+        for (int i = 0; i < history.size(); i++) {
+            LatLng point = history.get(i);
+
+            int alpha = (int) (255f * (i + 1) / history.size());
+            int fadedColor = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+
+            Circle circle = gMap.addCircle(new CircleOptions()
+                    .center(point)
+                    .radius(1.5)
+                    .strokeWidth(2f)
+                    .strokeColor(fadedColor)
+                    .fillColor(fadedColor));
+
+            rendered.add(circle);
+        }
+    }
+
+    /**
+     * Removes all currently displayed observation circles from the map.
+     */
+    private void clearObservationCircles() {
+        removeAll(gnssCircles);
+        removeAll(wifiCircles);
+        removeAll(pdrCircles);
+    }
+
+    /**
+     * Removes every circle in the provided list from the map and clears the list.
+     *
+     * @param circles The rendered circles to remove
+     */
+    private void removeAll(List<Circle> circles) {
+        for (Circle circle : circles) {
+            if (circle != null) {
+                circle.remove();
+            }
+        }
+        circles.clear();
     }
 
     /**
@@ -301,6 +452,135 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
+     * Initializes the smoothing filter spinner.
+     * Allows user to select how trajectory is smoothed.
+     */
+    private void initSmoothingSpinner() {
+
+        String[] options = new String[]{
+                "Raw",
+                "Moving Average",
+                "Exponential"
+        };
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                requireContext(),
+                android.R.layout.simple_spinner_dropdown_item,
+                options
+        );
+
+        smoothingSpinner.setAdapter(adapter);
+
+        smoothingSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+
+                // Update selected smoothing mode
+                switch (position) {
+                    case 0:
+                        smoothingType = SmoothingType.RAW;
+                        break;
+                    case 1:
+                        smoothingType = SmoothingType.MOVING_AVERAGE;
+                        break;
+                    case 2:
+                        smoothingType = SmoothingType.EXPONENTIAL;
+                        break;
+                }
+
+                // Reset smoothing state when switching modes
+                smoothedDisplayLocation = null;
+                smoothingBuffer.clear();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+
+
+    /**
+     * Returns the display location after applying the selected smoothing filter.
+     */
+    private LatLng applySmoothing(@NonNull LatLng newLocation) {
+
+        switch (smoothingType) {
+
+            case RAW:
+                return newLocation;
+
+            case MOVING_AVERAGE:
+                smoothingBuffer.add(newLocation);
+
+                if (smoothingBuffer.size() > SMOOTHING_WINDOW) {
+                    smoothingBuffer.remove(0);
+                }
+
+                double sumLat = 0;
+                double sumLng = 0;
+
+                for (LatLng p : smoothingBuffer) {
+                    sumLat += p.latitude;
+                    sumLng += p.longitude;
+                }
+
+                return new LatLng(
+                        sumLat / smoothingBuffer.size(),
+                        sumLng / smoothingBuffer.size()
+                );
+
+            case EXPONENTIAL:
+
+                if (smoothedDisplayLocation == null) {
+                    smoothedDisplayLocation = newLocation;
+                    return newLocation;
+                }
+
+                double lat = ALPHA * newLocation.latitude +
+                        (1 - ALPHA) * smoothedDisplayLocation.latitude;
+
+                double lng = ALPHA * newLocation.longitude +
+                        (1 - ALPHA) * smoothedDisplayLocation.longitude;
+
+                smoothedDisplayLocation = new LatLng(lat, lng);
+                return smoothedDisplayLocation;
+        }
+
+        return newLocation;
+    }
+
+    /**
+     * Adds a GNSS observation to the rolling history and redraws the overlays.
+     *
+     * @param point New GNSS position
+     */
+    public void addGnssObservation(@NonNull LatLng point) {
+        addObservation(gnssHistory, point);
+        redrawObservationOverlays();
+    }
+
+    /**
+     * Adds a WiFi observation to the rolling history and redraws the overlays.
+     *
+     * @param point New WiFi-derived position
+     */
+    public void addWifiObservation(@NonNull LatLng point) {
+        addObservation(wifiHistory, point);
+        redrawObservationOverlays();
+    }
+
+    /**
+     * Adds a PDR observation to the rolling history and redraws the overlays.
+     *
+     * @param point New PDR-derived position
+     */
+    public void addPdrObservation(@NonNull LatLng point) {
+        addObservation(pdrHistory, point);
+        redrawObservationOverlays();
+    }
+
+
+    /**
      * Update the user's current location on the map, create or move orientation marker,
      * and append to polyline if the user actually moved.
      *
@@ -310,27 +590,33 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
-        // Keep track of current location
+        // Apply selected smoothing filter before rendering
+        LatLng displayLocation = applySmoothing(newLocation);
+
+        addObservation(pdrHistory, displayLocation);
+        redrawObservationOverlays();
+
+        // Keep track of current location using the displayed point
         LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        this.currentLocation = displayLocation;
 
         // If no marker, create it
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
+                    .position(displayLocation)
                     .flat(true)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
         } else {
             // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
+            orientationMarker.setPosition(displayLocation);
             orientationMarker.setRotation(orientation);
             // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(displayLocation));
         }
 
         // Extend polyline if movement occurred
@@ -345,19 +631,18 @@ public class TrajectoryMapFragment extends Fragment {
 
             // First position fix: add the first polyline point
             if (oldLocation == null) {
-                points.add(newLocation);
+                points.add(displayLocation);
                 polyline.setPoints(points);
-            } else if (!oldLocation.equals(newLocation)) {
+            } else if (!oldLocation.equals(displayLocation)) {
                 // Subsequent movement: append a new polyline point
-                points.add(newLocation);
+                points.add(displayLocation);
                 polyline.setPoints(points);
             }
         }
 
-
         // Update indoor map overlay
         if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
+            indoorMapManager.setCurrentLocation(displayLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
@@ -418,6 +703,8 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
+        addObservation(gnssHistory, gnssLocation);
+        redrawObservationOverlays();
         if (!isGnssOn) return;
 
         if (gnssMarker == null) {
@@ -442,6 +729,14 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Updates the WiFi history with a new location and refreshes the map display.
+     * @param wifiLocation The new coordinates to add to the observation history.
+     */
+    public void updateWiFiObservation(@NonNull LatLng wifiLocation) {
+        addObservation(wifiHistory, wifiLocation);
+        redrawObservationOverlays();
+    }
 
     /**
      * Remove GNSS marker if user toggles it off
@@ -509,6 +804,13 @@ public class TrajectoryMapFragment extends Fragment {
         }
         testPointMarkers.clear();
 
+        // remove coloured observation circles from map
+        gnssHistory.clear();
+        wifiHistory.clear();
+        pdrHistory.clear();
+        clearObservationCircles();
+
+        smoothedDisplayLocation = null;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
@@ -584,7 +886,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .add(nkml1, nkml2, nkml3, nkml4, nkml1)
                 .strokeColor(Color.BLUE)    // Blue border
                 .strokeWidth(10f)           // Border width
-               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
+                // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
                 .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
 
         PolygonOptions buildingPolygonOptions3 = new PolygonOptions()

@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -86,6 +87,18 @@ public class RecordingFragment extends Fragment {
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+
+    // Update fused trajectory at least every 1 second
+    private static final long FUSED_UPDATE_INTERVAL_MS = 1000;
+
+    // Also update immediately when movement exceeds this threshold
+    private static final double MOVEMENT_THRESHOLD_METERS = 0.75;
+
+    // Last time a fused point was sent to the map
+    private long lastFusedUpdateTimeMs = 0L;
+
+    // Last fused point that was actually rendered
+    private LatLng lastSentFusedPosition = null;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -228,7 +241,7 @@ public class RecordingFragment extends Fragment {
         LatLng cur = trajectoryMapFragment.getCurrentLocation();
         if (cur == null) {
             Toast.makeText(requireContext(), "" +
-                    "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
+                            "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
                     Toast.LENGTH_SHORT).show();
             return;
         }
@@ -283,11 +296,85 @@ public class RecordingFragment extends Fragment {
         //     }
         // }
 
-        // Use fused position
+        // Get the latest fused position from SensorFusion (best estimate of user location)
         LatLng fusedPosition = sensorFusion.getFusedPosition();
+
+        // Only proceed if:
+        // 1. We have a valid fused position
+        // 2. The map fragment is ready to receive updates
         if (fusedPosition != null && trajectoryMapFragment != null) {
-            trajectoryMapFragment.updateUserLocation(fusedPosition,
-                    (float) Math.toDegrees(sensorFusion.passOrientation()));
+
+            // Get the current system time in milliseconds
+            long now = System.currentTimeMillis();
+
+            // --- CONDITION 1: First point ---
+            // If no previous fused point has been sent to the map,
+            // this is the very first update → must display it
+            boolean isFirstPoint = (lastSentFusedPosition == null);
+
+            // --- CONDITION 2: Time-based update ---
+            // Check if at least 1 second has passed since the last update
+            boolean oneSecondElapsed =
+                    (now - lastFusedUpdateTimeMs) >= FUSED_UPDATE_INTERVAL_MS;
+
+            // --- CONDITION 3: Movement-based update ---
+            // Check if the user has moved a meaningful distance
+            boolean movementDetected = false;
+
+            // Store how far the user moved (for debugging/logging)
+            double movedDistance = 0.0;
+
+            // Only compute movement if we have a previous point
+            if (lastSentFusedPosition != null) {
+
+                // Calculate distance between last displayed point and current fused position
+                movedDistance = UtilFunctions.distanceBetweenPoints(
+                        lastSentFusedPosition,
+                        fusedPosition
+                );
+
+                // If movement exceeds threshold (e.g., 0.75m), trigger update
+                movementDetected = movedDistance >= MOVEMENT_THRESHOLD_METERS;
+            }
+
+            // --- FINAL DECISION ---
+            // Update the map if ANY of the following is true:
+            // - first point
+            // - 1 second passed
+            // - significant movement detected
+            if (isFirstPoint || oneSecondElapsed || movementDetected) {
+
+                // Log that we are updating the map (useful for debugging)
+                Log.d("FUSED_TEST", "MAP UPDATE -> "
+                        + "first=" + isFirstPoint
+                        + ", oneSecondElapsed=" + oneSecondElapsed
+                        + ", movementDetected=" + movementDetected
+                        + ", movedDistance=" + movedDistance
+                        + ", lat=" + fusedPosition.latitude
+                        + ", lng=" + fusedPosition.longitude);
+
+                // Send the fused position to the map:
+                // - updates marker position
+                // - rotates marker (orientation)
+                // - extends trajectory polyline
+                trajectoryMapFragment.updateUserLocation(
+                        fusedPosition,
+                        (float) Math.toDegrees(sensorFusion.passOrientation())
+                );
+
+                // Save this position as the last displayed one
+                lastSentFusedPosition = fusedPosition;
+
+                // Save the time of this update
+                lastFusedUpdateTimeMs = now;
+
+            } else {
+
+                // Log that this update was skipped (for debugging performance)
+                Log.d("FUSED_TEST", "SKIPPED -> "
+                        + "movedDistance=" + movedDistance
+                        + ", elapsedMs=" + (now - lastFusedUpdateTimeMs));
+            }
         }
 
 
@@ -308,6 +395,15 @@ public class RecordingFragment extends Fragment {
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
+            }
+        }
+
+        // WiFi observation logic for colour-coded last N updates
+        if (trajectoryMapFragment != null) {
+            LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+            Log.d("WiFiDebug", "RecordingFragment wifiLocation = " + wifiLocation);
+            if (wifiLocation != null) {
+                trajectoryMapFragment.updateWiFiObservation(wifiLocation);
             }
         }
 
