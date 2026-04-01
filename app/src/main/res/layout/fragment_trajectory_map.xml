@@ -37,9 +37,24 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="start"
+                android:gravity="center_vertical"
+                android:baselineAligned="false"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:background="@drawable/switch_label_bg"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Options"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:textColor="@color/glass_text" />
 
                 <TextView
                     android:id="@+id/leftPanelToggle"
@@ -49,6 +64,7 @@
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="@color/glass_text"
+                    android:layout_marginStart="8dp"
                     android:padding="4dp"
                     android:background="@android:color/transparent"
                     android:contentDescription="Toggle controls panel" />

@@ -521,6 +521,9 @@ public class SensorFusion implements SensorEventListener {
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];
         state.startLocation[1] = startPosition[1];
+        if (recorder != null) {
+            recorder.ensureInitialPosition(startPosition[0], startPosition[1]);
+        }
         if (fusionEngine != null) {
             fusionEngine.reset(startPosition[0], startPosition[1], 0);
             // Anchor is now valid — immediately load wall geometry from cached building data
@@ -700,6 +703,9 @@ public class SensorFusion implements SensorEventListener {
         public void onLocationChanged(@NonNull Location location) {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
+            if (recorder != null && recorder.isRecording()) {
+                recorder.ensureInitialPosition(location.getLatitude(), location.getLongitude());
+            }
             if (fusionEngine != null) {
                 // Update GNSS first so the local-frame anchor is established,
                 // then load wall geometry which is converted into that frame.

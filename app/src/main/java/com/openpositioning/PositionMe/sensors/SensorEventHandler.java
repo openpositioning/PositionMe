@@ -28,13 +28,6 @@ public class SensorEventHandler {
 
     private static final float ALPHA = 0.8f;
     private static final long LARGE_GAP_THRESHOLD_MS = 500;
-    private static final float FLIP_DETECTION_MIN_DEG = 150f;
-    private static final float FLIP_DETECTION_MAX_DEG = 210f;
-    private static final float FLIP_GYRO_MAX_RAD_PER_SEC = 0.8f;
-    private static final float FLIP_DETECTION_STRICT_MIN_DEG = 170f;
-    private static final float FLIP_DETECTION_STRICT_MAX_DEG = 190f;
-    private static final float FLIP_GYRO_STRICT_MAX_RAD_PER_SEC = 0.3f;
-    private static final int FLIP_HYSTERESIS_MS = 500;
 
     private final SensorState state;
     private final PdrProcessing pdrProcessing;
@@ -53,9 +46,6 @@ public class SensorEventHandler {
     private float lastPdrX = 0f;
     private float lastPdrY = 0f;
     private boolean hasPdrReference = false;
-    private boolean hasPreviousHeading = false;
-    private float previousHeadingRad = 0f;
-    private long lastFlipCorrectionTime = 0;
 
     /**
      * Creates a new SensorEventHandler.
@@ -163,37 +153,6 @@ public class SensorEventHandler {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, state.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, state.orientation);
-
-                float correctedAzimuth = state.orientation[0];
-                if (hasPreviousHeading) {
-                    float deltaDeg = Math.abs((float) Math.toDegrees(
-                            shortestAngularDistance(previousHeadingRad, correctedAzimuth)));
-                    float gyroNorm = (float) Math.sqrt(
-                            state.angularVelocity[0] * state.angularVelocity[0]
-                                    + state.angularVelocity[1] * state.angularVelocity[1]
-                                    + state.angularVelocity[2] * state.angularVelocity[2]);
-
-                    long timeSinceLastFlip = currentTime - lastFlipCorrectionTime;
-                    boolean hysteresisOk = timeSinceLastFlip >= FLIP_HYSTERESIS_MS;
-
-                    if (hysteresisOk
-                            && deltaDeg >= FLIP_DETECTION_STRICT_MIN_DEG
-                            && deltaDeg <= FLIP_DETECTION_STRICT_MAX_DEG
-                            && gyroNorm <= FLIP_GYRO_STRICT_MAX_RAD_PER_SEC) {
-                        correctedAzimuth = normalizeAngleRad((float) (correctedAzimuth + Math.PI));
-                        lastFlipCorrectionTime = currentTime;
-                        Log.w("SensorFusion", "180-flip detected and corrected: deltaDeg=" + deltaDeg
-                                + " gyroNorm=" + gyroNorm);
-                    } else if (!hysteresisOk && deltaDeg >= FLIP_DETECTION_STRICT_MIN_DEG
-                            && deltaDeg <= FLIP_DETECTION_STRICT_MAX_DEG) {
-                        Log.d("SensorFusion", "Flip pattern detected but hysteresis active; timeSinceLastFlip="
-                                + timeSinceLastFlip + "ms");
-                    }
-                }
-
-                state.orientation[0] = correctedAzimuth;
-                previousHeadingRad = correctedAzimuth;
-                hasPreviousHeading = true;
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -250,20 +209,6 @@ public class SensorEventHandler {
         }
     }
 
-    private static float normalizeAngleRad(float angle) {
-        while (angle > Math.PI) {
-            angle -= (float) (2.0 * Math.PI);
-        }
-        while (angle <= -Math.PI) {
-            angle += (float) (2.0 * Math.PI);
-        }
-        return angle;
-    }
-
-    private static float shortestAngularDistance(float from, float to) {
-        return normalizeAngleRad(to - from);
-    }
-
     /**
      * Utility function to log the event frequency of each sensor.
      * Call this periodically for debugging purposes.
@@ -285,8 +230,5 @@ public class SensorEventHandler {
         this.hasPdrReference = false;
         this.lastPdrX = 0f;
         this.lastPdrY = 0f;
-        this.hasPreviousHeading = false;
-        this.previousHeadingRad = 0f;
-        this.lastFlipCorrectionTime = 0;
     }
 }

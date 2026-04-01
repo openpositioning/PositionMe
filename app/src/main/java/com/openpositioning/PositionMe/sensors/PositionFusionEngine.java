@@ -6,9 +6,12 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Map;
 import java.util.Random;
 
@@ -28,12 +31,12 @@ public class PositionFusionEngine {
 
     private static final int PARTICLE_COUNT = 500;
     private static final double RESAMPLE_RATIO = 0.5;
-    private static final double PDR_NOISE_STD_M = 0.30;
-    private static final double INIT_STD_M = 0.8;
-    private static final double ROUGHEN_STD_M = 0.08;
-    private static final double WIFI_SIGMA_M = 3.5;
+    private static final double PDR_NOISE_STD_M = 0.55;
+    private static final double INIT_STD_M = 2.0;
+    private static final double ROUGHEN_STD_M = 0.15;
+    private static final double WIFI_SIGMA_M = 4.5;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
-    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 6;
+    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 6.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
     private static final double MAX_OUTLIER_SIGMA_SCALE = 4.0;
     private static final double OUTPUT_SMOOTHING_ALPHA = 0.25;
@@ -45,6 +48,16 @@ public class PositionFusionEngine {
     private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(60.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
     private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.50;
+    private static final boolean ENABLE_WALL_SLIDE = true;
+    private static final double WALL_STOP_MARGIN_RATIO = 0.02;
+    private static final double MAX_WALL_SLIDE_M = 0.60;
+    private static final double WALL_PENALTY_HIT_INCREMENT = 1.0;
+    private static final double WALL_PENALTY_DECAY_ON_FREE_MOVE = 0.65;
+    private static final double WALL_PENALTY_STRENGTH = 0.35;
+    private static final double WALL_PENALTY_SCORE_MAX = 8.0;
+    private static final double FIX_WALL_CROSS_PROB_GNSS = 0.35;
+    private static final double FIX_WALL_CROSS_PROB_WIFI = 0.08;
+    private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     private final float floorHeightMeters;
     private final Random random = new Random();
@@ -72,6 +85,7 @@ public class PositionFusionEngine {
         double yNorth;
         int floor;
         double weight;
+        double wallPenaltyScore;
     }
 
     private static final class Point2D {
@@ -91,6 +105,16 @@ public class PositionFusionEngine {
         Segment(Point2D a, Point2D b) {
             this.a = a;
             this.b = b;
+        }
+    }
+
+    private static final class WallIntersection {
+        final Segment wall;
+        final double t;
+
+        WallIntersection(Segment wall, double t) {
+            this.wall = wall;
+            this.t = t;
         }
     }
 
@@ -145,6 +169,8 @@ public class PositionFusionEngine {
         double correctedDx = correctedStep[0];
         double correctedDy = correctedStep[1];
         int blockedByWall = 0;
+        int slidAlongWall = 0;
+        int stoppedAtWall = 0;
 
         for (Particle p : particles) {
             double oldX = p.xEast;
@@ -152,32 +178,61 @@ public class PositionFusionEngine {
             double candidateX = oldX + correctedDx + random.nextGaussian() * PDR_NOISE_STD_M;
             double candidateY = oldY + correctedDy + random.nextGaussian() * PDR_NOISE_STD_M;
 
-            if (crossesWall(p.floor, oldX, oldY, candidateX, candidateY)) {
-                // Rather than freezing the particle, try sliding it along the wall.
-                // This keeps particles moving in the corridor direction instead of piling up.
-                double[] slid = trySlideAlongWall(p.floor, oldX, oldY, candidateX, candidateY);
-                if (slid != null) {
-                    p.xEast = slid[0];
-                    p.yNorth = slid[1];
-                } else {
-                    blockedByWall++;
-                    // Particle stays at oldX, oldY
+            WallIntersection hit = firstWallIntersection(p.floor, oldX, oldY, candidateX, candidateY);
+            if (hit != null) {
+                blockedByWall++;
+
+                p.wallPenaltyScore = Math.min(
+                        WALL_PENALTY_SCORE_MAX,
+                        p.wallPenaltyScore + WALL_PENALTY_HIT_INCREMENT);
+
+                if (ENABLE_WALL_SLIDE) {
+                    Point2D wallDir = normalize(hit.wall.b.x - hit.wall.a.x, hit.wall.b.y - hit.wall.a.y);
+                    double travelRatio = clamp(hit.t - WALL_STOP_MARGIN_RATIO, 0.0, 1.0);
+                    double baseX = oldX + (candidateX - oldX) * travelRatio;
+                    double baseY = oldY + (candidateY - oldY) * travelRatio;
+
+                    double remDx = candidateX - baseX;
+                    double remDy = candidateY - baseY;
+                    double slideMag = remDx * wallDir.x + remDy * wallDir.y;
+                    slideMag = clamp(slideMag, -MAX_WALL_SLIDE_M, MAX_WALL_SLIDE_M);
+
+                    double slideX = baseX + wallDir.x * slideMag;
+                    double slideY = baseY + wallDir.y * slideMag;
+
+                    if (!crossesWall(p.floor, oldX, oldY, baseX, baseY)
+                            && !crossesWall(p.floor, baseX, baseY, slideX, slideY)) {
+                        p.xEast = slideX;
+                        p.yNorth = slideY;
+                        slidAlongWall++;
+                        continue;
+                    }
+
+                    if (!crossesWall(p.floor, oldX, oldY, baseX, baseY)) {
+                        p.xEast = baseX;
+                        p.yNorth = baseY;
+                        stoppedAtWall++;
+                        continue;
+                    }
                 }
                 continue;
             }
 
             p.xEast = candidateX;
             p.yNorth = candidateY;
+            p.wallPenaltyScore *= WALL_PENALTY_DECAY_ON_FREE_MOVE;
         }
 
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "Predict dPDRraw=(%.2fE, %.2fN) dPDRcorr=(%.2fE, %.2fN) headingBiasDeg=%.2f noiseStd=%.2f blockedByWall=%d",
+                    "Predict dPDRraw=(%.2fE, %.2fN) dPDRcorr=(%.2fE, %.2fN) headingBiasDeg=%.2f noiseStd=%.2f blockedByWall=%d slid=%d stopAtWall=%d",
                     dxEastMeters, dyNorthMeters,
                     correctedDx, correctedDy,
                     Math.toDegrees(headingBiasRad),
                     PDR_NOISE_STD_M,
-                    blockedByWall));
+                    blockedByWall,
+                    slidAlongWall,
+                    stoppedAtWall));
         }
     }
 
@@ -295,7 +350,8 @@ public class PositionFusionEngine {
         }
 
         Map<Integer, FloorConstraint> parsed = new HashMap<>();
-        List<FloorplanApiClient.FloorShapes> floorShapes = containing.getFloorShapesList();
+        List<FloorplanApiClient.FloorShapes> floorShapes =
+                normalizeFloorOrder(containing.getFloorShapesList());
         for (int i = 0; i < floorShapes.size(); i++) {
             FloorplanApiClient.FloorShapes floor = floorShapes.get(i);
             Integer logicalFloor = parseLogicalFloor(floor, i);
@@ -448,6 +504,7 @@ public class PositionFusionEngine {
         double sigma2 = effectiveSigma * effectiveSigma;
         double maxLogWeight = Double.NEGATIVE_INFINITY;
         double[] logWeights = new double[particles.size()];
+        int fixWallBlockedCount = 0;
 
         for (int i = 0; i < particles.size(); i++) {
             Particle p = particles.get(i);
@@ -455,6 +512,19 @@ public class PositionFusionEngine {
             double dy = p.yNorth - z[1];
             double distance2 = dx * dx + dy * dy;
             double logLikelihood = -0.5 * (distance2 / sigma2);
+
+            // Softly down-weight particles with repeated recent wall collisions.
+            double wallPenaltyFactor = Math.exp(-WALL_PENALTY_STRENGTH * p.wallPenaltyScore);
+            logLikelihood += Math.log(Math.max(wallPenaltyFactor, EPS));
+
+            // Map-aware fix gating: avoid rewarding through-wall attraction.
+            if (crossesWall(p.floor, p.xEast, p.yNorth, z[0], z[1])) {
+                fixWallBlockedCount++;
+                double blockedFixProb = floorHint == null
+                        ? FIX_WALL_CROSS_PROB_GNSS
+                        : FIX_WALL_CROSS_PROB_WIFI;
+                logLikelihood += Math.log(Math.max(blockedFixProb, EPS));
+            }
 
             if (floorHint != null) {
                 // Soft floor gating: keep mismatch possible, but less probable.
@@ -500,6 +570,13 @@ public class PositionFusionEngine {
 
         updateCounter++;
         logUpdateSummary(z[0], z[1], effectiveSigma, floorHint, effectiveBefore, effectiveN, resampled);
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "Fix wall-aware src=%s blockedLOS=%d/%d",
+                    floorHint == null ? "GNSS" : "WiFi",
+                    fixWallBlockedCount,
+                    particles.size()));
+        }
     }
 
     private void updateOrientationBiasFromInnovation(double innovationEast,
@@ -556,6 +633,7 @@ public class PositionFusionEngine {
             p.yNorth = random.nextGaussian() * INIT_STD_M;
             p.floor = initialFloor;
             p.weight = w;
+            p.wallPenaltyScore = 0.0;
             particles.add(p);
         }
     }
@@ -583,6 +661,7 @@ public class PositionFusionEngine {
             p.yNorth = candidateY;
             p.floor = floor;
             p.weight = w;
+            p.wallPenaltyScore = 0.0;
             particles.add(p);
         }
     }
@@ -619,6 +698,7 @@ public class PositionFusionEngine {
             copy.yNorth = src.yNorth;
             copy.floor = src.floor;
             copy.weight = step;
+            copy.wallPenaltyScore = src.wallPenaltyScore;
             resampled.add(copy);
         }
 
@@ -727,19 +807,31 @@ public class PositionFusionEngine {
 
     /** Returns true when segment (x0,y0)->(x1,y1) intersects any mapped wall segment. */
     private boolean crossesWall(int floor, double x0, double y0, double x1, double y1) {
+        return firstWallIntersection(floor, x0, y0, x1, y1) != null;
+    }
+
+    /** Returns first wall hit along a segment using smallest forward t in [0,1]. */
+    private WallIntersection firstWallIntersection(int floor, double x0, double y0, double x1, double y1) {
         FloorConstraint fc = floorConstraints.get(floor);
         if (fc == null || fc.walls.isEmpty()) {
-            return false;
+            return null;
         }
 
         Point2D a = new Point2D(x0, y0);
         Point2D b = new Point2D(x1, y1);
+        WallIntersection best = null;
         for (Segment wall : fc.walls) {
             if (segmentsIntersect(a, b, wall.a, wall.b)) {
-                return true;
+                double t = intersectionProgress(a, b, wall.a, wall.b);
+                if (Double.isNaN(t)) {
+                    t = 1.0;
+                }
+                if (best == null || t < best.t) {
+                    best = new WallIntersection(wall, t);
+                }
             }
         }
-        return false;
+        return best;
     }
 
     /**
@@ -829,29 +921,79 @@ public class PositionFusionEngine {
         return new Point2D(sx / count, sy / count);
     }
 
-    /** Maps floor display labels (e.g. G, LG) to numeric logical floors. */
+    /**
+     * Returns floor list sorted by logical floor when labels are parseable.
+     * Keeping this ordering aligned with indoor map rendering prevents constraints
+     * from being attached to the wrong logical floor.
+     */
+    private List<FloorplanApiClient.FloorShapes> normalizeFloorOrder(
+            List<FloorplanApiClient.FloorShapes> input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        List<FloorplanApiClient.FloorShapes> ordered = new ArrayList<>(input);
+        Collections.sort(ordered, (a, b) -> {
+            Integer floorA = parseLogicalFloorFromDisplayName(a == null ? null : a.getDisplayName());
+            Integer floorB = parseLogicalFloorFromDisplayName(b == null ? null : b.getDisplayName());
+
+            if (floorA != null && floorB != null) {
+                return Integer.compare(floorA, floorB);
+            }
+            if (floorA != null) {
+                return -1;
+            }
+            if (floorB != null) {
+                return 1;
+            }
+            return 0;
+        });
+        return ordered;
+    }
+
+    /** Maps floor display labels (e.g. LG, G, 1, F2) to numeric logical floors. */
     private Integer parseLogicalFloor(FloorplanApiClient.FloorShapes floor, int index) {
         if (floor == null) {
             return null;
         }
 
-        String display = floor.getDisplayName() == null ? "" : floor.getDisplayName().trim();
-        String upper = display.toUpperCase(Locale.US);
+        Integer parsed = parseLogicalFloorFromDisplayName(floor.getDisplayName());
+        return parsed != null ? parsed : index;
+    }
 
-        if ("LG".equals(upper) || "L".equals(upper)) {
+    private Integer parseLogicalFloorFromDisplayName(String displayName) {
+        if (displayName == null) {
+            return null;
+        }
+
+        String normalized = displayName.trim().toUpperCase(Locale.US).replace(" ", "");
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        if ("LG".equals(normalized) || "L".equals(normalized)
+                || "LOWERGROUND".equals(normalized)) {
             return -1;
         }
-        if ("G".equals(upper) || "GROUND".equals(upper)) {
+        if ("G".equals(normalized) || "GF".equals(normalized)
+                || "GROUND".equals(normalized) || "GROUNDFLOOR".equals(normalized)) {
             return 0;
         }
 
-        try {
-            return Integer.parseInt(display);
-        } catch (Exception ignored) {
-            // Fall back to index mapping when display name is not numeric.
+        if (normalized.startsWith("F") || normalized.startsWith("L")) {
+            normalized = normalized.substring(1);
         }
 
-        return index;
+        Matcher matcher = FLOOR_NUMBER_PATTERN.matcher(normalized);
+        if (matcher.matches()) {
+            try {
+                return Integer.parseInt(normalized);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     /** Point-in-polygon test in lat/lon space for containing-building detection. */
@@ -892,6 +1034,33 @@ public class PositionFusionEngine {
 
     private double orientation(Point2D a, Point2D b, Point2D c) {
         return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    }
+
+    /** Returns normalized direction; falls back to east if norm is tiny. */
+    private Point2D normalize(double x, double y) {
+        double norm = Math.hypot(x, y);
+        if (norm < 1e-9) {
+            return new Point2D(1.0, 0.0);
+        }
+        return new Point2D(x / norm, y / norm);
+    }
+
+    /** Returns progress t along AB where intersection occurs; NaN if indeterminate. */
+    private double intersectionProgress(Point2D a, Point2D b, Point2D c, Point2D d) {
+        double rX = b.x - a.x;
+        double rY = b.y - a.y;
+        double sX = d.x - c.x;
+        double sY = d.y - c.y;
+
+        double rxs = rX * sY - rY * sX;
+        if (Math.abs(rxs) < 1e-12) {
+            return Double.NaN;
+        }
+
+        double qmpX = c.x - a.x;
+        double qmpY = c.y - a.y;
+        double t = (qmpX * sY - qmpY * sX) / rxs;
+        return clamp(t, 0.0, 1.0);
     }
 
     /** Inclusive collinearity-bound check used by segment intersection. */
