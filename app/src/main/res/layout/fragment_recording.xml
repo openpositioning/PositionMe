@@ -81,6 +81,18 @@
         app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
         app:layout_constraintBottom_toTopOf="@id/controlLayout" />
 
+    <!-- 🔹 Refresh Position Button (Floating on top of the map) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btn_refresh_position"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="16dp"
+        android:contentDescription="@string/refresh_position"
+        android:src="@android:drawable/stat_notify_sync"
+        app:layout_constraintBottom_toTopOf="@id/btn_test_point"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- 🔹 Test Point Button (Floating on top of the map) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btn_test_point"

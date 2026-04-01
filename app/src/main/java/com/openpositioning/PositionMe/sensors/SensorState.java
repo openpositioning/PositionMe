@@ -23,6 +23,14 @@ public class SensorState {
     // Rotation vector: volatile because TYPE_ROTATION_VECTOR replaces via clone()
     public volatile float[] rotation = new float[]{0, 0, 0, 1.0f};
 
+    // Game rotation vector (no magnetometer) for diagnostic comparison
+    public final float[] gameOrientation = new float[3];
+
+    // Heading calibration: offset from game rotation to magnetic north (radians)
+    // calibratedHeading = gameOrientation[0] + headingOffset
+    public volatile float headingOffset = 0f;
+    public volatile boolean headingCalibrated = false;
+
     // Scalar sensors
     public volatile float pressure;
     public volatile float light;

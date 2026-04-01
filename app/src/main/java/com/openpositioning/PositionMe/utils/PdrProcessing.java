@@ -8,6 +8,8 @@ import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
+import android.util.Log;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -141,32 +143,30 @@ public class PdrProcessing {
      */
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
-            return new float[]{this.positionX, this.positionY};  // Return current position without update
-                                                                // - TODO - temporary solution of the empty list issue
+            Log.e("PDR_DEBUG", "Skipped: accelSamples="
+                    + (accelMagnitudeOvertime == null ? "null" : accelMagnitudeOvertime.size())
+                    + " < " + MIN_REQUIRED_SAMPLES);
+            return new float[]{this.positionX, this.positionY};
         }
 
-        // Change angle so zero rad is east
+        // Change angle so zero rad is east (north-clockwise -> east-counterclockwise)
         float adaptedHeading = (float) (Math.PI/2 - headingRad);
 
         // check if accelMagnitudeOvertime is empty
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()) {
-            // return current position, do not update
             return new float[]{this.positionX, this.positionY};
         }
-        
+
         // Calculate step length
         if(!useManualStep) {
-            //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
-            // Estimate stride
             this.stepLength = weibergMinMax(accelMagnitudeOvertime);
-            // System.err.println("Step Length" + stepLength);
         }
 
         // Increment aggregate variables
         sumStepLength += stepLength;
         stepCount++;
 
-        // Translate to cartesian coordinate system
+        // Translate to cartesian coordinate system (x=east, y=north)
         float x = (float) (stepLength * Math.cos(adaptedHeading));
         float y = (float) (stepLength * Math.sin(adaptedHeading));
 
@@ -174,7 +174,15 @@ public class PdrProcessing {
         this.positionX += x;
         this.positionY += y;
 
-        // return current position
+        // Detailed heading and step log
+        Log.e("PDR_DEBUG", "Step #" + stepCount
+                + " | rawHeading=" + String.format("%.1f", Math.toDegrees(headingRad)) + "deg"
+                + " | adaptedHeading=" + String.format("%.1f", Math.toDegrees(adaptedHeading)) + "deg"
+                + " | stepLen=" + String.format("%.3f", stepLength) + "m"
+                + " | dE=" + String.format("%.3f", x) + " dN=" + String.format("%.3f", y)
+                + " | posE=" + String.format("%.2f", positionX) + " posN=" + String.format("%.2f", positionY)
+                + " | accelSamples=" + accelMagnitudeOvertime.size());
+
         return new float[]{this.positionX, this.positionY};
     }
 

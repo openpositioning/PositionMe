@@ -300,12 +300,18 @@ public class StartLocationFragment extends Fragment {
         // Compute building centre from polygon points
         LatLng center = computePolygonCenter(polygon);
 
-        // Move the marker to building centre
+        // Use GNSS position if it falls inside the building, otherwise use building centre
+        float[] gnss = sensorFusion.getGNSSLatitude(false);
+        LatLng gnssPos = new LatLng(gnss[0], gnss[1]);
+        boolean gnssValid = gnss[0] != 0 || gnss[1] != 0;
+        LatLng bestStart = (gnssValid && isPointInPolygon(gnssPos, polygon)) ? gnssPos : center;
+
+        // Move the marker to the best start position
         if (startMarker != null) {
-            startMarker.setPosition(center);
+            startMarker.setPosition(bestStart);
         }
-        startPosition[0] = (float) center.latitude;
-        startPosition[1] = (float) center.longitude;
+        startPosition[0] = (float) bestStart.latitude;
+        startPosition[1] = (float) bestStart.longitude;
 
         // Zoom to the building
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 20f));
@@ -427,6 +433,30 @@ public class StartLocationFragment extends Fragment {
     }
 
     /**
+     * Ray-casting algorithm to test if a point lies inside a polygon.
+     *
+     * @param point   the point to test
+     * @param polygon the polygon to test against
+     * @return true if the point is inside the polygon
+     */
+    private boolean isPointInPolygon(LatLng point, Polygon polygon) {
+        List<LatLng> vertices = polygon.getPoints();
+        int n = vertices.size();
+        boolean inside = false;
+        for (int i = 0, j = n - 1; i < n; j = i++) {
+            LatLng vi = vertices.get(i);
+            LatLng vj = vertices.get(j);
+            if ((vi.latitude > point.latitude) != (vj.latitude > point.latitude)
+                    && point.longitude < (vj.longitude - vi.longitude)
+                    * (point.latitude - vi.latitude) / (vj.latitude - vi.latitude)
+                    + vi.longitude) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    /**
      * Computes the centroid of a Google Maps Polygon by averaging all vertices.
      *
      * @param polygon the polygon whose centre is to be computed
@@ -468,9 +498,9 @@ public class StartLocationFragment extends Fragment {
             }
 
             if (requireActivity() instanceof RecordingActivity) {
-                // Start sensor recording + set the start location
-                sensorFusion.startRecording();
+                // Set start location BEFORE recording so PositionFusion.init() sees it
                 sensorFusion.setStartGNSSLatitude(startPosition);
+                sensorFusion.startRecording();
                 // Write trajectory_id, initial_position and initial heading to protobuf
                 sensorFusion.writeInitialMetadata();
 

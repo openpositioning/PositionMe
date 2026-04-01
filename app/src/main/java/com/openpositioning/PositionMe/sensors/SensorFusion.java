@@ -11,6 +11,7 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -19,6 +20,7 @@ import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.sensors.PositionFusion;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -75,6 +77,7 @@ public class SensorFusion implements SensorEventListener {
     private MovementSensor rotationSensor;
     private MovementSensor gravitySensor;
     private MovementSensor linearAccelerationSensor;
+    private MovementSensor gameRotationSensor;
 
     // Non-sensor data sources
     private WifiDataProcessor wifiProcessor;
@@ -87,6 +90,9 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
+
+    // Position fusion engine
+    private PositionFusion positionFusion;
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
@@ -141,6 +147,7 @@ public class SensorFusion implements SensorEventListener {
         this.rotationSensor = new MovementSensor(context, Sensor.TYPE_ROTATION_VECTOR);
         this.gravitySensor = new MovementSensor(context, Sensor.TYPE_GRAVITY);
         this.linearAccelerationSensor = new MovementSensor(context, Sensor.TYPE_LINEAR_ACCELERATION);
+        this.gameRotationSensor = new MovementSensor(context, Sensor.TYPE_GAME_ROTATION_VECTOR);
 
         // Initialise non-sensor data sources
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
@@ -152,17 +159,20 @@ public class SensorFusion implements SensorEventListener {
         this.pathView = new PathView(context, null);
         WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
 
+        // Create position fusion engine
+        this.positionFusion = new PositionFusion();
+
         // Create internal modules
         this.recorder = new TrajectoryRecorder(appContext, state, serverCommunications, settings);
         this.recorder.setSensorReferences(
                 accelerometerSensor, gyroscopeSensor, magnetometerSensor,
                 barometerSensor, lightSensor, proximitySensor, rotationSensor);
 
-        this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
+        this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder, positionFusion);
 
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pathView, recorder, positionFusion, bootTime);
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -243,6 +253,10 @@ public class SensorFusion implements SensorEventListener {
                 stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this,
                 rotationSensor.sensor, (int) 1e6);
+        if (gameRotationSensor.sensor != null) {
+            gameRotationSensor.sensorManager.registerListener(this,
+                    gameRotationSensor.sensor, (int) 1e6);
+        }
         // Foreground service owns WiFi/BLE scanning during recording.
         if (!recorder.isRecording()) {
             startWirelessCollectors();
@@ -329,6 +343,13 @@ public class SensorFusion implements SensorEventListener {
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
 
+        // Initialize position fusion with the user-selected start position
+        if (state.startLocation[0] != 0 || state.startLocation[1] != 0) {
+            positionFusion.init(state.startLocation[0], state.startLocation[1]);
+        } else {
+            Log.e("FUSION_DEBUG", "WARNING: startRecording called but startLocation is (0,0)");
+        }
+
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
 
@@ -346,6 +367,7 @@ public class SensorFusion implements SensorEventListener {
      */
     public void stopRecording() {
         recorder.stopRecording();
+        positionFusion.reset();
         if (appContext != null) {
             SensorCollectionService.stop(appContext);
         }
@@ -511,12 +533,12 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Getter function for device orientation.
+     * Getter function for device orientation (game rotation + calibration offset).
      *
-     * @return orientation of device in radians.
+     * @return calibrated orientation of device in radians.
      */
     public float passOrientation() {
-        return state.orientation[0];
+        return state.gameOrientation[0] + state.headingOffset;
     }
 
     /**
@@ -624,6 +646,24 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns the fused position combining PDR, GNSS and WiFi.
+     *
+     * @return fused LatLng, or null if fusion not yet initialized
+     */
+    public LatLng getFusedPosition() {
+        return positionFusion.getFusedLatLng();
+    }
+
+    /**
+     * Returns the position fusion engine instance.
+     *
+     * @return the PositionFusion instance
+     */
+    public PositionFusion getPositionFusion() {
+        return positionFusion;
+    }
+
+    /**
      * Utility function to log the event frequency of each sensor.
      */
     public void logSensorFrequencies() {
@@ -640,11 +680,65 @@ public class SensorFusion implements SensorEventListener {
      * {@link TrajectoryRecorder}.
      */
     class MyLocationListener implements LocationListener {
+        private static final String TAG = "GNSS_DEBUG";
+
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            state.latitude = (float) location.getLatitude();
-            state.longitude = (float) location.getLongitude();
+            float lat = (float) location.getLatitude();
+            float lng = (float) location.getLongitude();
+            float accuracy = location.getAccuracy();
+            String provider = location.getProvider();
+            float speed = location.getSpeed();
+            double altitude = location.getAltitude();
+            long time = location.getTime();
+
+            Log.e(TAG, "=== GNSS Location Update ===");
+            Log.e(TAG, "Provider: " + provider
+                    + " | lat: " + lat
+                    + " | lng: " + lng
+                    + " | accuracy: " + accuracy + "m"
+                    + " | speed: " + speed + "m/s"
+                    + " | altitude: " + altitude + "m"
+                    + " | time: " + time);
+
+            // Flag suspicious readings
+            if (accuracy > 50) {
+                Log.e(TAG, "WARNING: GNSS accuracy very poor (>" + accuracy + "m), provider=" + provider);
+            }
+
+            // Check for large jumps from previous position
+            if (state.latitude != 0 && state.longitude != 0) {
+                double dLat = Math.abs(lat - state.latitude);
+                double dLng = Math.abs(lng - state.longitude);
+                double jumpMeters = Math.sqrt(
+                        Math.pow(dLat * 111111, 2)
+                                + Math.pow(dLng * 111111 * Math.cos(Math.toRadians(lat)), 2));
+                if (jumpMeters > 100) {
+                    Log.e(TAG, "WARNING: GNSS position jumped " + String.format("%.1f", jumpMeters)
+                            + "m from previous ("
+                            + state.latitude + "," + state.longitude
+                            + ") -> (" + lat + "," + lng + ")");
+                }
+                Log.e(TAG, "Delta from prev: " + String.format("%.2f", jumpMeters) + "m");
+            }
+
+            // Check distance from Nucleus building center (55.9230, -3.1743)
+            double distFromNucleus = Math.sqrt(
+                    Math.pow((lat - 55.9230) * 111111, 2)
+                            + Math.pow((lng - (-3.1743)) * 111111 * Math.cos(Math.toRadians(55.9230)), 2));
+            Log.e(TAG, "Distance from Nucleus center: " + String.format("%.1f", distFromNucleus) + "m");
+            if (distFromNucleus > 500) {
+                Log.e(TAG, "WARNING: GNSS position is >" + String.format("%.0f", distFromNucleus) + "m from building!");
+            }
+
+            state.latitude = lat;
+            state.longitude = lng;
             recorder.addGnssData(location);
+
+            // Feed GNSS observation into position fusion
+            if (positionFusion.isInitialized()) {
+                positionFusion.updateWithGnss(lat, lng, accuracy);
+            }
         }
     }
 

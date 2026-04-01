@@ -20,6 +20,9 @@ public class BuildingPolygon {
     // North-East and South-West Coordinates for the Kenneth and Murray Library Building
     public static final LatLng LIBRARY_NE=new LatLng(55.92306692576906, -3.174771893078224);
     public static final LatLng LIBRARY_SW=new LatLng(55.92281045664704, -3.175184089079065);
+    // Campus: bounding rectangle covering both Nucleus and Library
+    public static final LatLng CAMPUS_NE = NUCLEUS_NE; // northernmost + easternmost
+    public static final LatLng CAMPUS_SW = LIBRARY_SW;  // southernmost + westernmost
     // North-East and South-West Coordinates for Murchison House
     public static final LatLng MURCHISON_NE=new LatLng(55.92240, -3.17150);
     public static final LatLng MURCHISON_SW=new LatLng(55.92170, -3.17280);
@@ -44,6 +47,13 @@ public class BuildingPolygon {
         add(new LatLng(BuildingPolygon.MURCHISON_SW.latitude, BuildingPolygon.MURCHISON_NE.longitude));
         add(BuildingPolygon.MURCHISON_SW);
         add(new LatLng(BuildingPolygon.MURCHISON_NE.latitude, BuildingPolygon.MURCHISON_SW.longitude));
+    }};
+    // Campus polygon: bounding rectangle covering Nucleus + Library
+    public static final List<LatLng> CAMPUS_POLYGON = new ArrayList<LatLng>() {{
+        add(CAMPUS_NE);
+        add(new LatLng(CAMPUS_SW.latitude, CAMPUS_NE.longitude));
+        add(CAMPUS_SW);
+        add(new LatLng(CAMPUS_NE.latitude, CAMPUS_SW.longitude));
     }};
 
     /**
@@ -71,6 +81,116 @@ public class BuildingPolygon {
      */
     public static boolean inMurchison(LatLng point){
         return (pointInPolygon(point, MURCHISON_POLYGON));
+    }
+
+    /**
+     * Expands a polygon outward from its centroid by the given buffer distance.
+     * Each vertex is moved along the centroid→vertex direction by bufferMeters.
+     * Used for exit hysteresis so the indoor map does not disappear when the
+     * user is just near the outer wall rather than truly outside.
+     *
+     * @param polygon      original polygon vertices
+     * @param bufferMeters buffer distance in meters to expand outward
+     * @return a new polygon with each vertex shifted outward
+     */
+    public static List<LatLng> expandPolygon(List<LatLng> polygon, double bufferMeters) {
+        // Compute centroid
+        double centLat = 0, centLng = 0;
+        for (LatLng p : polygon) {
+            centLat += p.latitude;
+            centLng += p.longitude;
+        }
+        centLat /= polygon.size();
+        centLng /= polygon.size();
+
+        List<LatLng> expanded = new ArrayList<>();
+        for (LatLng vertex : polygon) {
+            double dLat = vertex.latitude - centLat;
+            double dLng = vertex.longitude - centLng;
+
+            // Convert lat/lng deltas to meters for distance calculation
+            double dLatM = dLat * 111320.0;
+            double dLngM = dLng * 111320.0 * Math.cos(Math.toRadians(centLat));
+            double dist = Math.sqrt(dLatM * dLatM + dLngM * dLngM);
+
+            if (dist > 0) {
+                double scale = (dist + bufferMeters) / dist;
+                expanded.add(new LatLng(
+                        centLat + dLat * scale,
+                        centLng + dLng * scale));
+            } else {
+                expanded.add(vertex);
+            }
+        }
+        return expanded;
+    }
+
+    /**
+     * Clamps a point to the nearest edge of the polygon if it is outside.
+     * If the point is already inside the polygon, it is returned unchanged.
+     * Uses orthogonal projection onto each edge segment to find the closest
+     * boundary point.
+     *
+     * @param point   the point to clamp
+     * @param polygon the building boundary polygon
+     * @return the original point if inside, or the nearest boundary point if outside
+     */
+    public static LatLng clampToPolygon(LatLng point, List<LatLng> polygon) {
+        if (pointInPolygon(point, polygon)) {
+            return point;
+        }
+
+        double bestDistSq = Double.MAX_VALUE;
+        LatLng bestPoint = point;
+
+        for (int i = 0; i < polygon.size(); i++) {
+            LatLng a = polygon.get(i);
+            LatLng b = polygon.get((i + 1) % polygon.size());
+
+            LatLng projected = projectOntoSegment(point, a, b);
+            double dLat = projected.latitude - point.latitude;
+            double dLng = projected.longitude - point.longitude;
+            double distSq = dLat * dLat + dLng * dLng;
+
+            if (distSq < bestDistSq) {
+                bestDistSq = distSq;
+                bestPoint = projected;
+            }
+        }
+        return bestPoint;
+    }
+
+    /**
+     * Projects a point onto a line segment (a→b), clamping to the segment
+     * endpoints if the projection falls outside the segment.
+     *
+     * @param p the point to project
+     * @param a segment start
+     * @param b segment end
+     * @return the closest point on segment [a, b] to p
+     */
+    private static LatLng projectOntoSegment(LatLng p, LatLng a, LatLng b) {
+        double abLat = b.latitude - a.latitude;
+        double abLng = b.longitude - a.longitude;
+        double apLat = p.latitude - a.latitude;
+        double apLng = p.longitude - a.longitude;
+
+        double abLenSq = abLat * abLat + abLng * abLng;
+        if (abLenSq == 0) return a; // degenerate segment
+
+        double t = (apLat * abLat + apLng * abLng) / abLenSq;
+        t = Math.max(0, Math.min(1, t)); // clamp to [0, 1]
+
+        return new LatLng(a.latitude + t * abLat, a.longitude + t * abLng);
+    }
+
+    /**
+     * Function to check if a point is in the Campus area (Nucleus + Library combined)
+     * @param point the point to be checked
+     * @return True if point is in either Nucleus or Library area
+     */
+    public static boolean inCampus(LatLng point){
+        return pointInPolygon(point, CAMPUS_POLYGON);
     }
 
     /**
