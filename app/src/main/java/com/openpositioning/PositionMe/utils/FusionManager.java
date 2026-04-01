@@ -163,6 +163,7 @@ public class FusionManager {
      * @param matcher ignored; pass {@code null} to document intent.
      * @deprecated Use {@link #configureDynamicWallMap(java.util.List, int)} to supply wall data.
      */
+    @Deprecated
     public void setMapMatcher(MapMatcher matcher) {
         // Legacy no-op: map walls are now passed via configureDynamicWallMap.
     }
