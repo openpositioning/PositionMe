@@ -7,8 +7,32 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-import java.util.Random; //FOR PARTICLE FILTER
-
+import java.util.Random;
+/**
+ * Sequential Monte Carlo (particle filter) for fused indoor positioning.
+ *
+ * <p>Maintains a cloud of NUM_PARTICLES weighted hypothesis particles, each
+ * representing a candidate position (easting, northing) and heading-bias offset in a
+ * local ENU frame centred on the first fix. Three update sources drive the filter:</p>
+ * <ul>
+ *   <li>PDR propagates particles using the pedestrian dead-reckoning step displacement
+ *       with per-particle heading-bias correction and Gaussian noise, then slides any
+ *       particle that would cross a wall along the wall tangent so it remains inside
+ *       the building.</li>
+ *   <li>GNSS weights particles with a Student-t likelihood (ν=4) that is robust to
+ *       the multipath outliers common indoors. Accuracy is inflated 10× when wall
+ *       segments are loaded to prevent bad GPS fixes from dragging the cloud outside
+ *       the building.</li>
+ *   <li>WiFi applies the same Student-t likelihood using positions from the
+ *       openpositioning fingerprinting API, which are the primary indoor anchor. The
+ *       filter is automatically reset to a WiFi fix whenever the estimated position
+ *       has diverged by more than 2.5× the particle-cloud spread.</li>
+ * </ul>
+ *
+ * <p>Systematic resampling with Gaussian roughening (Thrun, Burgard &amp; Fox 2005,
+ * Probabilistic Robotics) is applied whenever the effective sample size N_eff drops
+ * below N/2 to prevent sample impoverishment.</p>
+ */
 public class ParticleFilter {
     private static final String TAG = "ParticleFilter";
     private static final int NUM_PARTICLES = 200; // Number of particles
@@ -33,6 +57,22 @@ public class ParticleFilter {
     // Slow random-walk drift on heading bias per step (rad).
     private static final float BIAS_DRIFT_STD = 0.01f;
 
+    /**
+     * Initialises the filter at the given geographic position.
+     * Particles are spread in a Gaussian cloud of radius {@code accuracyMeters} around
+     * {@code firstFix}, which becomes the ENU origin for all subsequent computations.
+     * Each particle is also assigned a random initial heading-bias drawn from
+     * {@link #INITIAL_BIAS_STD}.  Subsequent calls are ignored once the filter is
+     * initialised; call {@link #reset()} first to re-seed at a new location.
+     * It's best to initialise with a GNSS fix when outdoors, but the filter can also be
+     * seeded with a WiFi position or manual anchor when GNSS is unavailable or unreliable indoors..
+     * 
+     *  -- Japjot
+     *
+     * @param firstFix       WGS-84 position used as the ENU origin and initial mean
+     * @param accuracyMeters 1-sigma spread of the initial particle cloud in metres;
+     *                       use a larger value when the fix is uncertain (e.g. GNSS indoors)
+     */
     public void initialise(LatLng firstFix, float accuracyMeters) {
         if (initialized) return;          // ignore subsequent calls
         this.origin = firstFix;
@@ -54,7 +94,7 @@ public class ParticleFilter {
         return initialized;
     }
 
-    /** Resets the filter so it can be re-initialised at a new origin. */
+
     public void reset() {
         initialized = false;
         origin = null;
@@ -62,14 +102,31 @@ public class ParticleFilter {
         weights = null;
     }
 
+
     public LatLng getOrigin() {
         return origin;
     }
 
+    /**
+     * Loads wall segments into the filter for collision detection.
+     * Each element is a float array {@code {x1, y1, x2, y2}} in ENU metres relative to
+     * {@link #getOrigin()}.  These segments are used in {@link #predict} to prevent
+     * particles from passing through building walls, and in {@link #wouldCrossWall} for
+     * trajectory display validation.
+     *
+     * @param wallSegments list of wall line segments; may be empty to disable collision checks
+     */
     public void setWalls(List<float[]> wallSegments) {
         this.walls = wallSegments;
     }
 
+    /**
+     * Returns {@code true} if at least one wall segment has been loaded via {@link #setWalls}.
+     * Used to distinguish indoor operation (walls present) from outdoor/unloaded state so
+     * that GNSS noise inflation and outlier thresholds can be tightened appropriately.
+     *
+     * @return {@code true} when the wall list is non-null and non-empty
+     */
     public boolean hasWalls() {
         return walls != null && !walls.isEmpty();
     }
@@ -83,6 +140,23 @@ public class ParticleFilter {
     // same parent are identical and provide no extra information on the next step.
     private static final float ROUGHENING_STD = 0.08f; // metres — reduced to limit stationary drift
 
+    /**
+     * Propagates each particle forward by one PDR step using a noisy motion model.
+     * The step displacement is derived from the PDR easting/northing deltas.  Per-particle
+     * heading-bias (see {@link #INITIAL_BIAS_STD}) is applied before adding Gaussian noise
+     * ({@link #HEADING_NOISE_STD}, {@link #STRIDE_LENGTH_NOISE_STD}) to the heading and stride.
+     * Particles that would cross a wall segment are instead slid along the wall tangent so they
+     * remain inside the building without clustering at the boundary.
+     * <p>
+     * Weights are intentionally unchanged here; weight updates occur only in
+     * {@link #updateGNSS} and {@link #updateWiFi} when an observation arrives.
+     *
+     * @param deltaEasting  eastward PDR displacement since the last step, in metres
+     * @param deltaNorthing northward PDR displacement since the last step, in metres
+     * 
+     * written by -- Japjot
+     * @JapjotS
+     */
     public void predict(float deltaEasting, float deltaNorthing) {
         if (!initialized) return; // ignore if not initialized
 
@@ -186,7 +260,7 @@ public class ParticleFilter {
     }
 
     /**
-     * Computes the effective sample size: N_eff = 1 / Σ(w_i²).
+     * Computes the effective sample size: N_eff = 1 / sum(w_i²).
      *
      * <p>N_eff equals NUM_PARTICLES when all weights are equal (maximum diversity)
      * and approaches 1 when a single particle carries all the weight (collapsed).
@@ -248,6 +322,17 @@ public class ParticleFilter {
         }
     }
 
+    /**
+     * Updates particle weights from a GNSS observation using a Student-t likelihood function.
+     * The Student-t distribution (ν=4) has heavier tails than a Gaussian, making it robust to
+     * the multipath and NLOS outlier fixes common indoors.  When wall segments are loaded the
+     * effective accuracy is inflated to {@code max(10 × gnssAccuracy, 50 m)} to prevent indoor
+     * GPS noise from dragging particles through walls.  Systematic resampling is triggered when
+     * the effective sample size N_eff drops below N/2.
+     *
+     * @param gnssPosition WGS-84 position reported by the GNSS subsystem
+     * @param gnssAccuracy 1-sigma horizontal accuracy reported by the GNSS fix, in metres
+     */
     public void updateGNSS(LatLng gnssPosition, float gnssAccuracy) {
         if (!initialized) return; // ignore if not initialized
 
@@ -266,7 +351,7 @@ public class ParticleFilter {
 
         // Student-t likelihood (ν=4) — heavier tails than Gaussian, robust to outlier GNSS fixes.
         // Based on: Nurminen, H. et al. (2013). "Particle Filter and Smoother for Indoor
-        // Localization." IPIN 2013. w_i ∝ (1 + d²/(ν·σ²))^(-(ν+2)/2), ν=4 → exponent=-3.
+        // Localization." IPIN 2013. w_i isproportional to (1 + d²/(ν·sigma²))^(-(ν+2)/2), ν=4 → exponent=-3.
         final float nu = 4.0f;
         float weightSum = 0f;
         for (int i = 0; i < NUM_PARTICLES; i++) {
@@ -299,6 +384,16 @@ public class ParticleFilter {
 
     }
 
+    /**
+     * Updates particle weights from a WiFi fingerprinting observation using a Student-t
+     * likelihood function identical in form to {@link #updateGNSS}.  WiFi fixes are the
+     * preferred indoor anchor because they are unaffected by multipath; the filter is
+     * initialised here if no prior fix exists, and reset to this position if the current
+     * estimate has diverged by more than 2.5× the particle-cloud spread.
+     *
+     * @param wifiPosition WGS-84 position returned by the openpositioning WiFi API
+     * @param wifiAccuracy assumed 1-sigma accuracy of the WiFi fix, in metres
+     */
     public void updateWiFi(LatLng wifiPosition, float wifiAccuracy) {
         if (!initialized) return; // ignore if not initialized
         float[] mesurementENU = UtilFunctions.convertWGS84ToENU(origin, wifiPosition);
@@ -339,6 +434,14 @@ public class ParticleFilter {
 
     }
 
+    /**
+     * Computes and returns the fused position estimate as the weighted mean of all particles.
+     * The mean is computed in ENU space and then converted back to WGS-84.  This is the
+     * primary output of the filter, representing the best current estimate of the user's
+     * location given all PDR, GNSS, and WiFi observations received so far.
+     *
+     * @return fused WGS-84 position, or {@code null} if the filter has not been initialised
+     */
     public LatLng getFusedPosition() {
         if (!initialized) return null; // Return null if not initialized
 
@@ -358,6 +461,15 @@ public class ParticleFilter {
      * Returns the RMS spread of particles around their weighted mean, in metres.
      * Provides a live estimate of position uncertainty — large when particles are
      * spread out, small when they are tightly clustered.
+     */
+    /**
+     * Returns the RMS spread of particles around their weighted mean, in metres.
+     * Computed as {@code sqrt(weightedVariance_E + weightedVariance_N)}, this provides a
+     * live estimate of positional uncertainty: large when the cloud is spread out (poor
+     * convergence or divergence), small when particles are tightly clustered (high confidence).
+     * Used by the map display to scale the accuracy circle and by the GNSS outlier gate.
+     *
+     * @return position uncertainty in metres, or {@link Float#MAX_VALUE} if not initialised
      */
     public float getPositionUncertaintyMeters() {
         if (!initialized) return Float.MAX_VALUE;
