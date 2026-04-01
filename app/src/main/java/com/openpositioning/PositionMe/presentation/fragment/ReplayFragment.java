@@ -276,24 +276,30 @@ public class ReplayFragment extends Fragment {
                     LatLng firstGnss = getFirstGnssLocation(replayData);
                     if (firstGnss != null) {
                         reanchorReplayToGnss(firstGnss);
-                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
+                        applyReplayStartPosition(firstGnss);
                     } else {
                         if (fallbackPosition != null) {
-                            Log.i(TAG, "Setting camera to file GNSS fallback position: " + fallbackPosition);
-                            trajectoryMapFragment.setInitialCameraPosition(fallbackPosition);
+                            applyReplayStartPosition(fallbackPosition);
                         }
                     }
                     dialog.dismiss();
                 })
                 .setNegativeButton("Use Manual Set", (dialog, which) -> {
                     if (fallbackPosition != null) {
-                        Log.i(TAG, "Setting camera to manual/fallback position: " + fallbackPosition);
-                        trajectoryMapFragment.setInitialCameraPosition(fallbackPosition);
+                        applyReplayStartPosition(fallbackPosition);
                     }
                     dialog.dismiss();
                 })
                 .setCancelable(false)
                 .show();
+    }
+
+    private void applyReplayStartPosition(@NonNull LatLng start) {
+        Log.i(TAG, "Setting replay start position: " + start);
+        trajectoryMapFragment.setInitialCameraPosition(start);
+        // Seed indoor map selection from replay start, independent of tester live location.
+        trajectoryMapFragment.updateUserLocation(start, 0f);
+        trajectoryMapFragment.refreshIndoorMapForLocation(start);
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {

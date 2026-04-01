@@ -443,6 +443,18 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Forces indoor-map building detection from a replay/location seed without
+     * affecting playback state.
+     */
+    public void refreshIndoorMapForLocation(@NonNull LatLng location) {
+        if (indoorMapManager == null) {
+            return;
+        }
+        indoorMapManager.setCurrentLocation(location);
+        setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+    }
+
 
 
     /**
