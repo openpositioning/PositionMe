@@ -306,6 +306,7 @@ public class TrajectoryMapFragment extends Fragment {
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(5f)
+            .zIndex(10f)
                 .add() // start empty
         );
 
@@ -313,6 +314,7 @@ public class TrajectoryMapFragment extends Fragment {
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
                 .width(5f)
+            .zIndex(10f)
                 .add() // start empty
         );
     }
@@ -686,10 +688,12 @@ public class TrajectoryMapFragment extends Fragment {
             polyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(5f)
+                .zIndex(10f)
                     .add());
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
                     .width(5f)
+                .zIndex(10f)
                     .add());
         }
     }

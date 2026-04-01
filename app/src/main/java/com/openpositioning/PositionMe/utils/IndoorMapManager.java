@@ -65,29 +65,29 @@ public class IndoorMapManager {
     // Walls — black stroke, transparent fill (structural outlines only)
     private static final int WALL_STROKE       = Color.argb(255,   0,   0,   0);
 
-    // Rooms — blue fill, dark blue stroke
-    private static final int ROOM_STROKE       = Color.argb(200,  25, 118, 210);
-    private static final int ROOM_FILL         = Color.argb(180,  33, 150, 243);
+    // Rooms — beige fill, dark brown stroke
+    private static final int ROOM_STROKE       = Color.argb(200, 140, 110,  70);
+    private static final int ROOM_FILL         = Color.argb(210, 245, 230, 200);
 
-    // Corridors / hallways — lighter blue fill
-    private static final int CORRIDOR_STROKE   = Color.argb(180,  25, 118, 210);
-    private static final int CORRIDOR_FILL     = Color.argb(120,  33, 150, 243);
+    // Corridors / hallways — slightly darker beige to distinguish from rooms
+    private static final int CORRIDOR_STROKE   = Color.argb(180, 140, 110,  70);
+    private static final int CORRIDOR_FILL     = Color.argb(180, 225, 210, 175);
 
     // Stairs — amber/orange so they pop as a navigation landmark
-    private static final int STAIRS_STROKE     = Color.argb(200, 230, 120,  20);
-    private static final int STAIRS_FILL       = Color.argb(180, 255, 200, 100);
+    private static final int STAIRS_STROKE     = Color.argb(255, 180,  90,   0);
+    private static final int STAIRS_FILL       = Color.argb(220, 255, 160,  40);
 
     // Lifts / elevators — violet, distinct from stairs
-    private static final int LIFT_STROKE       = Color.argb(200, 130,  60, 200);
-    private static final int LIFT_FILL         = Color.argb(180, 210, 170, 245);
+    private static final int LIFT_STROKE       = Color.argb(255, 110,  40, 180);
+    private static final int LIFT_FILL         = Color.argb(220, 200, 150, 240);
 
-    // Unknown — blue same as rooms
-    private static final int UNKNOWN_STROKE    = Color.argb(180,  25, 118, 210);
-    private static final int UNKNOWN_FILL      = Color.argb(120,  33, 150, 243);
+    // Unknown — beige same as rooms
+    private static final int UNKNOWN_STROKE    = Color.argb(160, 140, 110,  70);
+    private static final int UNKNOWN_FILL      = Color.argb(180, 235, 220, 190);
 
-    // Fallback for any unrecognised indoor type — blue fill, dark blue stroke
-    private static final int DEFAULT_STROKE    = Color.argb(200,  25, 118, 210);
-    private static final int DEFAULT_FILL      = Color.argb(180,  33, 150, 243);
+    // Fallback for any unrecognised indoor type — beige fill, dark brown stroke
+    private static final int DEFAULT_STROKE    = Color.argb(200, 140, 110,  70);
+    private static final int DEFAULT_FILL      = Color.argb(210, 245, 230, 200);
     private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     /**
@@ -328,14 +328,14 @@ public class IndoorMapManager {
         if (currentFloorShapes == null || floorIndex < 0
                 || floorIndex >= currentFloorShapes.size()) return;
 
-        // Draw building outline as a solid blue base fill so the interior
-        // reads as blue even when the API only provides wall line data.
+        // Draw building outline as a beige base fill so the interior is visible
+        // and data points don't blend in with the background.
         if (currentBuildingOutline != null && currentBuildingOutline.size() >= 3) {
             Polygon baseFill = gMap.addPolygon(new PolygonOptions()
                     .addAll(currentBuildingOutline)
                     .strokeColor(Color.TRANSPARENT)
                     .strokeWidth(0f)
-                    .fillColor(Color.argb(180, 33, 150, 243))
+                .fillColor(Color.argb(210, 245, 230, 200))
                     .zIndex(0f));
             drawnPolygons.add(baseFill);
         }
