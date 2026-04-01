@@ -1139,6 +1139,33 @@ public class TrajectoryMapFragment extends Fragment {
      * and applies floor changes only after the debounce window (3 seconds
      * of consistent readings).
      */
+    //endregion
+
+    /**
+     * Maps barometer elevation to floor level based on height ranges.
+     * - 9-11m: Floor 3
+     * - 3-6m: Floor 2
+     * - -1 to 2m: Floor 1
+     * - -4 to -7: Ground floor
+     * - -8 and below: Lower ground
+     *
+     * @param elevation Barometer elevation in meters
+     * @return Floor level (0 = ground, 1 = first floor, -1 = lower ground, etc.)
+     */
+    private int getFloorFromBarometerHeight(float elevation) {
+        if (elevation >= 9 && elevation <= 11) {
+            return 3;
+        } else if (elevation >= 3 && elevation < 9) {
+            return 2;
+        } else if (elevation >= -1 && elevation < 3) {
+            return 1;
+        } else if (elevation >= -7 && elevation < -1) {
+            return 0; // Ground floor
+        } else { // elevation < -8
+            return -1; // Lower ground
+        }
+    }
+
     private void startAutoFloor() {
         if (autoFloorHandler == null) {
             autoFloorHandler = new Handler(Looper.getMainLooper());
@@ -1161,9 +1188,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Applies the sensor-authoritative floor immediately without debounce.
-     * Uses the PDR/barometric floor counter — WiFi floor is intentionally excluded
-     * because near staircases WiFi fingerprints bleed across floors and cause false triggers.
+     * Applies the barometer-based floor immediately without debounce.
+     * Maps barometer elevation to floor level using the configured height ranges.
      */
     private void applyImmediateFloor() {
         if (sensorFusion == null || indoorMapManager == null) return;
@@ -1171,13 +1197,13 @@ public class TrajectoryMapFragment extends Fragment {
 
         updateWallsForPdr();
 
-        // Barometer-only: use the PDR pipeline's continuously-maintained floor counter
-        // which is already gated on lift proximity and 5.5 m snap tolerance in SensorFusion.
-        int candidateFloor = sensorFusion.getPdrCurrentFloor();
+        // Get barometer elevation and convert to floor
+        float elevation = sensorFusion.getElevation();
+        int candidateFloor = getFloorFromBarometerHeight(elevation);
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
         updateFloorLabel();
-        Log.d(TAG, "applyImmediateFloor -> floor=" + candidateFloor);
+        Log.d(TAG, "applyImmediateFloor -> elevation=" + elevation + " floor=" + candidateFloor);
 
         // Seed the debounce state so the first periodic evaluation doesn't re-trigger immediately
         lastCandidateFloor = candidateFloor;
@@ -1197,12 +1223,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Evaluates the current floor using barometric elevation only.
-     * Floor changes are permitted ONLY when the user is physically near a lift AND
-     * the barometer shows a change that is a whole multiple of the building's floor height
-     * (5.5 m for Nucleus). WiFi floor is intentionally excluded: near staircases the WiFi
-     * fingerprints from adjacent floors cause false triggers that move the map to the wrong
-     * floor and break the wall-collision geometry.
+     * Evaluates the current floor using barometric elevation with debounce.
+     * Maps barometer height directly to floor level based on configured ranges.
      */
     private void evaluateAutoFloor() {
         if (sensorFusion == null || indoorMapManager == null) return;
@@ -1210,32 +1232,11 @@ public class TrajectoryMapFragment extends Fragment {
 
         updateWallsForPdr();
 
-        // Barometric elevation from the PDR pipeline
+        // Get barometer elevation and convert to floor
         float elevation = sensorFusion.getElevation();
+        int candidateFloor = getFloorFromBarometerHeight(elevation);
 
-        // Use the building's known floor height (5.5 m for Nucleus)
-        float floorHeight = indoorMapManager.getFloorHeight();
-        if (floorHeight <= 0) floorHeight = IndoorMapManager.NUCLEUS_FLOOR_HEIGHT;
-
-        // Guard 1: ignore trivially small elevation changes (noise / gentle ramp)
-        if (Math.abs(elevation) < mapMatchingConfig.baroHeightThreshold) return;
-
-        // Guard 2: only commit near a lift — not near stairs, not in the middle of a corridor.
-        // This is the key fix: staircase proximity must NOT trigger floor changes.
-        if (!indoorMapManager.isNearLift(mapMatchingConfig.crossFeatureProximity)) return;
-
-        // Guard 3: require low horizontal movement (lift ≈ still, stairs ≈ walking)
-        float horizAccel = sensorFusion.getHorizontalAccelMagnitude();
-        if (horizAccel >= 0.3f) return; // user is walking — probably stairs, not lift
-
-        // Guard 4: snap-to-floor — barometer must be within 15 % of an exact floor level.
-        // Prevents committing a floor change mid-ascent when the lift is between floors.
-        int candidateFloor = Math.round(elevation / floorHeight);
-        float targetElev = candidateFloor * floorHeight;
-        if (Math.abs(elevation - targetElev) > floorHeight * 0.15f) return;
-
-        Log.d(TAG, "Auto-floor (baro/lift) elevation=" + elevation
-                + " candidate=" + candidateFloor + " horizAccel=" + horizAccel);
+        Log.d(TAG, "Auto-floor evaluation: elevation=" + elevation + " candidateFloor=" + candidateFloor);
 
         // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
         long now = SystemClock.elapsedRealtime();
