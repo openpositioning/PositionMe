@@ -76,15 +76,75 @@ public class IndoorMapManager {
     // List of currently drawn indoor floor polygons
     private final List<Polygon> activeFloorPolygons = new ArrayList<>();
 
+
+    // Distance (m) to consider user near stairs/floor features
     final double floorDistThresh = 5.0;
+
+    // Distance (m) to consider user near a lift (tighter than stairs)
     final double liftDistThresh = 3.0;
 
+    // Last confirmed floor key used as baseline for floor change detection
     private String confirmedFloorKey = null;
+
+    // Elevation (m) at which the current floor was confirmed (barometer reference)
     private float confirmedFloorElevation = Float.NaN;
 
+    // Handler to delay committing floor changes during UI floor browsing
     private final Handler floorCommitHandler = new Handler(Looper.getMainLooper());
+
+    // Delay (ms) before confirming a browsed floor as the active floor
     private static final long FLOOR_COMMIT_DELAY_MS = 1500;
 
+    // Timestamp of last accepted floor change (used to debounce rapid switches)
+    private long lastFloorChangeTimeMs = 0;
+
+    // Minimum time (ms) between floor changes to prevent oscillation
+    private static final long MIN_FLOOR_CHANGE_INTERVAL_MS = 5000;
+
+    // Required vertical change (m) to consider a real floor transition (barometer threshold)
+    private static final double HEIGHT_THRESHOLD_METERS = 4.5;
+
+    // Max distance (m) to consider user near stairs for a valid floor change
+    private static final double STAIRS_THRESHOLD_METERS = 12.0;
+
+    // Max distance (m) to consider user near a lift for a valid floor change
+    private static final double LIFT_THRESHOLD_METERS = 10.0;
+
+    // Max horizontal movement (m) allowed for lift detection (lifts have minimal horizontal shift)
+    private static final double LIFT_HORIZONTAL_THRESHOLD_METERS = 1.0;
+
+    // Tolerance for floating-point precision when checking line segment intersections
+    private static final float INTERSECTION_EPSILON = 1e-6f;
+
+    // Tolerance for determining if a polygon ring is already closed (first ≈ last point)
+    private static final float RING_CLOSURE_EPSILON = 1e-4f;
+
+    // Distance (m) to back off from a wall after detecting a collision (prevents sticking)
+    private static final float WALL_SNAP_BACK_METERS = 0.05f;
+
+    // FLOOR TRANSITION TRACKING
+
+    //location of where we starting changing floors
+    private LatLng floorTransitionStartLocation = null;
+
+    private LatLng lastStableFloorLocation = null;
+    //are we potentially changing floors
+    private boolean floorTransitionInProgress = false;
+
+    private static final float FLOOR_STABLE_BAND_METERS = 0.5f;
+    //threshold to start tracking as potential new floor transition
+    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f;
+
+    /**
+     * Confirms the currently displayed floor as the user's reference floor.
+     *
+     * Stores both:
+     * - the current floor key, and
+     * - the current sensor-derived elevation at the moment of confirmation.
+     *
+     * This confirmed floor/elevation pair is later used as the baseline for
+     * detecting real floor changes.
+     */
     private final Runnable commitBrowsedFloorRunnable = new Runnable() {
         @Override
         public void run() {
@@ -106,10 +166,18 @@ public class IndoorMapManager {
         public String rawMapShapes;
         public Map<String, FloorFeatures> floorFeatures = new HashMap<>();
 
+        // Stores all geometric features for a single floor, used for rendering and map-matching
         public static class FloorFeatures {
+            // Wall polygons in LatLng (used for drawing and geographic checks)
             public List<List<LatLng>> wallPolygons = new ArrayList<>();
+
+            // Wall polygons converted to ENU (meters) for efficient collision detection
             public List<List<float[]>> wallPolygonsEnu = new ArrayList<>();
+
+            // Centroid positions of stair features (used for floor transition logic)
             public List<LatLng> stairsCenters = new ArrayList<>();
+
+            // Centroid positions of lift/elevator features (used for floor transition logic)
             public List<LatLng> liftCenters = new ArrayList<>();
         }
     }
@@ -199,31 +267,22 @@ public class IndoorMapManager {
         }
     }
 
+
     /**
-     * Checks whether the movement from {@code fromEnu} to {@code toEnu} crosses any wall
-     * on the current floor. If it does, returns the last valid ENU position just before the
-     * wall (clamped via binary search). If no wall is crossed, returns {@code toEnu} unchanged.
+     * Prevents movement from passing through walls on the current floor.
      *
-     * Call this after every EKF prediction step, before reading the new state.
+     * This checks whether the line segment from the previous ENU position to the
+     * proposed ENU position intersects any wall polygon edge. If no wall is crossed,
+     * the destination is returned unchanged.
      *
-     * @param fromEnu float[]{east, north} — previous EKF position in metres
-     * @param toEnu   float[]{east, north} — new EKF position after predict()
-     * @return        clamped float[]{east, north}, or toEnu if no wall was crossed
+     * If a wall is crossed, the movement is shortened so that the returned point
+     * lies just before the first wall intersection. This is used as a hard wall
+     * constraint for fused position estimates.
+     *
+     * @param fromEnu Previous position in ENU metres: {east, north}
+     * @param toEnu Proposed new position in ENU metres: {east, north}
+     * @return Safe ENU position that does not cross a wall
      */
-    public float[] clampToWallEnu(float[] fromEnu, float[] toEnu) {
-        if (currentVenue == null || currentFloorKey == null) return toEnu;
-        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
-        if (floor == null || floor.wallPolygonsEnu.isEmpty()) return toEnu;
-
-        if (!crossesAnyWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu)) return toEnu;
-
-        return snapToWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu);
-    }
-
-    private static final float INTERSECTION_EPSILON = 1e-6f;
-    private static final float RING_CLOSURE_EPSILON = 1e-4f;
-    private static final float WALL_SNAP_BACK_METERS = 0.05f;
-
     public float[] constrainMovementToWalls(float[] fromEnu, float[] toEnu) {
         if (fromEnu == null || toEnu == null) {
             return toEnu;
@@ -249,10 +308,18 @@ public class IndoorMapManager {
         return moveToJustBeforeWall(fromEnu, toEnu, crossing.t, WALL_SNAP_BACK_METERS);
     }
 
+    // Represents where a movement path first intersects a wall edge in ENU space
     private static class WallCrossing {
+        // Exact ENU point where the path intersects the wall
         final float[] crossingPoint;
+
+        // Index of the wall polygon that was intersected
         final int polygonIndex;
+
+        // Index of the specific edge within the polygon that was hit
         final int edgeIndex;
+
+        // Parametric position along the path (0=start, 1=end) where intersection occurs
         final float t;
 
         WallCrossing(float[] crossingPoint, int polygonIndex, int edgeIndex, float t) {
@@ -263,6 +330,24 @@ public class IndoorMapManager {
         }
     }
 
+
+    /**
+     * Finds the earliest wall edge intersected by a movement segment.
+     *
+     * Iterates through all wall polygons on the current floor and checks every edge
+     * for intersection with the segment from {@code from} to {@code to}. If multiple
+     * walls are crossed, the closest one along the path is returned.
+     *
+     * The returned WallCrossing includes:
+     * - the intersection point,
+     * - which polygon and edge were hit,
+     * - the interpolation parameter t along the path.
+     *
+     * @param from Start ENU point {east, north}
+     * @param to End ENU point {east, north}
+     * @param walls List of wall polygons in ENU coordinates
+     * @return First wall crossing along the path, or null if no crossing occurs
+     */
     private WallCrossing findFirstWallCrossing(float[] from,
                                                float[] to,
                                                List<List<float[]>> walls) {
@@ -296,6 +381,16 @@ public class IndoorMapManager {
         return best;
     }
 
+    /**
+     * Returns the number of usable edges in a polygon ring.
+     *
+     * Some polygon rings are explicitly closed, meaning the first and last point are
+     * the same. In that case, the final repeated point should not create an extra edge.
+     * This helper detects that case and returns the correct number of edges.
+     *
+     * @param ring Polygon ring as a list of ENU points
+     * @return Number of distinct edges in the ring
+     */
     private int getRingEdgeCount(List<float[]> ring) {
         if (ring == null || ring.size() < 2) return 0;
 
@@ -309,6 +404,24 @@ public class IndoorMapManager {
         return alreadyClosed ? ring.size() - 1 : ring.size();
     }
 
+    /**
+     * Computes the intersection parameter t for two line segments.
+     *
+     * The first segment is p1 -> p2, and the second is p3 -> p4.
+     * If the segments intersect, this returns the parameter t such that:
+     *
+     *   intersection = p1 + t * (p2 - p1)
+     *
+     * where 0 <= t <= 1 means the intersection lies on the first segment.
+     *
+     * If the lines are parallel or the segments do not intersect, returns -1.
+     *
+     * @param p1 Start of first segment
+     * @param p2 End of first segment
+     * @param p3 Start of second segment
+     * @param p4 End of second segment
+     * @return Interpolation parameter t on first segment, or -1 if no intersection
+     */
     private double intersectionT(float[] p1, float[] p2, float[] p3, float[] p4) {
         double rX = p2[0] - p1[0];
         double rY = p2[1] - p1[1];
@@ -329,6 +442,20 @@ public class IndoorMapManager {
         return (t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0) ? t : -1.0;
     }
 
+    /**
+     * Moves a point to just before a detected wall collision.
+     *
+     * Given a path from {@code from} to {@code to} and the interpolation value
+     * {@code hitT} where the wall was hit, this backs the point away slightly
+     * from the wall by {@code snapBackMeters}. This avoids leaving the estimate
+     * exactly on the wall boundary.
+     *
+     * @param from Start ENU point
+     * @param to End ENU point
+     * @param hitT Path interpolation value where wall is hit
+     * @param snapBackMeters Distance to back off from the wall
+     * @return Adjusted ENU position just before the wall
+     */
     private float[] moveToJustBeforeWall(float[] from, float[] to, float hitT, float snapBackMeters) {
         float dx = to[0] - from[0];
         float dy = to[1] - from[1];
@@ -347,7 +474,17 @@ public class IndoorMapManager {
         };
     }
 
-
+    /**
+     * Checks whether a movement segment intersects any wall edge in ENU space.
+     *
+     * This is a broad collision test used before more detailed correction logic.
+     * It loops over every wall polygon and every edge within each polygon.
+     *
+     * @param from Start ENU point
+     * @param to End ENU point
+     * @param walls List of wall polygons in ENU coordinates
+     * @return true if the segment crosses at least one wall, false otherwise
+     */
     private boolean crossesAnyWallEnu(float[] from, float[] to, List<List<float[]>> walls) {
         for (List<float[]> polygon : walls) {
             for (int i = 0; i < polygon.size(); i++) {
@@ -359,7 +496,19 @@ public class IndoorMapManager {
         return false;
     }
 
-
+    /**
+     * Finds the furthest valid point along a path before hitting a wall.
+     *
+     * Uses binary search between {@code from} and {@code to} to find the last point
+     * that does not cross any wall. This is useful when a movement intersects a wall
+     * and we want to clamp the position as close as possible to the obstacle without
+     * crossing it.
+     *
+     * @param from Start ENU point
+     * @param to End ENU point
+     * @param allWalls List of all wall polygons in ENU coordinates
+     * @return Last valid ENU point before wall intersection
+     */
     private float[] snapToWallEnu(float[] from, float[] to,
                                   List<List<float[]>> allWalls) {
         float[] best = from.clone();
@@ -383,6 +532,20 @@ public class IndoorMapManager {
         return best;
     }
 
+
+    /**
+     * Tests whether two 2D line segments intersect in ENU coordinates.
+     *
+     * Handles both proper crossings and edge cases such as collinear points
+     * or touching at endpoints. This is the core geometric primitive used by
+     * the wall constraint logic.
+     *
+     * @param p1 Start of first segment
+     * @param p2 End of first segment
+     * @param p3 Start of second segment
+     * @param p4 End of second segment
+     * @return true if the segments intersect, false otherwise
+     */
     private boolean segmentsIntersectEnu(float[] p1, float[] p2, float[] p3, float[] p4) {
         double eps = 1e-6;
 
@@ -406,16 +569,56 @@ public class IndoorMapManager {
         return false;
     }
 
+    /**
+     * Returns the signed orientation / cross product of three ENU points.
+     *
+     * Positive value  -> c is to one side of line ab
+     * Negative value  -> c is to the other side
+     * Near zero       -> points are approximately collinear
+     *
+     * Used by segment intersection tests.
+     *
+     * @param a First point
+     * @param b Second point
+     * @param c Third point
+     * @return Signed 2D cross product value
+     */
     private double orientation(float[] a, float[] b, float[] c) {
         return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
     }
 
+    /**
+     * Checks whether a point lies on a line segment in ENU space.
+     *
+     * Assumes the point is already known to be approximately collinear with the
+     * segment, and then checks whether it falls within the segment bounds.
+     *
+     * @param a Segment start
+     * @param p Candidate point
+     * @param b Segment end
+     * @param eps Tolerance for floating-point comparisons
+     * @return true if p lies on segment ab, false otherwise
+     */
     private boolean onSegmentEnu(float[] a, float[] p, float[] b, double eps) {
         return p[0] >= Math.min(a[0], b[0]) - eps &&
                 p[0] <= Math.max(a[0], b[0]) + eps &&
                 p[1] >= Math.min(a[1], b[1]) - eps &&
                 p[1] <= Math.max(a[1], b[1]) + eps;
     }
+
+    /**
+     * Precomputes ENU versions of wall polygons for the current floor.
+     *
+     * Converts all wall polygon LatLng coordinates into local East-North-Up metre
+     * coordinates using the supplied CoordinateConverter. This allows wall collision
+     * checks to be done in a consistent local metric coordinate system.
+     *
+     * Should be called whenever:
+     * - a new floor is shown, or
+     * - the coordinate converter becomes available / changes.
+     *
+     * @param converter Converter for LatLng <-> ENU transformations
+     */
     public void bakeEnuCoordinates(CoordinateConverter converter) {
         if (currentVenue == null || currentFloorKey == null) return;
         IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
@@ -431,33 +634,7 @@ public class IndoorMapManager {
         }
         Log.d("WallDebug", "Baked " + floor.wallPolygonsEnu.size() + " wall polygons to ENU");
     }
-    private List<LatLng> getNearestWallPolygon(LatLng from, LatLng to,
-                                               List<List<LatLng>> wallPolygons) {
-        for (List<LatLng> polygon : wallPolygons) {
-            for (int i = 0; i < polygon.size(); i++) {
-                LatLng wallA = polygon.get(i);
-                LatLng wallB = polygon.get((i + 1) % polygon.size());
-                if (segmentsIntersect(from, to, wallA, wallB)) return polygon;
-            }
-        }
-        return wallPolygons.get(0); // fallback, shouldn't reach here
-    }
 
-    private boolean crossesAnyWall(LatLng from, LatLng to,
-                                   List<List<LatLng>> wallPolygons) {
-        for (List<LatLng> polygon : wallPolygons) {
-            for (int i = 0; i < polygon.size(); i++) {
-                LatLng wallA = polygon.get(i);
-                LatLng wallB = polygon.get((i + 1) % polygon.size());
-                if (segmentsIntersect(from, to, wallA, wallB)) {
-                    Log.e("IndoorMapManager", "wall detected!");
-                    return true;
-
-                }
-            }
-        }
-        return false;
-    }
 
     private LatLng toLatLng(float eastM, float northM, CoordinateConverter c) {
         double[] ll = c.toLatLon(eastM, northM);
@@ -481,59 +658,6 @@ public class IndoorMapManager {
         return (val > 0) ? 1 : 2;
     }
 
-    /**
-     * Finds gaps (doorways) in walls between two ENU positions by looking for
-     * wall segments that have a break/gap large enough to walk through (>0.6m).
-     * Returns a waypoint through the nearest gap, or null if no gap found.
-     */
-    private float[] findGapBetweenPoints(float[] fromEnu, float[] toEnu,
-                                         List<List<float[]>> walls) {
-        float[] bestGap = null;
-        double bestDist = Double.MAX_VALUE;
-
-        // Direction vector from->to
-        float dx = toEnu[0] - fromEnu[0];
-        float dy = toEnu[1] - fromEnu[1];
-        float totalDist = (float) Math.sqrt(dx * dx + dy * dy);
-        if (totalDist < 1e-6f) return null;
-
-        for (List<float[]> polygon : walls) {
-            for (int i = 0; i < polygon.size(); i++) {
-                float[] a = polygon.get(i);
-                float[] b = polygon.get((i + 1) % polygon.size());
-
-                // Only consider wall segments that intersect our path
-                if (!segmentsIntersectEnu(fromEnu, toEnu, a, b)) continue;
-
-                // Look for a gap by checking adjacent segments for a break
-                // A gap exists where two consecutive wall endpoints don't connect
-                float[] prev = polygon.get((i - 1 + polygon.size()) % polygon.size());
-                float[] next = polygon.get((i + 2) % polygon.size());
-
-                // Check gap before segment a
-                float gapBeforeSize = (float) Math.sqrt(
-                        Math.pow(a[0] - prev[1], 2) + Math.pow(a[1] - prev[1], 2));
-
-                // Check gap after segment b
-                float gapAfterSize = (float) Math.sqrt(
-                        Math.pow(next[0] - b[0], 2) + Math.pow(next[1] - b[1], 2));
-
-                // Midpoint of segment as candidate gap point
-                float midX = (a[0] + b[0]) / 2f;
-                float midY = (a[1] + b[1]) / 2f;
-
-                // Find closest point on the wall segment to our path
-                double distToMid = Math.sqrt(
-                        Math.pow(midX - fromEnu[0], 2) + Math.pow(midY - fromEnu[1], 2));
-
-                if (distToMid < bestDist) {
-                    bestDist = distToMid;
-                    bestGap = new float[]{midX, midY};
-                }
-            }
-        }
-        return bestGap;
-    }
 
     /**
      * When the EKF has teleported to the other side of a wall (e.g. after a
@@ -625,6 +749,14 @@ public class IndoorMapManager {
 
     private Circle activeAccessHighlight = null;
 
+    /**
+     * Draws a temporary visual highlight around a stairs/lift access point.
+     *
+     * Used to show the user which access point was selected during a floor change.
+     * Removes any previously drawn highlight before adding the new one.
+     *
+     * @param center Access point centre to highlight
+     */
     public void highlightAccessPoint(LatLng center) {
         if (center == null || gMap == null) return;
 
@@ -642,103 +774,7 @@ public class IndoorMapManager {
         );
     }
 
-    private LatLng getWalkableSnapNearAccessPoint(LatLng accessCenter,
-                                                  LatLng referenceLocation,
-                                                  IndoorVenue.FloorFeatures floorFeatures) {
-        if (accessCenter == null) return referenceLocation;
-        if (floorFeatures == null) return accessCenter;
 
-        // First try a point offset toward where the user came from
-        LatLng firstCandidate = offsetFromCenterTowardReference(accessCenter, referenceLocation, 1.5);
-        if (!isInsideAnyWall(firstCandidate, floorFeatures.wallPolygons)) {
-            return firstCandidate;
-        }
-
-        // Then do a radial search around the center
-        double[] radii = {1.0, 1.5, 2.0, 2.5, 3.0};
-        int angleStepDeg = 20;
-
-        for (double radius : radii) {
-            for (int deg = 0; deg < 360; deg += angleStepDeg) {
-                double rad = Math.toRadians(deg);
-                double east = radius * Math.cos(rad);
-                double north = radius * Math.sin(rad);
-
-                LatLng candidate = offsetLatLngMeters(accessCenter, east, north);
-                if (!isInsideAnyWall(candidate, floorFeatures.wallPolygons)) {
-                    return candidate;
-                }
-            }
-        }
-
-        // Fallback: keep the old corrected location if everything near the center is blocked
-        return referenceLocation;
-    }
-
-    private boolean isPointInPolygon(LatLng point, List<LatLng> polygon) {
-        if (point == null || polygon == null || polygon.size() < 3) return false;
-
-        boolean inside = false;
-        double x = point.longitude;
-        double y = point.latitude;
-
-        for (int i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
-            double xi = polygon.get(i).longitude;
-            double yi = polygon.get(i).latitude;
-            double xj = polygon.get(j).longitude;
-            double yj = polygon.get(j).latitude;
-
-            boolean intersect = ((yi > y) != (yj > y)) &&
-                    (x < (xj - xi) * (y - yi) / ((yj - yi) + 1e-12) + xi);
-
-            if (intersect) inside = !inside;
-        }
-
-        return inside;
-    }
-
-    private boolean isInsideAnyWall(LatLng point, List<List<LatLng>> wallPolygons) {
-        if (point == null || wallPolygons == null) return false;
-
-        for (List<LatLng> polygon : wallPolygons) {
-            if (polygon != null && polygon.size() >= 3 && isPointInPolygon(point, polygon)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private LatLng offsetLatLngMeters(LatLng origin, double eastMeters, double northMeters) {
-        if (origin == null) return null;
-
-        double latRad = Math.toRadians(origin.latitude);
-
-        double dLat = northMeters / 111320.0;
-        double dLng = eastMeters / (111320.0 * Math.cos(latRad));
-
-        return new LatLng(
-                origin.latitude + dLat,
-                origin.longitude + dLng
-        );
-    }
-
-    private LatLng offsetFromCenterTowardReference(LatLng center, LatLng reference, double offsetMeters) {
-        if (center == null || reference == null) return center;
-
-        double dNorth = (reference.latitude - center.latitude) * 111320.0;
-        double dEast = (reference.longitude - center.longitude) *
-                111320.0 * Math.cos(Math.toRadians(center.latitude));
-
-        double norm = Math.sqrt(dEast * dEast + dNorth * dNorth);
-        if (norm < 1e-6) {
-            return offsetLatLngMeters(center, offsetMeters, 0.0);
-        }
-
-        double unitEast = dEast / norm;
-        double unitNorth = dNorth / norm;
-
-        return offsetLatLngMeters(center, unitEast * offsetMeters, unitNorth * offsetMeters);
-    }
 
     /**
      * If the movement from fromEnu to toEnu crosses a wall, slides the destination
@@ -807,38 +843,22 @@ public class IndoorMapManager {
         return slid;
     }
 
-    /*
-    takes endpoints of two segments and determines whether they intersect
+
+    /**
+     * Applies wall-based correction to a predicted indoor location.
+     *
+     * Converts the old and predicted geographic coordinates into ENU space, checks
+     * whether the motion crosses a wall, and if so clamps the destination to just
+     * before the first wall hit. The corrected ENU point is then converted back to
+     * LatLng.
+     *
+     * This is the LatLng-facing version of the wall constraint logic.
+     *
+     * @param oldLocation Previous corrected location
+     * @param predictedLocation Newly predicted location
+     * @param heightChange Current vertical change estimate (currently not directly used here)
+     * @return Corrected location that does not pass through walls
      */
-    private static boolean segmentsIntersect(LatLng a, LatLng b, LatLng c, LatLng d) {
-
-        int o1 = orientation(a, b, c);
-        int o2 = orientation(a, b, d);
-        int o3 = orientation(c, d, a);
-        int o4 = orientation(c, d, b);
-
-        // Proper intersection
-        if (o1 != o2 && o3 != o4) {
-            return true;
-        }
-
-        // Special cases (collinear)
-        if (o1 == 0 && onSegment(a, c, b)) return true;
-        if (o2 == 0 && onSegment(a, d, b)) return true;
-        if (o3 == 0 && onSegment(c, a, d)) return true;
-        if (o4 == 0 && onSegment(c, b, d)) return true;
-
-        return false;
-    }
-
-    private static boolean onSegment(LatLng a, LatLng p, LatLng b) {
-        return p.latitude <= Math.max(a.latitude, b.latitude) &&
-                p.latitude >= Math.min(a.latitude, b.latitude) &&
-                p.longitude <= Math.max(a.longitude, b.longitude) &&
-                p.longitude >= Math.min(a.longitude, b.longitude);
-    }
-
-    /// height change = sensorfusion.getelevation
     public LatLng indoorLocationCorrection(LatLng oldLocation,
                                            LatLng predictedLocation,
                                            float heightChange) {
@@ -886,25 +906,27 @@ public class IndoorMapManager {
     }
 
 
-
-
-    //find nearest valid point that doesn't intersect walls
-    //loop through points on segment just traversed starting from predicted location back towards prev location
-    //use dx and dy
-    //once we find point that doesn't intersect wall
-    //corrected position = point
-    //break
-
-    private long lastFloorChangeTimeMs = 0;
-    private static final long MIN_FLOOR_CHANGE_INTERVAL_MS = 5000; // 5 seconds minimum
-    private static final double HEIGHT_THRESHOLD_METERS = 4.5;
-    private static final double STAIRS_THRESHOLD_METERS = 12.0;
-    private static final double LIFT_THRESHOLD_METERS = 10.0;
-    private static final double LIFT_HORIZONTAL_THRESHOLD_METERS = 1.0;
-//    private LatLng floorTransitionStartLocation = null;
-//    private boolean floorTransitionInProgress = false;
-//    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f;
-
+    /**
+     * Decides whether a proposed floor change should be accepted.
+     *
+     * A floor change is accepted only if:
+     * - there is a confirmed current floor reference,
+     * - enough time has passed since the last floor change,
+     * - the barometric height change exceeds a threshold,
+     * - the user is plausibly near stairs or a lift,
+     * - the horizontal movement pattern matches either stairs or lift usage.
+     *
+     * If accepted, the method:
+     * - determines the adjacent destination floor,
+     * - snaps the destination to the nearest stairs/lift centre on that floor,
+     * - commits the new floor state,
+     * - redraws the correct floor overlay.
+     *
+     * @param correctedLocation Current corrected location on map
+     * @param oldLocation Previous location
+     * @param currentHeight Current barometric height estimate
+     * @return FloorChangeResult describing whether the floor changed and where to snap the user
+     */
     public FloorChangeResult acceptFloorChange(LatLng correctedLocation,
                                                LatLng oldLocation,
                                                float currentHeight) {
@@ -955,14 +977,12 @@ public class IndoorMapManager {
 
         if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
             Log.d("MapMatch", "Next floor invalid");
-//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
         IndoorVenue.FloorFeatures nextFloorFeatures = currentVenue.floorFeatures.get(nextFloorKey);
         if (nextFloorFeatures == null) {
             Log.d("MapMatch", "No floor features for destination floor: " + nextFloorKey);
-//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
@@ -978,25 +998,17 @@ public class IndoorMapManager {
                 LIFT_THRESHOLD_METERS
         );
 
-//        double horizontalDisplacement = getFloorTransitionHorizontalDisplacement(correctedLocation);
-//        resetFloorTransitionState();
 
         boolean usedLift = nearLift && horizontalDisplacement < LIFT_HORIZONTAL_THRESHOLD_METERS;
         boolean usedStairs = false;
-//        if (!nearLift && nearStairs){
-//            usedStairs = true;
-//        }
 
-//        else {
         usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
-//        }
         Log.d("MapMatch", "nearStairs=" + nearStairs + ", nearLift=" + nearLift);
         Log.d("MapMatch", "horizontalDisplacement=" + horizontalDisplacement);
         Log.d("MapMatch", "usedLift=" + usedLift + ", usedStairs=" + usedStairs);
 
         if (!usedLift && !usedStairs) {
             Log.d("MapMatch", "Rejected floor change: not near stairs/lift in a plausible way");
-//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
         LatLng highlightCenter = null;
@@ -1004,7 +1016,6 @@ public class IndoorMapManager {
 
 
         if (nextFloorKey.equals(confirmedFloorKey)) {
-//            resetFloorTransitionState();
             return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
@@ -1023,11 +1034,6 @@ public class IndoorMapManager {
 
             if (nearestStairsOnNextFloor != null) {
                 snappedDestination = nearestStairsOnNextFloor;
-//                snappedDestination = getWalkableSnapNearAccessPoint(
-//                        nearestStairsOnNextFloor,
-//                        oldLocation,
-//                        nextFloorFeatures
-//                );
             }
         }
 
@@ -1041,25 +1047,13 @@ public class IndoorMapManager {
                 (nextFloorFeatures.stairsCenters == null ? 0 : nextFloorFeatures.stairsCenters.size()));
         Log.d("MapMatch", "nextFloor lift count = " +
                 (nextFloorFeatures.liftCenters == null ? 0 : nextFloorFeatures.liftCenters.size()));
-
         showFloor(nextFloorKey);
-
-
-
         return new FloorChangeResult(nextFloorKey, snappedDestination, true, highlightCenter);
     }
 
 
 
-    // ================= FLOOR TRANSITION TRACKING =================
 
-    private LatLng floorTransitionStartLocation = null;
-    private LatLng lastStableFloorLocation = null;
-    private boolean floorTransitionInProgress = false;
-
-    // Tune these based on your barometer noise
-    private static final float FLOOR_STABLE_BAND_METERS = 0.5f;              // "definitely still on floor"
-    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f; // "transition has begun"
 
     /**
      * Updates transition tracking state.
@@ -1164,6 +1158,16 @@ public class IndoorMapManager {
                 " at elevation " + confirmedFloorElevation);
     }
 
+    /**
+     * Returns the floor key directly above or below a given floor.
+     *
+     * Floors are first sorted into building order (e.g. B2, B1, G, 1, 2, ...),
+     * then the next key is selected using the supplied direction.
+     *
+     * @param floorKey Current floor key
+     * @param direction +1 for up one floor, -1 for down one floor
+     * @return Adjacent floor key, or null if none exists
+     */
     private String getAdjacentFloorKey(String floorKey, int direction) {
         if (currentVenue == null || currentVenue.rawMapShapes == null) return null;
 
@@ -1185,6 +1189,15 @@ public class IndoorMapManager {
         }
     }
 
+    /**
+     * Computes straight-line distance between two LatLng points in metres.
+     *
+     * Uses Android's Location.distanceBetween utility.
+     *
+     * @param a First point
+     * @param b Second point
+     * @return Distance in metres
+     */
     private double distanceMeters(LatLng a, LatLng b) {
         float[] result = new float[1];
         android.location.Location.distanceBetween(
@@ -1195,6 +1208,17 @@ public class IndoorMapManager {
         return result[0];
     }
 
+    /**
+     * Checks whether a location lies within a threshold distance of any point in a list.
+     *
+     * Used for access-point logic such as determining whether the user is close enough
+     * to stairs or a lift for a floor change to be plausible.
+     *
+     * @param location Location to test
+     * @param centers Candidate reference points
+     * @param thresholdMeters Distance threshold in metres
+     * @return true if location is near at least one point
+     */
     private boolean isNearAnyPoint(LatLng location, List<LatLng> centers, double thresholdMeters) {
 
         if (location == null || centers == null || centers.isEmpty()) {
@@ -1210,76 +1234,6 @@ public class IndoorMapManager {
         }
 
         return false;
-    }
-
-    public LatLng adjustPositionToNearestValidLocation(
-            LatLng oldLocation,
-            LatLng predictedLocation,
-            List<LatLng> polygon) {
-
-        LatLng bestValid = oldLocation;
-
-        double low = 0.0;   // valid end
-        double high = 1.0;  // invalid end
-
-        //binary search
-        for (int iter = 0; iter < 20; iter++) {
-            double mid = (low + high) / 2.0;
-
-            double lat = oldLocation.latitude +
-                    mid * (predictedLocation.latitude - oldLocation.latitude);
-            double lon = oldLocation.longitude +
-                    mid * (predictedLocation.longitude - oldLocation.longitude);
-
-            LatLng candidate = new LatLng(lat, lon);
-
-            boolean intersectsWall = false;
-
-            for (int i = 0; i < polygon.size(); i++) {
-                LatLng wallStart = polygon.get(i);
-                LatLng wallEnd = polygon.get((i + 1) % polygon.size());
-
-                if (segmentsIntersect(oldLocation, candidate, wallStart, wallEnd)) {
-                    intersectsWall = true;
-                    break;
-                }
-            }
-
-            if (intersectsWall) {
-                high = mid;   // candidate is invalid, search closer to oldLocation
-            } else {
-                low = mid;    // candidate is valid, search closer to predictedLocation
-                bestValid = candidate;
-            }
-        }
-
-        return bestValid;
-    }
-
-    public void initializeFloorFromLocation(LatLng location) {
-        if (currentVenue == null) return;
-
-        double bestDist = Double.MAX_VALUE;
-        String bestFloor = null;
-
-        for (Map.Entry<String, IndoorVenue.FloorFeatures> entry : currentVenue.floorFeatures.entrySet()) {
-            String floorKey = entry.getKey();
-            IndoorVenue.FloorFeatures floor = entry.getValue();
-
-            // use centroid of walls (simple heuristic)
-            LatLng centroid = computeCentroid(floor.wallPolygons);
-            double dist = distanceMeters(location, centroid);
-
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestFloor = floorKey;
-            }
-        }
-
-        if (bestFloor != null) {
-            currentFloorKey = bestFloor;
-            Log.d("FloorInit", "Initial floor set to " + bestFloor);
-        }
     }
 
     public LatLng computeCentroid(List<List<LatLng>> wallPolygons) {
@@ -1364,6 +1318,17 @@ public class IndoorMapManager {
         }
     }
 
+    /**
+     * Displays a specific floor immediately.
+     *
+     * Clears the existing floor overlay, redraws the requested floor, and rebakes
+     * ENU wall coordinates for map matching.
+     *
+     * Unlike delayed browsing logic, this is typically used when the floor should
+     * be shown directly, such as after an accepted automatic floor change.
+     *
+     * @param floorKey Floor key to display
+     */
     private void showFloor(String floorKey) {
         if (currentVenue == null || currentVenue.rawMapShapes == null || floorKey == null) return;
 
@@ -1384,6 +1349,16 @@ public class IndoorMapManager {
         }
     }
 
+    /**
+     * Immediately commits an automatically detected floor change.
+     *
+     * Updates both the displayed floor and the confirmed floor reference, stores the
+     * elevation at which the change was accepted, cancels any pending delayed floor
+     * commit, and redraws the new floor overlay.
+     *
+     * @param newFloorKey Newly accepted floor
+     * @param elevation Elevation associated with the accepted floor change
+     */
     private void commitAutoFloorChange(String newFloorKey, float elevation) {
         currentFloorKey = newFloorKey;
         confirmedFloorKey = newFloorKey;
@@ -1437,7 +1412,6 @@ public class IndoorMapManager {
             float strokeWidth = 2.0f;
 
             if (t.contains("wall")) {
-//                strokeColor = Color.RED;
                 fillColor = Color.argb(0, 250, 0, 0);
                 strokeWidth = 3.5f;
             } else if (t.contains("lift")) {

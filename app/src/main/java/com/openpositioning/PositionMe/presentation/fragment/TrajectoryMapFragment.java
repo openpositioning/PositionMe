@@ -258,8 +258,6 @@ public class TrajectoryMapFragment extends Fragment {
         autoFloorSwitch.setVisibility(View.GONE);
         floorLabel.setVisibility(View.GONE);
 
-        // Setup floor up/down UI hidden initially until we know there's an indoor map
-//        setFloorControlsVisibility(View.GONE);
         // Hide particle cloud switch when EKF mode is active
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
         boolean useEkf = prefs.getBoolean("use_ekf", false);

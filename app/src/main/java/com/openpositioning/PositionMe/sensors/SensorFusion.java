@@ -309,30 +309,41 @@ public class SensorFusion implements SensorEventListener, Observer {
         return this.initialRotation;
     }
 
-    /**
-     * Initialisation function for the SensorFusion instance.
-     *
-     * Initialise all Movement sensor instances from context and predetermined types. Creates a
-     * server communication instance for sending trajectories. Saves current absolute and relative
-     * time, and initialises saving the recording to false.
-     *
-     * @param context   application context for permissions and device access.
-     *
-     * @see MovementSensor handling all SensorManager based data collection devices.
-     * @see ServerCommunications handling communication with the server.
-     * @see GNSSDataProcessor for location data processing.
-     * @see WifiDataProcessor for network data processing.
-     */
 
+
+    /**
+     * Adds a test point (ground truth or manually marked point) to a local list.
+     * This is typically used for debugging or evaluation purposes.
+     *
+     * @param timestampMillis Timestamp of the test point in milliseconds
+     * @param lat Latitude of the point
+     * @param lon Longitude of the point
+     */
     public void addTestPoint(long timestampMillis, double lat, double lon) {
         testPoints.add(new TestPoint(timestampMillis, lat, lon));
     }
 
-//    debugging-
+    /**
+     * Returns all stored test points.
+     * Used for debugging, evaluation, or visualisation of ground truth vs estimated trajectory.
+     *
+     * @return List of test points
+     */
     public List<TestPoint> getTestPoints() {
         return testPoints;
     }
 
+
+    /**
+     * Adds a test point to the trajectory at the current estimated position.
+     * This is stored in the trajectory protobuf for later analysis.
+     *
+     * NOTE:
+     * - Only works when recording is active.
+     * - Uses current latitude/longitude/elevation from sensors.
+     *
+     * @param timestamp Absolute timestamp when the test point was triggered
+     */
     public void addTestPoint(long timestamp) {
         Log.d("TestPoint", "Test point marked at: " + timestamp);
         if (!saveRecording || trajectory == null) {
@@ -354,6 +365,21 @@ public class SensorFusion implements SensorEventListener, Observer {
         Log.d("SensorFusion", "Test point added @ " + latitude + ", " + longitude);
     }
 
+    /**
+     * Initialises all sensors, processors, filters, and system components.
+     *
+     * This MUST be called before using SensorFusion.
+     *
+     * Responsibilities:
+     * - Initialise all hardware sensors (accelerometer, gyro, etc.)
+     * - Initialise WiFi, BLE, GNSS processors
+     * - Set up particle filter + EKF
+     * - Configure settings and filters
+     * - Start WiFi scanning
+     * - Acquire wake lock to keep device active during recording
+     *
+     * @param context Application context
+     */
     public void setContext(Context context) {
         this.appContext = context.getApplicationContext(); // store app context for later use
 
@@ -389,8 +415,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.bootTime = SystemClock.uptimeMillis();
         // Initialise saveRecording to false
         this.saveRecording = false;
-
-        // Other initialisations...
         this.accelMagnitude = new ArrayList<>();
         this.pdrProcessing = new PdrProcessing(context);
         this.particleFilter = new ParticleFilter();
@@ -580,48 +604,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                         float[] ekfPrev = ekfPositioning.getBestEstimate();
                         ekfPositioning.predict(dx, dy);
                         // Previous EKF position in ENU, for wall-slide constraint
-
-
-// Wall-clamp the EKF position after each prediction step
-//                        if (coordinateConverter != null
-//                                && indoorMapManager != null
-//                                && settings.getBoolean("use_wall_constraints", true)) {
-//
-//                            float[] ekfEst = ekfPositioning.getBestEstimate();
-//                            float[] clamped = indoorMapManager.clampToWallEnu(ekfPrev, ekfEst);
-//
-//                            boolean wasClamped =
-//                                    Math.abs(clamped[0] - ekfEst[0]) > 1e-4f ||
-//                                            Math.abs(clamped[1] - ekfEst[1]) > 1e-4f;
-//
-//                            if (wasClamped) {
-//                                ekfPositioning.resetAroundPosition(clamped[0], clamped[1], 2.0f);
-//                                Log.d("SensorFusion", "EKF clamped to wall: ("
-//                                        + clamped[0] + ", " + clamped[1] + ")");
-//                            }
-//                        }
-
-
-                        // Wall-slide the EKF position after each prediction step
-//                        if (coordinateConverter != null && indoorMapManager != null
-//                                && settings.getBoolean("use_wall_constraints", true)) {
-//                            float[] ekfEst = ekfPositioning.getBestEstimate();
-//                            if (prevEkfEnu != null) {
-//                                float[] adjusted = indoorMapManager.slideAlongWallEnu(prevEkfEnu, ekfEst);
-//                                if (adjusted != ekfEst) {
-//                                    ekfPositioning.resetAroundPosition(adjusted[0], adjusted[1], 2.0f);
-//                                    Log.d("SensorFusion", "EKF wall-slid to: ("
-//                                            + adjusted[0] + ", " + adjusted[1] + ")");
-//                                    prevEkfEnu = adjusted;
-//                                } else {
-//                                    prevEkfEnu = ekfEst.clone();
-//                                }
-//                            } else {
-//                                // First step — just record current position, no constraint to apply yet
-//                                prevEkfEnu = ekfEst.clone();
-//                            }
-//                        }
-
                         // Wall constraint for EKF after each prediction step
                         if (coordinateConverter != null && indoorMapManager != null
                                 && settings.getBoolean("use_wall_constraints", true)) {
@@ -813,18 +795,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                         }
                         lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
                     }
-
-                    // Detect floor change and reset particle cloud if needed
-                    int currentFloor = pdrProcessing.getCurrentFloor();
-//                    if (currentFloor != lastKnownFloor) {
-//                        float[] best = particleFilter.getBestEstimate();
-//                        particleFilter.resetAroundPosition(best[0], best[1], 8f);
-//                        ekfPositioning.resetAroundPosition(best[0], best[1], 8f);
-//                        Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
-//                                + " → " + currentFloor + ", particles reset");
-//                        lastKnownFloor = currentFloor;
-//
-//                    }
 
                 }
             }
@@ -1385,23 +1355,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     /** Trajectory points accumulated during a session, used to redraw path on CorrectionFragment. */
     private final List<LatLng> fusedTrajectoryPoints = new ArrayList<>();
 
-//    public double[] getFusedLatLon() {
-//        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
-//        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
-//        if ((ekfReady || pfReady) && coordinateConverter != null) {
-//            float[] enu = useEKF ? ekfPositioning.getBestEstimate()
-//                    : particleFilter.getBestEstimate();
-//            double[] latLon = coordinateConverter.toLatLon(enu[0], enu[1]);
-//
-//            // Only add points during active recording
-//            if (saveRecording && fusedTrajectoryPoints.size() < 2000) {
-//                fusedTrajectoryPoints.add(new LatLng(latLon[0], latLon[1]));
-//            }
-//            return latLon;
-//        }
-//        return null;
-//    }
-
     /** Returns accumulated fused trajectory points for display in CorrectionFragment. */
     public List<LatLng> getFusedTrajectoryPoints() {
         return fusedTrajectoryPoints;
@@ -1416,15 +1369,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     /** Last raw WiFi position. Returns null before first WiFi scan result. */
     public double[] getLastWifiLatLon() {
         return lastWifiLatLon;
-    }
-
-    /** Last PDR-derived position as lat/lon. Returns null before first step is detected. */
-    public double[] getLastPdrLatLon() {
-        return lastPdrLatLon;
-    }
-
-    public void resetFusedConstraintState() {
-        prevBestEnu = null;
     }
 
     /**
