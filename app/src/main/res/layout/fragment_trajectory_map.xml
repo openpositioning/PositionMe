@@ -31,6 +31,22 @@
             android:padding="8dp"
             android:gravity="center">
 
+            <ImageButton
+                android:id="@+id/toggleControlsButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/arrow_up_float"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Toggle controls"
+                android:padding="4dp" />
+
+            <LinearLayout
+                android:id="@+id/switchesPanel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center">
+
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/gnssSwitch"
                 android:layout_width="wrap_content"
@@ -48,6 +64,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/smooth_toggle" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/pdrPathSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:text="@string/pdr_path_toggle" />
  
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
@@ -68,6 +91,8 @@
                 android:spinnerMode="dropdown"
                 app:layout_constraintTop_toTopOf="parent"
                 android:elevation="5dp"/>
+
+            </LinearLayout>
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

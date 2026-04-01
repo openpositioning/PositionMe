@@ -321,12 +321,13 @@ public class RecordingFragment extends Fragment {
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
-            // Update the red PDR polyline and move the position marker (with optional smoothing).
-            // Prefer the particle filter estimate for the marker; fall back to PDR-derived position.
+            // Update the red PDR polyline and move the position marker.
+            // Priority: particle filter → WiFi fix → PDR-derived fallback.
             if (trajectoryMapFragment != null) {
                 float orientation = (float) Math.toDegrees(sensorFusion.passOrientation());
                 trajectoryMapFragment.updateUserLocation(newLocation, orientation);
                 LatLng fusedPos = sensorFusion.getFusedPosition();
+                if (fusedPos == null) fusedPos = sensorFusion.getLatLngWifiPositioning();
                 trajectoryMapFragment.updateFusedPosition(
                         fusedPos != null ? fusedPos : newLocation, orientation);
             }
@@ -364,11 +365,13 @@ public class RecordingFragment extends Fragment {
             }
         }
  
-        // WiFi observation: add an orange marker whenever a new WiFi fix arrives
+        // WiFi observation: add an orange marker and correct the particle filter
+        // whenever a new WiFi fix arrives
         LatLng wifiObs = sensorFusion.getLatLngWifiPositioning();
         if (wifiObs != null && !wifiObs.equals(lastWifiObsPos)) {
             trajectoryMapFragment.addObservationMarker(wifiObs,
                     TrajectoryMapFragment.ObservationSource.WIFI);
+            sensorFusion.correctWithWifiPosition(wifiObs);
             lastWifiObsPos = wifiObs;
         }
  

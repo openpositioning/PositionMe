@@ -30,7 +30,14 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 
 
@@ -87,10 +94,11 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline fusedTrajectoryPolyline;
     private LatLng lastFusedTrajectoryPoint = null;
  
-    // One moving marker per source — each updates in place rather than accumulating
-    private Marker gnssObsMarker = null;
-    private Marker wifiObsMarker = null;
-    private Marker pdrObsMarker  = null;
+    // Last 3 observation circle-markers per source; index 0 = newest (label "1")
+    private static final int OBS_HISTORY = 3;
+    private final Deque<Marker> gnssObsMarkers = new ArrayDeque<>();
+    private final Deque<Marker> wifiObsMarkers = new ArrayDeque<>();
+    private final Deque<Marker> pdrObsMarkers  = new ArrayDeque<>();
  
     // EMA smoothing state
     private boolean smoothingEnabled = false;
@@ -118,11 +126,14 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
     private SwitchMaterial smoothSwitch;
+    private SwitchMaterial pdrPathSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+    private android.widget.LinearLayout switchesPanel;
+    private android.widget.ImageButton toggleControlsButton;
 
 
     public TrajectoryMapFragment() {
@@ -148,10 +159,22 @@ public class TrajectoryMapFragment extends Fragment {
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         smoothSwitch    = view.findViewById(R.id.smoothSwitch);
+        pdrPathSwitch   = view.findViewById(R.id.pdrPathSwitch);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
         switchColorButton = view.findViewById(R.id.lineColorButton);
+        switchesPanel = view.findViewById(R.id.switchesPanel);
+        toggleControlsButton = view.findViewById(R.id.toggleControlsButton);
+        toggleControlsButton.setOnClickListener(v -> {
+            if (switchesPanel.getVisibility() == View.VISIBLE) {
+                switchesPanel.setVisibility(View.GONE);
+                toggleControlsButton.setImageResource(android.R.drawable.arrow_down_float);
+            } else {
+                switchesPanel.setVisibility(View.VISIBLE);
+                toggleControlsButton.setImageResource(android.R.drawable.arrow_up_float);
+            }
+        });
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -216,6 +239,13 @@ public class TrajectoryMapFragment extends Fragment {
             smoothSwitch.setOnCheckedChangeListener((btn, isChecked) ->
                     setSmoothingEnabled(isChecked));
         }
+
+        // PDR path toggle — hidden by default, shown only when user enables it
+        if (pdrPathSwitch != null) {
+            pdrPathSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+                if (polyline != null) polyline.setVisible(isChecked);
+            });
+        }
  
         // Auto-floor toggle: start/stop periodic floor evaluation
         sensorFusion = SensorFusion.getInstance();
@@ -267,11 +297,12 @@ public class TrajectoryMapFragment extends Fragment {
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Initialize an empty polyline
+        // Initialize an empty polyline — hidden by default, toggled via pdrPathSwitch
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(5f)
-                .add() // start empty
+                .visible(false)
+                .add()
         );
 
         // GNSS path in blue
@@ -520,52 +551,73 @@ public class TrajectoryMapFragment extends Fragment {
         lastFusedTrajectoryPoint = pos;
     }
  
-    /**
-     * Places or moves a colour-coded observation marker for the given source.
-     * Each source maintains exactly one marker on the map — it moves to the latest position
-     * rather than accumulating multiple markers.
-     *
-     * @param pos    Absolute position of the observation.
-     * @param source Which positioning source produced this observation.
-     */
+    // Show a numbered circle marker for the given source, keeping last 3 positions.
+    // Circle 1 = latest, 3 = oldest.
     public void addObservationMarker(@NonNull LatLng pos, @NonNull ObservationSource source) {
         if (gMap == null) return;
 
-        Marker existing;
-        float hue;
+        Deque<Marker> deque;
+        int solidColor;
         String title;
         switch (source) {
             case GNSS:
-                existing = gnssObsMarker;
-                hue      = BitmapDescriptorFactory.HUE_AZURE;
-                title    = "GNSS";
+                deque = gnssObsMarkers;
+                solidColor = COLOR_GNSS_OBS;
+                title = "GNSS";
                 break;
             case WIFI:
-                existing = wifiObsMarker;
-                hue      = BitmapDescriptorFactory.HUE_ORANGE;
-                title    = "WiFi";
+                deque = wifiObsMarkers;
+                solidColor = COLOR_WIFI_OBS;
+                title = "WiFi";
                 break;
             default: // PDR
-                existing = pdrObsMarker;
-                hue      = BitmapDescriptorFactory.HUE_RED;
-                title    = "PDR";
+                deque = pdrObsMarkers;
+                solidColor = COLOR_PDR_OBS;
+                title = "PDR";
                 break;
         }
 
-        if (existing != null) {
-            existing.setPosition(pos);
-        } else {
-            Marker m = gMap.addMarker(new MarkerOptions()
-                    .position(pos)
-                    .title(title)
-                    .anchor(0.5f, 0.5f)
-                    .icon(BitmapDescriptorFactory.defaultMarker(hue)));
-            switch (source) {
-                case GNSS: gnssObsMarker = m; break;
-                case WIFI: wifiObsMarker = m; break;
-                default:   pdrObsMarker  = m; break;
-            }
+        if (deque.size() >= OBS_HISTORY) {
+            deque.removeLast().remove();
         }
+
+        // Bump labels on existing markers
+        int newLabel = deque.size() + 1;
+        for (Marker m : deque) {
+            m.setIcon(BitmapDescriptorFactory.fromBitmap(makeObsCircleBitmap(solidColor, newLabel)));
+            newLabel--;
+        }
+
+        Marker newest = gMap.addMarker(new MarkerOptions()
+                .position(pos)
+                .title(title)
+                .anchor(0.5f, 0.5f)
+                .zIndex(1f)
+                .icon(BitmapDescriptorFactory.fromBitmap(makeObsCircleBitmap(solidColor, 1))));
+        deque.addFirst(newest);
+    }
+
+    // Creates a semi-transparent filled circle bitmap with a number in the centre
+    private Bitmap makeObsCircleBitmap(int solidColor, int number) {
+        int size = 64;
+        Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+
+        int fillColor = Color.argb(160, Color.red(solidColor), Color.green(solidColor), Color.blue(solidColor));
+        Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fillPaint.setStyle(Paint.Style.FILL);
+        fillPaint.setColor(fillColor);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f - 2, fillPaint);
+
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        textPaint.setTextSize(size * 0.45f);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        float textY = size / 2f - (textPaint.descent() + textPaint.ascent()) / 2f;
+        canvas.drawText(String.valueOf(number), size / 2f, textY, textPaint);
+
+        return bmp;
     }
  
     /**
@@ -649,10 +701,13 @@ public class TrajectoryMapFragment extends Fragment {
         }
         testPointMarkers.clear();
 
-        // Clear all per-source observation markers
-        if (gnssObsMarker != null) { gnssObsMarker.remove(); gnssObsMarker = null; }
-        if (wifiObsMarker != null) { wifiObsMarker.remove(); wifiObsMarker = null; }
-        if (pdrObsMarker  != null) { pdrObsMarker.remove();  pdrObsMarker  = null; }
+        // Clear all per-source observation circle-markers
+        for (Marker m : gnssObsMarkers) m.remove();
+        gnssObsMarkers.clear();
+        for (Marker m : wifiObsMarkers) m.remove();
+        wifiObsMarkers.clear();
+        for (Marker m : pdrObsMarkers) m.remove();
+        pdrObsMarkers.clear();
  
         // Clear fused trajectory
         if (fusedTrajectoryPolyline != null) {
@@ -670,6 +725,7 @@ public class TrajectoryMapFragment extends Fragment {
             polyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(5f)
+                    .visible(pdrPathSwitch != null && pdrPathSwitch.isChecked())
                     .add());
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)

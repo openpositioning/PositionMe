@@ -119,6 +119,7 @@
     <string name="choose_map">Choose Map</string>
     <string name="auto_floor">❇️ Auto Floor </string>
     <string name="smooth_toggle">Smooth</string>
+    <string name="pdr_path_toggle">PDR Path</string>
     <string name="legend_gnss">GNSS fix</string>
     <string name="legend_wifi">WiFi fix</string>
     <string name="legend_pdr">PDR step</string>

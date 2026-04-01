@@ -636,6 +636,19 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Feeds a WiFi position fix into the particle filter as a correction measurement.
+     * WiFi is more reliable indoors than GNSS, so this prevents PDR drift accumulating
+     * in environments where GNSS accuracy is too poor to pass the filter's threshold.
+     *
+     * @param wifiLatLng WiFi-derived position from the OpenPositioning API.
+     */
+    public void correctWithWifiPosition(LatLng wifiLatLng) {
+        if (particleFilter != null && particleFilter.isInitialised() && wifiLatLng != null) {
+            particleFilter.updateWeights(wifiLatLng, 8.0f);
+        }
+    }
+
+    /**
      * Returns the current floor the user is on, obtained using WiFi positioning.
      *
      * @return current floor number.
