@@ -93,6 +93,7 @@ public class TrajectoryMapFragment extends Fragment {
     private long lastCandidateTime = 0;
 
     private final MapMatchingConfig mapMatchingConfig = new MapMatchingConfig();
+    private LatLng wallOrigin;
 
     // UI
     private Spinner switchMapSpinner;
@@ -772,13 +773,18 @@ public class TrajectoryMapFragment extends Fragment {
     private void updateWallsForPdr() {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
-        if (indoorMapManager.getLastLocation() == null) return;
+        LatLng current = indoorMapManager.getLastLocation();
+        if (current == null) return;
+
+        if (wallOrigin == null) {
+            wallOrigin = current;
+        }
 
         FloorplanApiClient.FloorShapes floor = indoorMapManager.getCurrentFloorShape();
         if (floor == null) return;
 
         List<List<PointF>> walls = WallGeometryBuilder.buildWalls(
-                floor, indoorMapManager.getLastLocation());
+                floor, wallOrigin);
         sensorFusion.setPdrWalls(walls);
     }
 }
