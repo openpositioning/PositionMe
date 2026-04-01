@@ -330,6 +330,13 @@ private SwitchMaterial showPdrPathSwitch;
         floorLabel.setText("Floor: -");
 
 
+
+// Hide floor controls until a venue is selected
+        floorUpButton.setVisibility(View.GONE);
+        floorDownButton.setVisibility(View.GONE);
+        autoFloorSwitch.setVisibility(View.GONE);
+        floorLabel.setVisibility(View.GONE);
+
         // Setup floor up/down UI hidden initially until we know there's an indoor map
 //        setFloorControlsVisibility(View.GONE);
 
@@ -484,7 +491,7 @@ private SwitchMaterial showPdrPathSwitch;
 
         floorUpButton.setOnClickListener(v -> {
             // If user manually changes floor, turn off auto floor
-            autoFloorSwitch.setChecked(false);
+//            autoFloorSwitch.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
                 String fk = indoorMapManager.getCurrentFloorKey();
@@ -796,17 +803,19 @@ private SwitchMaterial showPdrPathSwitch;
                     heightChange
             );
             oldfloor = newfloor;
-            floorResult = indoorMapManager.acceptFloorChange(
-                    correctedLocation,
-                    oldLocation,
-                    currentElevation
-            );
-            if (floorResult.snappedLocation != null) {
-                correctedLocation = floorResult.snappedLocation;
-                newfloor = floorResult.floorKey;
-            }
-            if (floorResult.changedFloor && floorResult.highlightcenter != null) {
-                highlightAccessPoint(floorResult.highlightcenter);
+            if (autoFloorSwitch.isChecked()) {
+                floorResult = indoorMapManager.acceptFloorChange(
+                        correctedLocation,
+                        oldLocation,
+                        currentElevation
+                );
+                if (floorResult.snappedLocation != null) {
+                    correctedLocation = floorResult.snappedLocation;
+                    newfloor = floorResult.floorKey;
+                }
+                if (floorResult.changedFloor && floorResult.highlightcenter != null) {
+                    highlightAccessPoint(floorResult.highlightcenter);
+                }
             }
         }
             if (!Objects.equals(oldfloor, newfloor)) {
@@ -1333,6 +1342,7 @@ private SwitchMaterial showPdrPathSwitch;
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
         autoFloorSwitch.setVisibility(visibility);
+        floorLabel.setVisibility(visibility);
     }
 
     public void clearMapAndReset() {
