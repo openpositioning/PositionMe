@@ -1998,12 +1998,17 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     private boolean isStationary(List<Double> samples) {
         if (samples.isEmpty()) return false;
+        // Require at least 5 samples; fewer samples means a very short step interval,
+        // which is more likely genuine movement than noise.
+        if (samples.size() < 5) return false;
         double max = Double.MIN_VALUE, min = Double.MAX_VALUE;
         for (double v : samples) {
             if (v > max) max = v;
             if (v < min) min = v;
         }
-        return (max - min) < 0.5;
+        // Lowered threshold from 0.5 to 0.3 m/s²: walking in a bag/pocket produces
+        // a steady magnitude that varies less than 0.5 but still more than 0.3.
+        return (max - min) < 0.3;
     }
 
     /**
