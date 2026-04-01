@@ -25,17 +25,15 @@ import java.util.List;
 
 /**
  * Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
- * <p>
- * The ReplayFragment is responsible for visualizing and replaying trajectory data captured during
- * previous recordings. It loads trajectory data from a JSON file, updates the map with user movement,
+ * Loads trajectory data from a JSON file, updates the map with user movement,
  * and provides UI controls for playback, pause, and seek functionalities.
- * <p>
+ *
  * Features:
  * - Loads trajectory data from a file and displays it on a map.
  * - Provides playback controls including play, pause, restart, and go to end.
  * - Updates the trajectory dynamically as playback progresses.
  * - Allows users to manually seek through the recorded trajectory.
- * - Integrates with {@link TrajectoryMapFragment} for map visualization.
+ * - Integrates with TrajectoryMapFragment for map visualization.
  *
  * @see TrajectoryMapFragment The map fragment displaying the trajectory.
  * @see ReplayActivity The activity managing the replay workflow.

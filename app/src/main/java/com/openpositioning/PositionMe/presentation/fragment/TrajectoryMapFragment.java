@@ -277,11 +277,8 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Initialize the map settings with the provided GoogleMap instance.
-     * <p>
-     *     The method sets basic map settings, initializes the indoor map manager,
-     *     and creates an empty polyline for user movement tracking.
-     *     The method also initializes the GNSS polyline for tracking GNSS path.
-     *     The method sets the map type to Hybrid and initializes the map with these settings.
+     * Sets basic map settings, initializes the indoor map manager,
+     * and creates an empty polyline for user movement tracking.
      *
      * @param map
      */
@@ -322,19 +319,7 @@ public class TrajectoryMapFragment extends Fragment {
 
 
     /**
-     * Initialize the map type spinner with the available map types.
-     * <p>
-     *     The spinner allows the user to switch between different map types
-     *     (e.g. Hybrid, Normal, Satellite) to customize their map view.
-     *     The spinner is populated with the available map types and listens
-     *     for user selection to update the map accordingly.
-     *     The map type is updated directly on the GoogleMap instance.
-     *     <p>
-     *         Note: The spinner is initialized with the default map type (Hybrid).
-     *         The map type is updated on user selection.
-     *     </p>
-     * </p>
-     *     @see com.google.android.gms.maps.GoogleMap The GoogleMap instance to update map type.
+     * Initialize the map type spinner with the available map types (Hybrid, Normal, Satellite).
      */
     private void initMapTypeSpinner() {
         if (switchMapSpinner == null) return;
@@ -375,7 +360,7 @@ public class TrajectoryMapFragment extends Fragment {
     /**
      * Records the user’s current PDR-derived location and extends the red trajectory polyline.
      * Does NOT move the orientation marker — marker updates are handled exclusively by
-     * {@link #updateFusedPosition} to avoid competing updates from different loops.
+     * updateFusedPosition() to avoid competing updates from different loops.
      *
      * @param newLocation The new PDR-derived location.
      * @param orientation Unused here; kept for API compatibility.
@@ -409,12 +394,8 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Set the initial camera position for the map.
-     * <p>
-     *     The method sets the initial camera position for the map when it is first loaded.
-     *     If the map is already ready, the camera is moved immediately.
-     *     If the map is not ready, the camera position is stored until the map is ready.
-     *     The method also tracks if there is a pending camera move.
-     * </p>
+     * If the map is not ready yet, the position is stored and applied once it is.
+     *
      * @param startLocation The initial camera position to set.
      */
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
@@ -488,8 +469,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Updates the user's best-estimate position on the map.
-     * When smoothing is enabled an Exponential Moving Average filter (α = {@value #EMA_ALPHA})
-     * is applied before moving the orientation marker, producing visibly smoother motion.
+     * When smoothing is enabled an EMA filter is applied before moving the orientation marker.
      *
      * @param pos         Raw best-estimate position from the fusion / fallback pipeline.
      * @param orientation Device heading in degrees (clockwise from north).
@@ -622,10 +602,9 @@ public class TrajectoryMapFragment extends Fragment {
  
     /**
      * Enables or disables the EMA position smoothing filter.
-     * Disabling resets the filter state so the next call to
-     * {@link #updateFusedPosition} re-seeds it from the raw position.
+     * Disabling resets the filter so the next call re-seeds from the raw position.
      *
-     * @param enabled {@code true} to enable smoothing.
+     * @param enabled true to enable smoothing.
      */
     public void setSmoothingEnabled(boolean enabled) {
         this.smoothingEnabled = enabled;
@@ -739,21 +718,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Draw the building polygon on the map
-     * <p>
-     *     The method draws a polygon representing the building on the map.
-     *     The polygon is drawn with specific vertices and colors to represent
-     *     different buildings or areas on the map.
-     *     The method removes the old polygon if it exists and adds the new polygon
-     *     to the map with the specified options.
-     *     The method logs the number of vertices in the polygon for debugging.
-     *     <p>
-     *
-     *    Note: The method uses hard-coded vertices for the building polygon.
-     *
-     *    </p>
-     *
-     *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
+     * Draw the building polygon on the map using hard-coded vertices.
+     * Removes any existing polygon before adding the new one.
      */
     private void drawBuildingPolygon() {
         if (gMap == null) {

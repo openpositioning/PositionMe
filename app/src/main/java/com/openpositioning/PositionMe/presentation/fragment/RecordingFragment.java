@@ -278,11 +278,7 @@ public class RecordingFragment extends Fragment {
     private void updateFusedDisplay() {
         if (trajectoryMapFragment == null) return;
 
-        // Prefer WiFi fix; fall back to PDR-derived current location (no raw GNSS)
-        LatLng bestEstimate = sensorFusion.getLatLngWifiPositioning();
-        if (bestEstimate == null) {
-            bestEstimate = trajectoryMapFragment.getCurrentLocation();
-        }
+        LatLng bestEstimate = sensorFusion.getFusedPosition();
         if (bestEstimate == null) return;
 
         // Append to fused trajectory only if the position has moved > 0.3 m
