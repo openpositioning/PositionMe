@@ -21,9 +21,9 @@
             app:title="@string/split_trajectory_title" />
 
         <SeekBarPreference
-            android:max="30"
-            android:min="5"
-            app:defaultValue="10"
+            android:max="7"
+            android:min="1"
+            app:defaultValue="5"
             app:dependency="split_trajectory"
             app:key="split_duration"
             app:showSeekBarValue="true"
@@ -75,7 +75,7 @@
             app:defaultValue="false"/>
 
         <EditTextPreference
-            android:id="@+id/weibergKInput"
+            android:id="@+id/weiberg_k"
             android:inputType="number"
             app:key="weiberg_k"
             app:title="@string/weiberg_K_title"
@@ -128,6 +128,104 @@
             app:defaultValue="5"
             android:summary="@string/wifi_scan_interval" />
 
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/fusion_constants_header">
+        <SwitchPreferenceCompat
+            app:key="overwrite_fusion_constants"
+            app:title="@string/constants_enable_title"
+            app:summaryOff="@string/constants_summary_off"
+            app:summaryOn="@string/constants_summary_on"
+            app:defaultValue="false"/>
+
+        <SeekBarPreference
+            android:max="100"
+            android:min="1"
+            app:defaultValue="20"
+            app:dependency="overwrite_fusion_constants"
+            app:key="particle_count"
+            app:showSeekBarValue="true"
+            app:title="@string/particle_count_title"
+            android:summary="@string/particle_count"/>
+
+        <SeekBarPreference
+            android:max="100"
+            android:min="1"
+            app:defaultValue="25"
+            app:dependency="overwrite_fusion_constants"
+            app:key="alpha_orientation"
+            app:showSeekBarValue="true"
+            app:title="@string/alpha_orientation_title"
+            android:summary="@string/alpha_orientation"/>
+
+        <SeekBarPreference
+            android:max="100"
+            android:min="1"
+            app:defaultValue="50"
+            app:dependency="overwrite_fusion_constants"
+            app:key="resampling_variance"
+            app:showSeekBarValue="true"
+            app:title="@string/resampling_variance_title"
+            android:summary="@string/resampling_variance"/>
+
+        <SeekBarPreference
+            android:max="100"
+            android:min="1"
+            app:defaultValue="10"
+            app:dependency="overwrite_fusion_constants"
+            app:key="particle_threshold"
+            app:showSeekBarValue="true"
+            app:title="@string/particle_threshold_title"
+            android:summary="@string/particle_threshold"/>
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/kalman_section_title">
+
+        <SwitchPreferenceCompat
+            app:key="overwrite_kalman_constants"
+            app:title="@string/kalman_constants_enable_title"
+            app:summaryOff="@string/kalman_constants_summary_off"
+            app:summaryOn="@string/kalman_constants_summary_on"
+            app:defaultValue="false"/>
+
+        <EditTextPreference
+            android:id="@+id/kalman_pred_noise_std_dev"
+            android:inputType="number"
+            app:key="kalman_pred_noise_std_dev"
+            app:title="@string/kalman_pred_noise_title"
+            app:dependency="overwrite_kalman_constants"
+            app:defaultValue="0.1"
+            android:summary="@string/kalman_pred_noise" />
+
+        <EditTextPreference
+            android:id="@+id/kalman_pred_bias_std_dev"
+            android:inputType="number"
+            app:key="kalman_pred_bias_std_dev"
+            app:title="@string/kalman_noise_bias_title"
+            app:dependency="overwrite_kalman_constants"
+            app:defaultValue="0.1"
+            android:summary="@string/kalman_noise_bias" />
+
+        <EditTextPreference
+            android:id="@+id/kalman_noise"
+            android:inputType="number"
+            app:key="kalman_noise"
+            app:title="@string/kalman_noise_title"
+            app:dependency="overwrite_kalman_constants"
+            app:defaultValue="0.1"
+            android:summary="@string/kalman_noise" />
+
+    </PreferenceCategory>
+
+
+    <PreferenceCategory app:title="Developer Settings">
+        <SwitchPreferenceCompat
+            app:key="debug_mode"
+            app:title="@string/debug_mode_title"
+            app:summaryOff="@string/debug_mode_disabled"
+            app:summaryOn="@string/debug_mode_enabled"
+            app:defaultValue="false"/>
     </PreferenceCategory>
 
 

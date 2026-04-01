@@ -49,7 +49,7 @@
     <string name="elevation">Elevation: %1s</string>
     <string name="averageStepLgn">Computed Avg. Step Length</string>
     <string name="correctStepLgn">unit: cm</string>
-    <string name="locationInstructions">Long press and drag the marker to your start location</string>
+    <string name="locationWaiting">Waiting for starting location... (GNSS or Wi-Fi)</string>
     <string name="correctionInstructions">Zoom, scroll and rotate the map \n to correct the path</string>
 
     <!-- Sensor Info -->
@@ -67,6 +67,7 @@
     <string name="sync_header">Sync</string>
     <string name="user_header">User information</string>
     <string name="constants_header">Constants</string>
+    <string name="fusion_constants_header">Fusion Constants</string>
 
     <!-- Content Descriptions -->
     <string name="recording">Recording in progress</string>
@@ -98,6 +99,12 @@
     <string name="constants_summary_on">The app will use the values provided below</string>
     <string name="weiberg_K_title">Weiberg K</string>
     <string name="weiberg_K">K used in the Weiberg stride length estimation</string>
+    <string name="alpha_orientation_title">Orientation Sensitivity (%)</string>
+    <string name="alpha_orientation">Adjust the turning sensitivity during recordings</string>
+    <string name="particle_count_title">Particle Count</string>
+    <string name="particle_count">The number of particles used for indoor mapping with Particle Fusion</string>
+    <string name="fusion_observation_count_title">Observations Count (Fusion)</string>
+    <string name="fusion_observation_count">The number of stored observations used in the particle fusion algorithm</string>
     <string name="elevation_seconds_title">Elevation seconds</string>
     <string name="elevation_seconds">Number of samples in the elevation buffer</string>
     <string name="accel_samples">Number of samples in the vertical/horizontal movement buffer</string>
@@ -108,6 +115,22 @@
     <string name="filter_coefficient_title">Orientation filter coefficient</string>
     <string name="wifi_scan_interval">Scan interval for wifi networks. A scan takes approximately two seconds.</string>
     <string name="wifi_scan_title">WiFi interval</string>
+    <!--  Fusion Constants  -->
+    <string name="resampling_variance_title">Resampling Variance (%)</string>
+    <string name="resampling_variance">Adjust the spread of particles during repopulation events</string>
+    <string name="particle_threshold_title">Particle Threshold (%)</string>
+    <string name="particle_threshold">The maximum weight a single particle can have before repopulation.</string>
+    <!-- Kalman Filter Constants -->
+    <string name="kalman_section_title">Kalman Filter Settings</string>
+    <string name="kalman_constants_enable_title">Adjust the Kalman filter</string>
+    <string name="kalman_constants_summary_off">The app will use the default constants</string>
+    <string name="kalman_constants_summary_on">The app will use the values provided below</string>
+    <string name="kalman_noise_title">Orientation Measurement Noise</string>
+    <string name="kalman_noise">Uncertainty of the PDR orientation measurement. Larger values correspond to less trust in the PDR value.</string>
+    <string name="kalman_pred_noise_title">Kalman Filter Predicted Noise</string>
+    <string name="kalman_pred_noise">Influence of process noise of Kalman filter orientation predictions. Larger values correspond to less trust in the gyroscope predictions.</string>
+    <string name="kalman_noise_bias_title">Orientation Measurement Noise</string>
+    <string name="kalman_noise_bias">Gyroscope drift. Larger values correspond to faster expected gyroscope drift.</string>
     <!-- Mobile data Preferences -->
     <string name="mobile_data_title">Sync using mobile data</string>
     <string name="mobile_data_summary_off">The app will only send data through a WiFi connection</string>
@@ -116,11 +139,17 @@
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Colour</string>
-    <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="trajMapSettings">Map Settings</string>
+    <string name="autoPanSwitch">🔭 Autopan</string>
+    <string name="gnssSwitch">🛰 GNSS</string>
+    <string name="pdrSwitch">🥾 PDR</string>
+    <string name="wifiAPSSwitch">🛜 Wi-Fi</string>
+    <string name="recordedPathSwitch">🎥 Recorded Path</string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
     <string name="auto_floor">❇️ Auto Floor </string>
+    <string name="show_particles">Show Particles (Fusion)</string>
     <string name="gnss_error">GNSS error:</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
@@ -145,5 +174,9 @@
     <string name="button_indoorPositioning">Indoor Positioning (In Development)</string>
     <string name="text_map_type">Map Type</string>
     <string name="drop_marker">Drop Marker</string>
+    <!--  Debug Mode  -->
+    <string name="debug_mode_title">Developer Mode</string>
+    <string name="debug_mode_enabled">Developer mode is enabled.</string>
+    <string name="debug_mode_disabled">Developer mode is not enabled.</string>
 
 </resources>

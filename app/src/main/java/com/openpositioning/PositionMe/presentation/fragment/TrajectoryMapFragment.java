@@ -1,10 +1,16 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.fusion.FusionConstants.LINE_WEIGHT_PARTICLE;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.MAP_PARTICLE_COLOUR;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.MAP_PARTICLE_WEIGHTING;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.MAP_WIFI_COLOUR;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.OBSERVATION_TYPE_WIFI;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.WIFI_STD_DEV;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_FILL_PREVIEW;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_FILL_TRANSPARENT;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_COLOUR;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_FUSION;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_GNSS;
-import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_MONOCHROME;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.MAP_DRAWING_PRIORITY_MAX;
 import static com.openpositioning.PositionMe.utils.UtilConstants.LINE_WEIGHT_PATH;
 import static com.openpositioning.PositionMe.utils.UtilConstants.ZOOM_LEVEL_DEFAULT;
@@ -16,7 +22,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.Spinner;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -26,6 +31,8 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -34,19 +41,21 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fusion.Particle;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.Building;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
  *
  * <p>The TrajectoryMapFragment provides a map interface for visualizing movement trajectories, GNSS
  * tracking, and indoor mapping. It manages map settings, user interactions, and real-time updates
- * to user location and GNSS markers.
+ * to user location and GNSS timedMarkers.
  *
  * <p>Key Features: - Displays a Google Map with support for different map types (Hybrid, Normal,
  * Satellite). - Tracks and visualizes user movement using polylines. - Supports GNSS position
@@ -64,15 +73,20 @@ import java.util.List;
 public class TrajectoryMapFragment extends Fragment {
     private static final String TAG = "TrajectoryMapFragment";
 
-    private GoogleMap gMap; // Google Maps instance
+    // Google Maps instance
+    private GoogleMap gMap;
+
+    // Lines and headers for each type of positioning
+    private Polyline pdrPolyline;
+    private Marker pdrMarker;
+    private Marker gnssMarker;
+    private Polyline gnssPolyline;
+    private Marker fusionMarker;
+    private Polyline fusionPolyline;
+
     private LatLng currentLocation; // Stores the user's current location
-    private Marker orientationMarker; // Marker representing user's heading
-    private Marker gnssMarker; // GNSS position marker
-    private Polyline polyline; // Polyline representing user's movement path
-    private boolean isColourEnabled = true; // Tracks whether the polyline color is red
-    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
-    private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
+    private LatLng lastFusedLocation = null; //
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
@@ -83,15 +97,19 @@ public class TrajectoryMapFragment extends Fragment {
     // UI
     private Spinner switchMapSpinner;
     private SwitchMaterial gnssSwitch;
+    private SwitchMaterial pdrSwitch;
+    private SwitchMaterial wifiAPSSwitch;
     private SwitchMaterial autoFloorSwitch;
     private SwitchMaterial autopanSwitch;
+    private SwitchMaterial showParticlesSwitch;
     private boolean isInsideBuilding = false;
-    private String currentFloor = "no_floor";
+    private String currentFloorName = "no_floor";
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton,
             floorDownButton;
-    private Button switchColorButton;
-    private List<Marker> markers = new ArrayList<>();
+    private List<Marker> timedMarkers = new ArrayList<>();
+    private List<Circle> particleCircles = new ArrayList<>();
+    private List<Circle> wifiAPSCircles = new ArrayList<>();
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -120,11 +138,15 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         autopanSwitch = view.findViewById(R.id.switchAutopan);
+
         gnssSwitch = view.findViewById(R.id.gnssSwitch);
+        pdrSwitch = view.findViewById(R.id.pdrSwitch);
+        wifiAPSSwitch = view.findViewById(R.id.wifiAPSSwitch);
+
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
+        showParticlesSwitch = view.findViewById(R.id.showParticles);
         floorUpButton = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
 
         sensorFusion = SensorFusion.getInstance();
 
@@ -164,27 +186,24 @@ public class TrajectoryMapFragment extends Fragment {
         // GNSS Switch
         gnssSwitch.setOnCheckedChangeListener(
                 (buttonView, isChecked) -> {
-                    isGnssOn = isChecked;
-                    if (!isChecked && gnssMarker != null) {
-                        gnssMarker.remove();
-                        gnssMarker = null;
-                    }
+                    setLineVisibility(gnssPolyline, gnssMarker, isChecked);
                 });
 
-        // Color switch
-        switchColorButton.setOnClickListener(
-                v -> {
-                    if (polyline != null) {
-                        if (isColourEnabled) {
-                            switchColorButton.setBackgroundColor(COLOUR_PATH_MONOCHROME);
-                            polyline.setColor(COLOUR_PATH_MONOCHROME);
-                        } else {
-                            switchColorButton.setBackgroundColor(COLOUR_PATH_COLOUR);
-                            polyline.setColor(COLOUR_PATH_COLOUR);
-                        }
-                        isColourEnabled = !isColourEnabled;
-                    }
+        // PDR Switch
+        pdrSwitch.setOnCheckedChangeListener(
+                (buttonView, isChecked) -> {
+                    setLineVisibility(pdrPolyline, pdrMarker, isChecked);
                 });
+
+        // Wi-Fi APS switch
+        wifiAPSSwitch.setOnCheckedChangeListener(
+                (buttonView, isChecked) -> {
+                    if (!isChecked) removeAllWiFiAPS();
+                });
+
+        // Auto-Pan switch
+        autopanSwitch.setOnCheckedChangeListener(
+                (buttonView, isChecked) -> checkAutoPan(isChecked, currentLocation));
 
         floorUpButton.setOnClickListener(
                 v -> {
@@ -221,6 +240,91 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
+     * Draw the API response's estimated positions based on Wi-Fi fingerprinting
+     *
+     * @see com.openpositioning.PositionMe.fusion.Fusion Fusion
+     */
+    private void updateWiFiAPSDisplay() {
+        if (wifiAPSSwitch.isChecked()) {
+
+            Map<String, Object> wifiObservationsMap =
+                    sensorFusion.fusion.getObservationsByType(OBSERVATION_TYPE_WIFI);
+            List<LatLng> positions = (List<LatLng>) wifiObservationsMap.get("positions");
+            List<String> floorNames = (List<String>) wifiObservationsMap.get("floor_names");
+
+            for (int i = 0; i < positions.size(); i++) {
+                LatLng position = positions.get(i);
+                String floorName = floorNames.get(i);
+
+                // Do not redraw circles which already exist
+                boolean circleKnown = false;
+                for (Circle circle : wifiAPSCircles) {
+                    if (circle.getCenter().equals(position)) {
+                        circleKnown = true;
+                        circle.setVisible(floorName.equals(currentFloorName));
+                        break;
+                    }
+                }
+                if (circleKnown) continue;
+
+                if (floorName.equals(currentFloorName)) {
+                    Circle wifiAPSCircle =
+                            gMap.addCircle(
+                                    new CircleOptions()
+                                            .center(position)
+                                            .zIndex(4)
+                                            .radius(WIFI_STD_DEV / 2)
+                                            .strokeColor(MAP_WIFI_COLOUR)
+                                            .fillColor(COLOUR_FLOOR_PLAN_FILL_TRANSPARENT));
+                    wifiAPSCircles.add(wifiAPSCircle);
+                }
+            }
+
+            // Remove old observations
+            while (wifiAPSCircles.size() > positions.size()) {
+                Circle oldCircle = wifiAPSCircles.get(0);
+                if (oldCircle != null) {
+                    oldCircle.remove();
+                }
+                wifiAPSCircles.remove(0);
+            }
+        }
+    }
+
+    private void removeAllWiFiAPS() {
+        for (Circle circle : wifiAPSCircles) {
+            if (circle != null) {
+                circle.remove();
+            }
+        }
+        wifiAPSCircles.clear();
+    }
+
+    /**
+     * Helper function to show or hide a tracking method's line on the map
+     *
+     * @param polyline The line of the tracking method
+     * @param marker The head of the tracking method's line
+     * @param visibility True to show the line; false to hide the line
+     */
+    private void setLineVisibility(Polyline polyline, Marker marker, boolean visibility) {
+        if (polyline != null) polyline.setVisible(visibility);
+        if (marker != null) marker.setVisible(visibility);
+    }
+
+    /**
+     * Helper function for auto-pan support
+     *
+     * @param status True for auto-pan enabled; false for disabled
+     * @param position The position to zoom to
+     */
+    private void checkAutoPan(boolean status, LatLng position) {
+        if (status && position != null) {
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, ZOOM_LEVEL_DEFAULT));
+        }
+    }
+
+    /**
      * Initialize the map settings with the provided GoogleMap instance.
      *
      * <p>The method sets basic map settings, initializes the indoor map manager, and creates an
@@ -242,7 +346,7 @@ public class TrajectoryMapFragment extends Fragment {
         indoorMapManager = new IndoorMapManager(map);
 
         // Initialize an empty polyline
-        polyline =
+        pdrPolyline =
                 map.addPolyline(
                         new PolylineOptions()
                                 .color(COLOUR_PATH_COLOUR)
@@ -260,6 +364,15 @@ public class TrajectoryMapFragment extends Fragment {
                                 .zIndex(MAP_DRAWING_PRIORITY_MAX)
                                 .add() // start empty
                         );
+
+        // Fused path
+        fusionPolyline =
+                map.addPolyline(
+                        new PolylineOptions()
+                                .color(COLOUR_PATH_FUSION)
+                                .width(LINE_WEIGHT_PATH)
+                                .zIndex(MAP_DRAWING_PRIORITY_MAX)
+                                .add()); // start empty
     }
 
     /**
@@ -319,7 +432,7 @@ public class TrajectoryMapFragment extends Fragment {
      * @param newLocation The new location to plot.
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
-    public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+    public void updatePDRLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
         // Keep track of current location
@@ -327,8 +440,8 @@ public class TrajectoryMapFragment extends Fragment {
         this.currentLocation = newLocation;
 
         // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker =
+        if (pdrMarker == null) {
+            pdrMarker =
                     gMap.addMarker(
                             new MarkerOptions()
                                     .position(newLocation)
@@ -343,158 +456,27 @@ public class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, ZOOM_LEVEL_DEFAULT));
         } else {
             // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
+            pdrMarker.setPosition(newLocation);
+            pdrMarker.setRotation(orientation);
         }
 
         // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        if (oldLocation != null && !oldLocation.equals(newLocation) && pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
             points.add(newLocation);
-            polyline.setPoints(points);
+            pdrPolyline.setPoints(points);
         }
 
-        // Update indoor map overlay to draw all possible building outlines
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
-            for (Building building : indoorMapManager.getAllBuildings()) {
-                building.drawBuildingOutline(gMap);
-                if (building.getIsInsideBuilding()) {
-                    sensorFusion.setCurrentBuilding(building.getName());
-                    setFloorUIVisibility(View.VISIBLE);
-                    isInsideBuilding = true;
-                    currentFloor = building.getFloorName();
-                } else {
-                    setFloorUIVisibility(View.GONE);
-                    isInsideBuilding = false;
-                }
-                // Preview floor plan by clicking on building, and associate route
-                gMap.setOnPolygonClickListener(
-                        new GoogleMap.OnPolygonClickListener() {
-                            @Override
-                            public void onPolygonClick(@NonNull Polygon polygon) {
-                                sensorFusion.setCurrentBuilding(building.getName());
-
-                                // Only show a preview of the building if not inside
-                                if (building.getIsInsideBuilding()) {
-                                    return;
-                                }
-                                // Only show preview if floor plans are available
-                                if (building.getFloorNames().isEmpty()) {
-                                    Log.w(
-                                            TAG,
-                                            "Cannot show preview of "
-                                                    + building.getName()
-                                                    + " as there are no floor plans.");
-                                    return;
-                                }
-                                polygon = building.getBuildingOutline();
-                                int currentColour = polygon.getFillColor();
-                                switch (currentColour) {
-                                    case COLOUR_FLOOR_PLAN_FILL_TRANSPARENT ->
-                                            polygon.setFillColor(COLOUR_FLOOR_PLAN_FILL_PREVIEW);
-                                    case COLOUR_FLOOR_PLAN_FILL_PREVIEW ->
-                                            polygon.setFillColor(
-                                                    COLOUR_FLOOR_PLAN_FILL_TRANSPARENT);
-                                }
-                                // Display floor plan of ground floor
-                                int groundFloorIndex = building.getGroundFloorIndex();
-                                List<Polyline> elements =
-                                        building.getFloorPlanElements(
-                                                building.getFloorNames().get(groundFloorIndex));
-                                if (elements == null) {
-                                    building.editFloorPlan(gMap, groundFloorIndex, true);
-                                } else {
-                                    for (Polyline element : elements) {
-                                        element.setVisible(!element.isVisible());
-                                    }
-                                }
-                                // Flag to not overwrite preview
-                                building.setIsPreviewingFloorPlan(
-                                        !building.getIsPreviewingFloorPlan());
-                            }
-                        });
-            }
-        }
-
-        // AutoFloor elevation check
-        if (autoFloorSwitch.isChecked()) {
-            Building building = indoorMapManager.getCurrentBuilding(currentLocation);
-            if (building != null) {
-                float elevationVal = sensorFusion.getElevation();
-                int newFloor =
-                        (int)
-                                (building.getGroundFloorIndex()
-                                        + elevationVal / building.getFloorHeight());
-                building.setCurrentFloor(newFloor, gMap);
-            }
-        }
-
-        if (autopanSwitch.isChecked()) {
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, ZOOM_LEVEL_DEFAULT));
-        }
+        setLineVisibility(pdrPolyline, pdrMarker, pdrSwitch.isChecked());
     }
 
     /**
-     * Set the initial camera position for the map.
+     * Called when we want to set or update the GNSS marker position
      *
-     * <p>The method sets the initial camera position for the map when it is first loaded. If the
-     * map is already ready, the camera is moved immediately. If the map is not ready, the camera
-     * position is stored until the map is ready. The method also tracks if there is a pending
-     * camera move.
-     *
-     * @param startLocation The initial camera position to set.
+     * @param gnssLocation The new GNSS location
      */
-    public void setInitialCameraPosition(@NonNull LatLng startLocation) {
-        // If the map is already ready, move camera immediately
-        if (gMap != null) {
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, ZOOM_LEVEL_DEFAULT));
-        } else {
-            // Otherwise, store it until onMapReady
-            pendingCameraPosition = startLocation;
-            hasPendingCameraMove = true;
-        }
-    }
-
-    /** Adds a Timed marker to the map */
-    public void addTimeMarker(LatLng pos, String timeLabel, int number) {
-        if (gMap == null || pos == null) return;
-
-        Marker marker =
-                gMap.addMarker(
-                        new MarkerOptions()
-                                .position(pos)
-                                .title("Test Point #" + number)
-                                .snippet("Time: " + timeLabel)
-                                .icon(
-                                        BitmapDescriptorFactory.defaultMarker(
-                                                BitmapDescriptorFactory.HUE_GREEN)));
-        markers.add(marker);
-    }
-
-    /** Clears Markers From Maps */
-    public void removeAllMarkers() {
-        for (Marker marker : markers) {
-            if (marker != null) {
-                marker.remove();
-            }
-        }
-        markers.clear();
-    }
-
-    /**
-     * Get the current user location on the map.
-     *
-     * @return The current user location as a LatLng object.
-     */
-    public LatLng getCurrentLocation() {
-        return currentLocation;
-    }
-
-    /** Called when we want to set or update the GNSS marker position */
-    public void updateGNSS(@NonNull LatLng gnssLocation) {
+    public void updateGNSSLocation(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
-        if (!isGnssOn) return;
 
         if (gnssMarker == null) {
             // Create the GNSS marker for the first time
@@ -519,6 +501,266 @@ public class TrajectoryMapFragment extends Fragment {
             }
             lastGnssLocation = gnssLocation;
         }
+
+        setLineVisibility(gnssPolyline, gnssMarker, gnssSwitch.isChecked());
+    }
+
+    /**
+     * Update the user's current location on the map based on the {@link
+     * com.openpositioning.PositionMe.fusion.Fusion Fusion} algorithm
+     *
+     * @param fusedLocation The latest {@link com.openpositioning.PositionMe.fusion.Fusion Fusion}
+     *     positioning estimate to plot
+     * @param orientation The user’s heading in degrees
+     */
+    public void updateFusionLocation(@NonNull LatLng fusedLocation, float orientation) {
+        if (gMap == null) return;
+        if (!sensorFusion.fusion.isActive()) {
+            wifiAPSSwitch.setChecked(false);
+            wifiAPSSwitch.setEnabled(false);
+            //            return;
+        } else {
+            wifiAPSSwitch.setEnabled(true);
+        }
+
+        // Initialisation
+        if (fusionMarker == null) {
+            fusionMarker =
+                    gMap.addMarker(
+                            new MarkerOptions()
+                                    .position(fusedLocation)
+                                    .title("Fused Position")
+                                    .flat(true)
+                                    .icon(
+                                            BitmapDescriptorFactory.fromBitmap(
+                                                    UtilFunctions.getBitmapFromVector(
+                                                            requireContext(),
+                                                            R.drawable
+                                                                    .ic_baseline_navigation_25))));
+            List<LatLng> points = new ArrayList<>(fusionPolyline.getPoints());
+            points.add(fusedLocation);
+            fusionPolyline.setPoints(points);
+            lastFusedLocation = fusedLocation;
+        } else {
+            // Updating trace on screen
+            fusionMarker.setPosition(fusedLocation);
+            if (!Float.isNaN(orientation)) fusionMarker.setRotation(orientation);
+
+            if (lastFusedLocation != null && !lastFusedLocation.equals(fusedLocation)) {
+                List<LatLng> points = new ArrayList<>(fusionPolyline.getPoints());
+                points.add(fusedLocation);
+                fusionPolyline.setPoints(points);
+            }
+            lastFusedLocation = fusedLocation;
+
+            // Auto-Pan will follow fusion path
+            checkAutoPan(autopanSwitch.isChecked(), fusedLocation);
+
+            // Update building to display correct floor
+            indoorMapManager.drawBuildingPolygons();
+            updateBuildingUI(fusedLocation);
+            makeClickableBuildings();
+
+            if (showParticlesSwitch.isChecked()) {
+                drawParticles();
+            } else {
+                removeAllParticles();
+            }
+        }
+    }
+
+    /**
+     * Display all particles currently being used for positioning
+     *
+     * @see com.openpositioning.PositionMe.fusion.Fusion Fusion
+     * @see com.openpositioning.PositionMe.fusion.ParticleFilter ParticleFilter
+     * @see Particle
+     */
+    private void drawParticles() {
+        // Clear all old particles
+        removeAllParticles();
+        List<Particle> particles = sensorFusion.getFusionParticles();
+
+        for (Particle particle : particles) {
+            double weight = particle.getWeight();
+            double[] en = particle.getEastingNorthing();
+            LatLng particleLatLng = sensorFusion.convertENToLatLng(en);
+            Circle particleCircle =
+                    gMap.addCircle(
+                            new CircleOptions()
+                                    .center(particleLatLng)
+                                    .radius(MAP_PARTICLE_WEIGHTING * weight)
+                                    .strokeWidth(LINE_WEIGHT_PARTICLE)
+                                    .fillColor(MAP_PARTICLE_COLOUR)
+                                    .zIndex(50));
+            particleCircles.add(particleCircle);
+        }
+    }
+
+    /**
+     * Update {@link IndoorMapManager indoor map} overlay to draw all possible {@link Building}
+     * outlines, and set the current floor in AutoFloor mode
+     *
+     * <p>Should be called when using {@link com.openpositioning.PositionMe.fusion.Fusion Fusion}
+     *
+     * @param location Current location of user on map
+     */
+    private void updateBuildingUI(LatLng location) {
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(location);
+            for (Building building : indoorMapManager.getAllBuildings()) {
+                building.drawBuildingOutline(gMap);
+                if (building.getIsInsideBuilding()) {
+                    sensorFusion.setCurrentBuilding(building.getName());
+                    sensorFusion.onBuildingAvailable(building);
+                    setFloorUIVisibility(View.VISIBLE);
+                    isInsideBuilding = true;
+                    wifiAPSSwitch.setEnabled(true);
+
+                    // AutoFloor elevation check
+                    if (autoFloorSwitch.isChecked()) {
+                        building.setCurrentFloor(sensorFusion.getEstimatedFloorNumber(), gMap);
+                    }
+
+                    currentFloorName = building.getFloorName();
+
+                    if (wifiAPSSwitch.isChecked()) {
+                        updateWiFiAPSDisplay();
+                    }
+                } else {
+                    setFloorUIVisibility(View.GONE);
+                    removeAllParticles();
+                    removeAllWiFiAPS();
+                    wifiAPSSwitch.setChecked(false);
+                    wifiAPSSwitch.setEnabled(false);
+                    isInsideBuilding = false;
+                }
+            }
+        }
+    }
+
+    /**
+     * Make the {@link Building} {@link Polygon Polygons} clickable on the map to display floorplan
+     * previews
+     */
+    private void makeClickableBuildings() {
+        if (indoorMapManager != null) {
+            for (Building building : indoorMapManager.getAllBuildings()) {
+                // Preview floor plan by clicking on building, and associate route
+                gMap.setOnPolygonClickListener(
+                        polygon -> {
+                            sensorFusion.setCurrentBuilding(building.getName());
+
+                            // Only show a preview of the building if not inside
+                            if (building.getIsInsideBuilding()) {
+                                return;
+                            }
+                            // Only show preview if floor plans are available
+                            if (building.getFloorNames().isEmpty()) {
+                                Log.w(
+                                        TAG,
+                                        "Cannot show preview of "
+                                                + building.getName()
+                                                + " as there are no floor plans.");
+                                return;
+                            }
+                            polygon = building.getBuildingOutline();
+                            int currentColour = polygon.getFillColor();
+                            switch (currentColour) {
+                                case COLOUR_FLOOR_PLAN_FILL_TRANSPARENT ->
+                                        polygon.setFillColor(COLOUR_FLOOR_PLAN_FILL_PREVIEW);
+                                case COLOUR_FLOOR_PLAN_FILL_PREVIEW ->
+                                        polygon.setFillColor(COLOUR_FLOOR_PLAN_FILL_TRANSPARENT);
+                            }
+                            // Display floor plan of ground floor
+                            int groundFloorIndex = building.getGroundFloorIndex();
+                            List<Polyline> elements =
+                                    building.getFloorPlanElements(
+                                            building.getFloorNames().get(groundFloorIndex));
+                            if (elements == null) {
+                                building.editFloorPlan(gMap, groundFloorIndex, true);
+                            } else {
+                                for (Polyline element : elements) {
+                                    element.setVisible(!element.isVisible());
+                                }
+                            }
+                            // Flag to not overwrite preview
+                            building.setIsPreviewingFloorPlan(!building.getIsPreviewingFloorPlan());
+                        });
+            }
+        }
+    }
+
+    /**
+     * Set the initial camera position for the map.
+     *
+     * <p>The method sets the initial camera position for the map when it is first loaded. If the
+     * map is already ready, the camera is moved immediately. If the map is not ready, the camera
+     * position is stored until the map is ready. The method also tracks if there is a pending
+     * camera move.
+     *
+     * @param startLocation The initial camera position to set.
+     */
+    public void setInitialCameraPosition(@NonNull LatLng startLocation) {
+        // If the map is already ready, move camera immediately
+        if (gMap != null) {
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, ZOOM_LEVEL_DEFAULT));
+        } else {
+            // Otherwise, store it until onMapReady
+            pendingCameraPosition = startLocation;
+            hasPendingCameraMove = true;
+        }
+    }
+
+    /**
+     * Adds a timed marker to the map
+     *
+     * @param pos Position of the marker
+     * @param timeLabel Label associated with the marker
+     * @param number The marker's number
+     */
+    public void addTimeMarker(LatLng pos, String timeLabel, int number) {
+        if (gMap == null || pos == null) return;
+
+        Marker marker =
+                gMap.addMarker(
+                        new MarkerOptions()
+                                .position(pos)
+                                .title("Test Point #" + number)
+                                .snippet("Time: " + timeLabel)
+                                .icon(
+                                        BitmapDescriptorFactory.defaultMarker(
+                                                BitmapDescriptorFactory.HUE_GREEN)));
+        timedMarkers.add(marker);
+    }
+
+    /** Clears timedMarkers from maps */
+    public void removeAllTimedMarkers() {
+        for (Marker marker : timedMarkers) {
+            if (marker != null) {
+                marker.remove();
+            }
+        }
+        timedMarkers.clear();
+    }
+
+    /** Clear all particles from the map */
+    public void removeAllParticles() {
+        for (Circle particleCircle : particleCircles) {
+            if (particleCircle != null) {
+                particleCircle.remove();
+            }
+        }
+        particleCircles.clear();
+    }
+
+    /**
+     * Get the current user location on the map.
+     *
+     * @return The current user location as a LatLng object.
+     */
+    public LatLng getCurrentLocation() {
+        return currentLocation;
     }
 
     /** Remove GNSS marker if user toggles it off */
@@ -531,7 +773,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     /** Whether user is currently showing GNSS or not */
     public boolean isGnssEnabled() {
-        return isGnssOn;
+        return gnssSwitch.isChecked();
     }
 
     public boolean getIsInsideBuilding() {
@@ -539,7 +781,7 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public String getFloorName() {
-        return currentFloor;
+        return currentFloorName;
     }
 
     private void setFloorUIVisibility(int visibility) {
@@ -551,31 +793,50 @@ public class TrajectoryMapFragment extends Fragment {
             autoFloorSwitch.setChecked(true);
         }
         autoFloorSwitch.setVisibility(visibility);
+
+        // Disable particle display switch when hiding
+        if (visibility == View.GONE && showParticlesSwitch.isChecked()) {
+            showParticlesSwitch.setChecked(false);
+        }
+        showParticlesSwitch.setVisibility(visibility);
     }
 
     public void clearMapAndReset() {
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
+        if (pdrPolyline != null) {
+            pdrPolyline.remove();
+            pdrPolyline = null;
         }
         if (gnssPolyline != null) {
             gnssPolyline.remove();
             gnssPolyline = null;
         }
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
+        if (fusionPolyline != null) {
+            fusionPolyline.remove();
+            fusionPolyline = null;
+        }
+        if (pdrMarker != null) {
+            pdrMarker.remove();
+            pdrMarker = null;
+        }
+        if (fusionMarker != null) {
+            fusionMarker.remove();
+            fusionMarker = null;
         }
         if (gnssMarker != null) {
             gnssMarker.remove();
             gnssMarker = null;
         }
+
+        removeAllParticles();
+        removeAllWiFiAPS();
+
+        lastFusedLocation = null;
         lastGnssLocation = null;
         currentLocation = null;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
-            polyline =
+            pdrPolyline =
                     gMap.addPolyline(
                             new PolylineOptions()
                                     .color(COLOUR_PATH_COLOUR)
@@ -586,6 +847,13 @@ public class TrajectoryMapFragment extends Fragment {
                     gMap.addPolyline(
                             new PolylineOptions()
                                     .color(COLOUR_PATH_GNSS)
+                                    .width(LINE_WEIGHT_PATH)
+                                    .zIndex(MAP_DRAWING_PRIORITY_MAX)
+                                    .add());
+            fusionPolyline =
+                    gMap.addPolyline(
+                            new PolylineOptions()
+                                    .color(COLOUR_PATH_FUSION)
                                     .width(LINE_WEIGHT_PATH)
                                     .zIndex(MAP_DRAWING_PRIORITY_MAX)
                                     .add());

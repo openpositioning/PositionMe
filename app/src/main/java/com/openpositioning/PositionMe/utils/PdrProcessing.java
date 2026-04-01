@@ -139,7 +139,7 @@ public class PdrProcessing {
         if (accelMagnitudeOvertime == null
                 || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
             return new float[] {
-                this.positionX, this.positionY
+                this.positionX, this.positionY, 0.0f, 0.0f
             }; // Return current position without update
             // TODO - temporary solution of the empty list issue
         }
@@ -398,6 +398,8 @@ public class PdrProcessing {
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+        this.stepCount = 0;
+        this.sumStepLength = 0f;
     }
 
     /**
@@ -406,14 +408,9 @@ public class PdrProcessing {
      * @return average step length in meters.
      */
     public float getAverageStepLength() {
-        // Calculate average step length
-        float averageStepLength = sumStepLength / (float) stepCount;
-
-        // Reset sum and number of steps
-        stepCount = 0;
-        sumStepLength = 0;
+        if (stepCount == 0) return 0f;
 
         // Return average step length
-        return averageStepLength;
+        return sumStepLength / (float) stepCount;
     }
 }

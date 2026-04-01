@@ -34,27 +34,33 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         setPreferencesFromResource(R.xml.root_preferences, rootKey);
         loginManager = LoginManager.getInstance();
         getActivity().setTitle("Settings - " + loginManager.getUsername());
+
         weibergK = findPreference("weiberg_k");
         weibergK.setOnBindEditTextListener(
                 editText ->
                         editText.setInputType(
                                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
         elevationSeconds = findPreference("elevation_seconds");
         elevationSeconds.setOnBindEditTextListener(
                 editText -> editText.setInputType(InputType.TYPE_CLASS_NUMBER));
+
         accelSamples = findPreference("accel_samples");
         accelSamples.setOnBindEditTextListener(
                 editText -> editText.setInputType(InputType.TYPE_CLASS_NUMBER));
+
         epsilon = findPreference("epsilon");
         epsilon.setOnBindEditTextListener(
                 editText ->
                         editText.setInputType(
                                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
         accelFilter = findPreference("accel_filter");
         accelFilter.setOnBindEditTextListener(
                 editText ->
                         editText.setInputType(
                                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
         wifiInterval = findPreference("wifi_interval");
         wifiInterval.setOnBindEditTextListener(
                 editText -> editText.setInputType(InputType.TYPE_CLASS_NUMBER));

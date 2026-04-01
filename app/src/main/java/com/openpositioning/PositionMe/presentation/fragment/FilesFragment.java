@@ -9,6 +9,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
@@ -44,14 +47,20 @@ import org.json.JSONObject;
  */
 public class FilesFragment extends Fragment implements Observer {
     private static final String TAG = "FilesFragment";
+
+    private static final String[] sortMethods = new String[] {"Latest First", "Oldest First"};
+
     // UI elements
     private RecyclerView filesList;
     private TrajDownloadListAdapter listAdapter;
     private CardView uploadCard;
+    private Spinner spinnerSortBy;
+    private Comparator<Integer> sortMethod = Comparator.reverseOrder();
 
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
     private LoginManager loginManager;
+    private List<Map<String, String>> entryList = new ArrayList<>();
 
     /** Default public constructor, empty. */
     public FilesFragment() {
@@ -120,6 +129,9 @@ public class FilesFragment extends Fragment implements Observer {
                     }
                 });
 
+        spinnerSortBy = view.findViewById(R.id.spinnerSortBy);
+        initialiseSpinner();
+
         // Request list of uploaded trajectories from the server.
         serverCommunications.requestPathsFromServer(URL_GET_USER_TRAJECTORIES);
 
@@ -133,6 +145,44 @@ public class FilesFragment extends Fragment implements Observer {
                             }
                         },
                         500);
+    }
+
+    private void initialiseSpinner() {
+        if (spinnerSortBy == null) return;
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<>(
+                        requireContext(),
+                        android.R.layout.simple_spinner_dropdown_item,
+                        sortMethods);
+        spinnerSortBy.setAdapter(adapter);
+        spinnerSortBy.setSelection(0);
+
+        spinnerSortBy.setOnItemSelectedListener(
+                new AdapterView.OnItemSelectedListener() {
+
+                    @Override
+                    public void onItemSelected(
+                            AdapterView<?> adapterView, View view, int position, long l) {
+                        switch (position) {
+                            case 0:
+                                sortMethod = Comparator.reverseOrder();
+                                break;
+                            case 1:
+                                sortMethod = Comparator.naturalOrder();
+                                break;
+                            default:
+                                sortMethod = Comparator.reverseOrder();
+                                break;
+                        }
+                        updateEntryList();
+                    }
+
+                    @Override
+                    public void onNothingSelected(AdapterView<?> adapterView) {
+                        sortMethod = Comparator.reverseOrder();
+                    }
+                });
     }
 
     /**
@@ -150,17 +200,8 @@ public class FilesFragment extends Fragment implements Observer {
         // Check if the string is non-null and non-empty before processing
         if (infoString != null && !infoString.isEmpty()) {
             // Process string
-            List<Map<String, String>> entryList = processInfoResponse(infoString);
-            // Start a handler to be able to modify UI elements
-            new Handler(Looper.getMainLooper())
-                    .post(
-                            new Runnable() {
-                                @Override
-                                public void run() {
-                                    // Update the RecyclerView with data from the server
-                                    updateView(entryList);
-                                }
-                            });
+            entryList = processInfoResponse(infoString);
+            updateEntryList();
         }
     }
 
@@ -184,6 +225,8 @@ public class FilesFragment extends Fragment implements Observer {
                 entryMap.put("owner_id", String.valueOf(trajectoryEntry.get("owner_id")));
                 entryMap.put("date_submitted", trajectoryEntry.get("date_submitted").toString());
                 entryMap.put("id", String.valueOf(trajectoryEntry.get("id")));
+                // Store the original index
+                entryMap.put("original_index", String.valueOf(i));
                 // Add decoded map to list of entries
                 entryList.add(entryMap);
             }
@@ -193,9 +236,24 @@ public class FilesFragment extends Fragment implements Observer {
         // Sort the list by the ID fields of the maps
         entryList.sort(
                 Comparator.comparing(
-                        m -> Integer.parseInt(m.get("id")),
-                        Comparator.nullsLast(Comparator.naturalOrder())));
+                        m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(sortMethod)));
         return entryList;
+    }
+
+    private void updateEntryList() {
+        entryList.sort(
+                Comparator.comparing(
+                        m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(sortMethod)));
+        // Start a handler to be able to modify UI elements
+        new Handler(Looper.getMainLooper())
+                .post(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                // Update the RecyclerView with data from the server
+                                updateView(entryList);
+                            }
+                        });
     }
 
     /**
@@ -221,8 +279,12 @@ public class FilesFragment extends Fragment implements Observer {
                             String id = selectedItem.get("id");
                             String dateSubmitted = selectedItem.get("date_submitted");
 
+                            int originalIndex =
+                                    Integer.parseInt(selectedItem.get("original_index"));
+
                             // Pass ID and date_submitted
-                            serverCommunications.downloadTrajectory(position, id, dateSubmitted);
+                            serverCommunications.downloadTrajectory(
+                                    originalIndex, id, dateSubmitted);
                         });
         filesList.setAdapter(listAdapter);
 

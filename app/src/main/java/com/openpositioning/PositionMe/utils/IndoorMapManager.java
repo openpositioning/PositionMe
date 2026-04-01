@@ -68,20 +68,22 @@ public class IndoorMapManager implements Observer {
      */
     public void setCurrentLocation(LatLng currentLocation) {
         this.currentLocation = currentLocation;
-        drawBuildingPolygons();
     }
 
-    /** Handle polygon drawing if inside the building, and hide all elements otherwise */
-    private void drawBuildingPolygons() {
+    /**
+     * Handle {@link com.google.android.gms.maps.model.Polygon Polygon} drawing if inside the {@link
+     * Building}, and hide all elements otherwise
+     */
+    public void drawBuildingPolygons() {
         for (Building building : buildings) {
             if (building.equals(getCurrentBuilding(currentLocation))) {
                 building.setFillColour(COLOUR_FLOOR_PLAN_FILL_INSIDE);
-                building.setCurrentFloor(Math.max(building.getFloorNumber(), 0), gMap);
                 // Disable preview if present
                 building.setIsPreviewingFloorPlan(false);
             } else if (building.getIsPreviewingFloorPlan()) {
                 return;
             } else {
+                Log.d(TAG, "Outside building " + building.getName() + "; hiding floor plans");
                 building.setFillColour(COLOUR_FLOOR_PLAN_FILL_TRANSPARENT);
                 building.hideFloorPlans(gMap);
             }
@@ -95,6 +97,7 @@ public class IndoorMapManager implements Observer {
      * @return The building, if position is inside one, or null if no building contains position
      */
     public Building getCurrentBuilding(LatLng position) {
+        if (position == null) return null;
         for (Building building : buildings) {
             if (building.isPointInBuilding(position)) {
                 return building;
@@ -122,13 +125,13 @@ public class IndoorMapManager implements Observer {
         try {
             // Parse the JSON, and draw all possible buildings
             List<Map<String, Object>> entryList = processPOSTResponse(response);
-            for (Map<String, Object> building : entryList) {
+            for (Map<String, Object> buildingEntry : entryList) {
 
-                String name = building.get("name").toString();
+                String name = buildingEntry.get("name").toString();
                 @SuppressWarnings("unchecked")
-                List<LatLng> outline = (List<LatLng>) building.get("outline");
+                List<LatLng> outline = (List<LatLng>) buildingEntry.get("outline");
                 @SuppressWarnings("unchecked")
-                List<FloorPlan> mapShapes = (List<FloorPlan>) building.get("map_shapes");
+                List<FloorPlan> mapShapes = (List<FloorPlan>) buildingEntry.get("map_shapes");
 
                 // Add building to list of known buildings
                 if (!this.getAllBuildingNames().contains(name)) {

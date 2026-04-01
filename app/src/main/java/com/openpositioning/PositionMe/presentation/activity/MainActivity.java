@@ -295,10 +295,17 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 if (errorMessage.contains("{")) {
                     JSONObject jsonObject = new JSONObject(errorMessage);
 
+                    // Error usually split by :, but not always
                     String cause = jsonObject.getString("detail");
-                    String[] causeElements = cause.split(":", 2);
-                    String causeSource = causeElements[0].strip();
-                    String causeMessage = causeElements[1].strip();
+                    String causeSource, causeMessage;
+                    if (!cause.contains(":")) {
+                        causeSource = "";
+                        causeMessage = cause;
+                    } else {
+                        String[] causeElements = cause.split(":", 2);
+                        causeSource = causeElements[0].strip();
+                        causeMessage = causeElements[1].strip();
+                    }
 
                     new Handler(Looper.getMainLooper())
                             .post(

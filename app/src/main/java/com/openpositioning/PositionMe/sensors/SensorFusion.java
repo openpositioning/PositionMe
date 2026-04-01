@@ -1,5 +1,9 @@
 package com.openpositioning.PositionMe.sensors;
 
+import static com.openpositioning.PositionMe.fusion.FusionConstants.DELTA_T;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.MAX_STEP_LENGTH;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.WIFI_STD_DEV;
+import static com.openpositioning.PositionMe.utils.UtilConstants.ALPHA_ORIENTATION_DEFAULT;
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_OUTSIDE;
 import static com.openpositioning.PositionMe.utils.UtilConstants.SENSOR_POLL_TIME_MS;
 
@@ -12,6 +16,7 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
+import android.os.Handler;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
@@ -21,8 +26,11 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.fusion.Fusion;
+import com.openpositioning.PositionMe.fusion.KalmanFilter;
+import com.openpositioning.PositionMe.fusion.Particle;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.openpositioning.PositionMe.utils.Building;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import java.util.ArrayList;
@@ -59,6 +67,7 @@ import org.json.JSONObject;
  */
 public class SensorFusion implements SensorEventListener, Observer {
     private static final String TAG = "SensorFusion";
+    private static final String WAKE_LOCK_TAG = "MyApp::MyWakelockTag";
 
     // Store the last event timestamps for each sensor type
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -76,7 +85,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Coefficient for fusing gyro-based and magnetometer-based orientation
     public static final float FILTER_COEFFICIENT = 0.96f;
     // Tuning value for low pass filter
-    private static final float ALPHA = 0.8f;
+    private static final float ALPHA_PRESSURE = 0.8f;
     // String for creating WiFi fingerprint JSON object
     private static final String WIFI_FINGERPRINT = "wf";
 
@@ -115,7 +124,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Settings
     private boolean saveRecording;
-    private float filter_coefficient;
+    private float filterCoefficient;
+    private float alphaOrientation;
     // Variables to help with timed events
     private long absoluteStartTime;
     private long bootTime;
@@ -125,7 +135,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Counters for dividing timer to record data every 1 second/ every 5 seconds
     private int counter;
     private int secondCounter;
-
     // Sensor values
     private float[] acceleration;
     private float[] filteredAcc;
@@ -133,6 +142,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] magneticField;
     private float[] angularVelocity;
     private float[] orientation;
+    private float kalmanFilterOrientation;
     private float[] rotation;
     private float pressure;
     private float light;
@@ -141,7 +151,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private int stepCounter;
     // Derived values
     private float elevation;
-    private boolean elevator;
+    private boolean isInElevator;
     // Location values
     private float latitude;
     private float longitude;
@@ -170,7 +180,13 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
     // Fusion used for corrected positioning
-    public Fusion fusion = new Fusion();
+    public Fusion fusion;
+    // Kalman filter used for orientation smoothing
+    private KalmanFilter kalmanFilter;
+    // Handler used to make kalman intervals
+    private Handler kalmanFilterHandler;
+    // Runnable used to execute kalman filter methods
+    private Runnable kalmanFIlterRunnable;
 
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion. Initialises
@@ -188,7 +204,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.stepCounter = 0;
         // PDR elevation initial values
         this.elevation = 0;
-        this.elevator = false;
+        this.isInElevator = false;
         // PDR position array
         this.startLocation = new float[2];
         // Empty array initialisation
@@ -201,8 +217,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.rotation = new float[4];
         this.rotation[3] = 1.0f;
         this.R = new float[9];
-        // GNSS initial Long-Lat array
-        this.startLocation = new float[2];
     }
 
     /**
@@ -228,9 +242,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see WifiDataProcessor for network data processing.
      */
     public void setContext(Context context) {
-        this.appContext = context.getApplicationContext(); // store app context for later use
+        this.appContext = context.getApplicationContext();
 
-        // Initialise data collection devices (unchanged)...
+        // Initialise data collection devices
         this.accelerometerSensor = new MovementSensor(context, Sensor.TYPE_ACCELEROMETER);
         this.barometerSensor = new MovementSensor(context, Sensor.TYPE_PRESSURE);
         this.gyroscopeSensor = new MovementSensor(context, Sensor.TYPE_GYROSCOPE);
@@ -248,11 +262,14 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
         this.bleProcessor = new BleDataProcessor(context);
         bleProcessor.registerObserver(this);
+
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
+
         // Save absolute and relative start time
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
+
         // Initialise saveRecording to false
         this.saveRecording = false;
 
@@ -264,16 +281,35 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.pathView = new PathView(context, null);
         this.wiFiPositioning = new WiFiPositioning(context);
 
-        if (settings.getBoolean("overwrite_constants", false)) {
-            this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
-        } else {
-            this.filter_coefficient = FILTER_COEFFICIENT;
-        }
+        updateConstants();
+
+        this.fusion = new Fusion(appContext);
+        fusion.updateConstants(appContext);
 
         // Keep app awake during the recording (using stored appContext)
         PowerManager powerManager =
                 (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG);
+    }
+
+    /** Update any constants used based on the user's values from the {@link SettingsFragment} */
+    public void updateConstants() {
+        if (settings.getBoolean("overwrite_fusion_constants", false)) {
+            filterCoefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
+            alphaOrientation =
+                    (float)
+                                    settings.getInt(
+                                            "alpha_orientation",
+                                            (int) ALPHA_ORIENTATION_DEFAULT * 100)
+                            / 100;
+        } else {
+            filterCoefficient = FILTER_COEFFICIENT;
+            alphaOrientation = ALPHA_ORIENTATION_DEFAULT;
+        }
+
+        Log.d(TAG, "Constants updated");
+        Log.d(TAG, "filterCoefficient: " + filterCoefficient);
+        Log.d(TAG, "alphaOrientation: " + alphaOrientation);
     }
 
     /**
@@ -302,12 +338,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_PRESSURE:
-                pressure = (1 - ALPHA) * pressure + ALPHA * sensorEvent.values[0];
+                pressure = (1 - ALPHA_PRESSURE) * pressure + ALPHA_PRESSURE * sensorEvent.values[0];
                 if (saveRecording) {
                     this.elevation =
                             pdrProcessing.updateElevation(
                                     SensorManager.getAltitude(
                                             SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure));
+                }
+                if (fusion.isActive()) {
+                    fusion.onAltitudeUpdate(this.elevation);
                 }
                 break;
 
@@ -315,6 +354,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 angularVelocity[0] = sensorEvent.values[0];
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
+                break;
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 filteredAcc[0] = sensorEvent.values[0];
@@ -329,9 +369,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                                         + Math.pow(filteredAcc[2], 2));
 
                 // TODO - This grows without bound! Would limiting it break functionality?
-                this.accelMagnitude.add(accelMagFiltered);
-
-                elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
+                accelMagnitude.add(accelMagFiltered);
+                isInElevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
             case Sensor.TYPE_GRAVITY:
@@ -339,10 +378,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 gravity[1] = sensorEvent.values[1];
                 gravity[2] = sensorEvent.values[2];
 
-                // Possibly log gravity values if needed
-                // Log.v(TAG, "Gravity: " + Arrays.toString(gravity));
-
-                elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
+                isInElevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
             case Sensor.TYPE_LIGHT:
@@ -360,17 +396,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_ROTATION_VECTOR:
-                this.rotation = sensorEvent.values.clone();
-                float[] rotationVectorDCM = new float[9];
-                SensorManager.getRotationMatrixFromVector(rotationVectorDCM, this.rotation);
-                SensorManager.getOrientation(rotationVectorDCM, this.orientation);
+                rotation = sensorEvent.values.clone();
+                SensorManager.getRotationMatrixFromVector(R, rotation);
+                SensorManager.getOrientation(R, orientation);
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
 
                 if (currentTime - lastStepTime < SENSOR_POLL_TIME_MS) {
-                    Log.e(
+                    Log.w(
                             TAG,
                             "Ignoring step event, too soon after last step event:"
                                     + (currentTime - lastStepTime)
@@ -398,8 +433,17 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     float dx = newCords[2];
                     float dy = newCords[3];
-                    this.fusion.filterPDRUpdate(dx, dy);
-
+                    // Extract step length from PDR displacement vector and forward raw heading
+                    // separately
+                    // so each particle can apply its own orientation error correction in the filter
+                    float stepLength =
+                            (float)
+                                    Math.sqrt(
+                                            newCords[2] * newCords[2] + newCords[3] * newCords[3]);
+                    stepLength = Math.max(stepLength, MAX_STEP_LENGTH);
+                    if (fusion.isActive()) {
+                        fusion.onPDRUpdate(stepLength, orientation[0], dx, dy);
+                    }
                     // Clear the accelMagnitude after using it
                     // CAUTION - This line never runs!
                     this.accelMagnitude.clear();
@@ -415,7 +459,38 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
                     break;
                 }
+            default:
         }
+    }
+
+    /**
+     * Applies a low-pass filter to the orientation result to give smoother orientation tracking
+     *
+     * @param oldOrientation The current orientation value
+     * @param newOrientation The raw value of the new orientation from the phone's sensors
+     * @return The new orientation value to be used, after a low-pass filter has been applied
+     * @see SensorFusion#onSensorChanged(SensorEvent)
+     */
+    private float applyLPFToOrientation(float oldOrientation, float newOrientation) {
+        // Do not apply filter if going from positive angle to negative angle
+        // (Prevents orientation from glitching)
+        boolean bothPositive = (oldOrientation >= 0 && newOrientation >= 0);
+        boolean bothNegative = (oldOrientation < 0 && newOrientation < 0);
+        if (!bothPositive && !bothNegative) {
+            return newOrientation;
+        } else {
+            return (1 - alphaOrientation) * oldOrientation + alphaOrientation * newOrientation;
+        }
+    }
+
+    /**
+     * Getter for the estimated floor number from the {@link Fusion} class
+     *
+     * @return The floor number
+     * @see Fusion#getEstimatedFloorNumber()
+     */
+    public int getEstimatedFloorNumber() {
+        return fusion.getEstimatedFloorNumber();
     }
 
     /**
@@ -439,13 +514,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     class myLocationListener implements LocationListener {
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            // Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
             latitude = (float) location.getLatitude();
             longitude = (float) location.getLongitude();
             float altitude = (float) location.getAltitude();
-            float accuracy = (float) location.getAccuracy();
-            float speed = (float) location.getSpeed();
-            float bearing = (float) location.getBearing();
+            float accuracy = location.getAccuracy();
+            float speed = location.getSpeed();
+            float bearing = location.getBearing();
             String provider = location.getProvider();
 
             Log.d(
@@ -454,9 +528,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             // Forward the GNSS fix to the particle filter as a position observation
             // Queued until the next PDR step, where it will be used to update particle weights
-            if (fusion.isActive()) {
-                fusion.onGnssUpdate(new LatLng(latitude, longitude), accuracy);
-            }
+            fusion.onGnssUpdate(new LatLng(latitude, longitude), accuracy);
 
             if (saveRecording) {
                 trajectory.addGnssData(
@@ -616,7 +688,12 @@ public class SensorFusion implements SensorEventListener, Observer {
         trajectory.addBleFingerprints(bleFingerprint);
     }
 
-    // Helper to convert MAC string to long
+    /**
+     * Helper to convert MAC string to long (ie, remove the colon separators)
+     *
+     * @param macAddress The MAC address
+     * @return the MAC address as a long
+     */
     private long convertMacToLong(String macAddress) {
         String cleanMac = macAddress.replace(":", "");
         return Long.parseLong(cleanMac, 16);
@@ -650,7 +727,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         try {
             // Creating a JSON object to store the WiFi access points
             JSONObject wifiAccessPoints = new JSONObject();
-            for (Wifi data : this.wifiList) {
+            for (Wifi data : wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
@@ -659,7 +736,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             Log.d(TAG, "Sending: " + wifiFingerPrint);
 
-            this.wiFiPositioning.request(
+            wiFiPositioning.request(
                     wifiFingerPrint,
                     new WiFiPositioning.VolleyCallback() {
                         // Logic added for onSuccess and onError cases
@@ -676,9 +753,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                                             + " floor="
                                             + floor);
 
-                            if (fusion.isActive() && wifiLocation != null) {
-                                fusion.onWifiUpdate(wifiLocation, 10.0);
-                            }
+                            fusion.onWifiUpdate(wifiLocation, WIFI_STD_DEV, floor);
                         }
 
                         @Override
@@ -697,17 +772,17 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return {@link LatLng} corresponding to user's position.
      */
     public LatLng getLatLngWifiPositioning() {
-        return this.wiFiPositioning.getWifiLocation();
+        return wiFiPositioning.getWifiLocation();
     }
 
     /**
-     * Method to get current floor the user is at, obtained using WiFiPositioning
+     * Method to get current floor the user is at, obtained using {@link WiFiPositioning}
      *
      * @see WiFiPositioning for WiFi positioning
      * @return Current floor user is at using WiFiPositioning
      */
     public int getWifiFloor() {
-        return this.wiFiPositioning.getFloor();
+        return wiFiPositioning.getFloor();
     }
 
     /**
@@ -799,12 +874,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Getter function for core location data.
      *
-     * @param start set true to get the initial location
+     * @param getStartingLocation set true to get the initial location
      * @return longitude and latitude data in a float[2].
      */
-    public float[] getGNSSLatitude(boolean start) {
+    public float[] getGNSSLatitude(boolean getStartingLocation) {
         float[] latLong = new float[2];
-        if (!start) {
+        if (!getStartingLocation) {
             latLong[0] = latitude;
             latLong[1] = longitude;
         } else {
@@ -816,9 +891,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Setter function for core location data.
      *
-     * @param startPosition contains the initial location set by the user
+     * @param startPosition The starting location of the recording
      */
-    public void setStartGNSSLatitude(float[] startPosition) {
+    public void setStartLocation(float[] startPosition) {
         startLocation = startPosition;
     }
 
@@ -832,8 +907,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
-     * Getter function for average step count. Calls the average step count function in
-     * pdrProcessing class
+     * Getter function for average step count. Calls the average step count function in {@link
+     * PdrProcessing}
      *
      * @return average step count of total PDR.
      */
@@ -846,8 +921,21 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return orientation of device.
      */
-    public float passOrientation() {
-        return orientation[0];
+    public float getOrientation() {
+        if (!Float.isNaN(orientation[0])) {
+            return orientation[0];
+        } else {
+            return 0.00f;
+        }
+    }
+
+    // TODO - Replace normal orientation with LPF version when it's ready
+    public float getKalmanFilterOrientation() {
+        if (!Float.isNaN(kalmanFilterOrientation)) {
+            return kalmanFilterOrientation;
+        } else {
+            return 0.00f;
+        }
     }
 
     /**
@@ -928,7 +1016,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return float of the estimated elevation in meters.
      */
     public float getElevation() {
-        return this.elevation;
+        return elevation;
     }
 
     /**
@@ -937,8 +1025,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return true if the PDR estimates the user is in an elevator, false otherwise.
      */
-    public boolean getElevator() {
-        return this.elevator;
+    public boolean getIsInElevator() {
+        return isInElevator;
     }
 
     /**
@@ -947,7 +1035,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return int 1 if the phone is by the ear, int 0 otherwise.
      */
     public int getHoldMode() {
-        int proximityThreshold = 1, lightThreshold = 100; // holdMode: by ear=1, not by ear =0
+        // holdMode: by ear = 1, not by ear = 0
+        int proximityThreshold = 1, lightThreshold = 100;
         if (proximity < proximityThreshold && light > lightThreshold) { // unit cm
             return 1;
         } else {
@@ -1051,9 +1140,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (wakeLock == null) {
             PowerManager powerManager =
                     (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
-            wakeLock =
-                    powerManager.newWakeLock(
-                            PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG);
         }
         wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
 
@@ -1077,7 +1164,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setTrajectoryVersion(2.0f)
                         .setTrajectoryId(generateTrajectoryId());
 
-        // Set initial position from user-selected start location
+        // Set initial position
         if (startLocation != null && (startLocation[0] != 0 || startLocation[1] != 0)) {
             trajectory.setInitialPosition(
                     Traj.GNSSPosition.newBuilder()
@@ -1107,19 +1194,36 @@ public class SensorFusion implements SensorEventListener, Observer {
                                             .setZ(rotation[2])
                                             .setW(rotation[3]))
                             .setStepCount(0));
-            // start fusion predictions
-            this.fusion.start(
-                    new LatLng(startLocation[0], startLocation[1]),
-                    pdrProcessing); // Start fusion predictions
+            // Start fusion predictions
+            fusion.start(new LatLng(startLocation[0], startLocation[1]), elevation);
         }
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
-        if (settings.getBoolean("overwrite_constants", false)) {
-            this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
-        } else {
-            this.filter_coefficient = FILTER_COEFFICIENT;
-        }
+
+        updateConstants();
+        fusion.updateConstants(appContext);
+
+        // Initialise kalman filter handler
+        kalmanFilter = new KalmanFilter(appContext);
+        kalmanFilter.updateConstants(appContext);
+        kalmanFilter.setInitialHeading(sensorFusion.getOrientation());
+        this.kalmanFilterHandler = new Handler();
+        // Initialise kalman filter runnable
+        this.kalmanFIlterRunnable =
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        // perform kalman filter prediction step with angular velocity in
+                        // counterclockwise direction
+                        kalmanFilter.predict(angularVelocity[2]);
+                        kalmanFilter.measure(getOrientation());
+                        kalmanFilterOrientation = kalmanFilter.getMeasurement();
+                        // wait for kalman filter specified time delay (sampling frequency)
+                        kalmanFilterHandler.postDelayed(this, (long) (DELTA_T * 1000));
+                    }
+                };
+        kalmanFilterHandler.post(kalmanFIlterRunnable);
     }
 
     /**
@@ -1143,6 +1247,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (fusion.isActive()) {
             this.fusion.stop();
         }
+        kalmanFilterHandler.removeCallbacks(kalmanFIlterRunnable);
     }
 
     /**
@@ -1182,11 +1287,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
      *
-     * <p>Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
+     * <p>Inherently threaded; runnables are created in {@link SensorFusion#startRecording()} and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
     private class storeDataInTrajectory extends TimerTask {
-        // private Fusion fusion;
 
         public void run() {
             // Store IMU data in Trajectory class
@@ -1222,32 +1326,24 @@ public class SensorFusion implements SensorEventListener, Observer {
                                             .setZ(magneticField[2])));
 
             // Divide timer with a counter for storing data every 1 second
-            if (counter == 99) {
+            if (counter < 99) {
+                counter++;
+            } else {
                 counter = 0;
-                Log.d(
-                        TAG,
-                        "1 second timer fired, fusion active="
-                                + (fusion != null && fusion.isActive()));
-                // store fusion corrected estimated point to the trajectory at 1 sec intervals
-                // Pre-existing code that has been uncommented to implement fusion corrections to
-                // trajectory
-                // Floor is not yet implemented — see fusion.getEstimatedFloor().
-                if (SensorFusion.this.fusion != null && SensorFusion.this.fusion.isActive()) {
-                    LatLng fused = SensorFusion.this.fusion.getBestEstimate();
+                if (fusion != null && fusion.isActive()) {
+                    LatLng fused = fusion.getBestEstimate();
                     if (fused != null) {
-                        Log.d(
-                                TAG,
-                                "Corrected position stored: "
-                                        + fused.latitude
-                                        + ", "
-                                        + fused.longitude);
-                        trajectory.addCorrectedPositions(
+                        // Store corrected position
+                        Traj.GNSSPosition.Builder builder =
                                 Traj.GNSSPosition.newBuilder()
                                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                         .setLatitude(fused.latitude)
                                         .setLongitude(fused.longitude)
-                                        .setAltitude(elevation));
-                        // .setFloor(fusion.getEstimatedFloor));
+                                        .setAltitude(fusion.getElevation());
+                        if (!getCurrentBuilding().equals(BUILDING_NAME_OUTSIDE)) {
+                            builder = builder.setFloor(fusion.getEstimatedFloorName());
+                        }
+                        trajectory.addCorrectedPositions(builder);
                     }
                 }
 
@@ -1272,7 +1368,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 }
 
                 // Divide the timer for storing AP data every 5 seconds
-                if (secondCounter == 4) {
+                if (secondCounter < 4) {
+                    secondCounter++;
+                } else {
                     secondCounter = 0;
                     // Current Wifi Object
                     Wifi currentWifi = wifiProcessor.getCurrentWifiData();
@@ -1283,15 +1381,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     .setFrequency(currentWifi.getFrequency())
                                     .setRttEnabled(currentWifi.isRttEnabled()));
                     seenAPs.put(currentWifi.getBssid(), true);
-                } else {
-                    secondCounter++;
                 }
-            } else {
-                counter++;
             }
         }
     }
 
+    /**
+     * TODO - JavaDoc
+     *
+     * @return ???
+     */
     public double getGNSSAltitude() {
         if (gnssProcessor != null && gnssProcessor.getLastLocation() != null) {
             return gnssProcessor.getLastLocation().getAltitude();
@@ -1299,6 +1398,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         return 0.0;
     }
 
+    /**
+     * TODO - JavaDoc
+     *
+     * @param latitude ???
+     * @param longitude ???
+     * @param altitude ???
+     */
     public void addTestPoint(double latitude, double longitude, double altitude) {
         if (saveRecording && trajectory != null) {
             trajectory.addTestPoints(
@@ -1310,11 +1416,26 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    /**
+     * Provides building geometry to the fusion system for map-matching constraints.
+     *
+     * <p>Call this when a building's floor plans have been loaded and the user is inside the
+     * building. If fusion is not yet active, the building is ignored — call again after recording
+     * starts.
+     *
+     * @param building the {@link Building} whose geometry should constrain the particle filter.
+     */
+    public void onBuildingAvailable(Building building) {
+        if (fusion != null && fusion.isActive()) {
+            fusion.setBuilding(building);
+        }
+    }
+
     public long getRecordingElapsedMs() {
         return SystemClock.uptimeMillis() - bootTime;
     }
 
-    public void requestFloorplans(LatLng position) {
+    public void requestFloorPlans(LatLng position) {
         this.serverCommunications.requestFloorplans(position, this.wifiList);
     }
 
@@ -1327,5 +1448,21 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     public String getCurrentBuilding() {
         return currentBuilding;
+    }
+
+    public LatLng getFusionEstimate() {
+        return fusion.getBestEstimate();
+    }
+
+    public List<Particle> getFusionParticles() {
+        return fusion.getParticles();
+    }
+
+    public LatLng convertENToLatLng(double[] en) {
+        return fusion.convertENToLatLng(en);
+    }
+
+    public double getOrientationError() {
+        return fusion.getOrientationError();
     }
 }

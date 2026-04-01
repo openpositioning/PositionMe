@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.utils;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.BUILDING_ELEMENT_LIFT;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.BUILDING_ELEMENT_STAIRS;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.BUILDING_ELEMENT_WALL;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.BUILDING_NO_FLOOR_NUMBER;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_BUILDING_WITHOUT_FLOOR_MAPS;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_BUILDING_WITH_FLOOR_MAPS;
 import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_ELEMENTS_DEFAULT;
@@ -37,7 +38,6 @@ import java.util.Map;
  */
 public class Building {
     private static final String TAG = "Building";
-    private static final int BUILDING_NO_FLOOR = -1;
     private static final String BUILDING_GROUND_PREFIX = "G";
 
     /*
@@ -56,7 +56,7 @@ public class Building {
     private List<FloorPlan> floorPlans;
     private List<String> floorNames;
     private float floorHeight;
-    private int floorNumber = BUILDING_NO_FLOOR;
+    private int floorNumber = BUILDING_NO_FLOOR_NUMBER;
     private int groundFloorIndex = 0;
     private boolean isInsideBuilding = false;
     private boolean isPreviewingFloorPlan = false;
@@ -131,9 +131,10 @@ public class Building {
             List<Object> floorElements = new ArrayList<>();
             for (List<LatLng> elementWall : elementsWall) {
                 floorElements.add(
-                        new PolylineOptions()
-                                .width(LINE_WEIGHT_FLOOR_PLAN)
-                                .color(COLOUR_FLOOR_PLAN_ELEMENTS_WALL)
+                        new PolygonOptions()
+                                .strokeWidth(LINE_WEIGHT_FLOOR_PLAN)
+                                .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_WALL)
+                                .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_WALL)
                                 .zIndex(2)
                                 .addAll(elementWall));
             }
@@ -218,6 +219,10 @@ public class Building {
 
     public int getGroundFloorIndex() {
         return groundFloorIndex;
+    }
+
+    public List<FloorPlan> getFloorPlans() {
+        return floorPlans;
     }
 
     /**
@@ -311,7 +316,7 @@ public class Building {
             Log.d(TAG, name + ": Already on floor " + newFloor);
         } else {
             // Floor number initialises to -1, so reinitialise if required
-            if (floorNumber == BUILDING_NO_FLOOR) {
+            if (floorNumber == BUILDING_NO_FLOOR_NUMBER) {
                 floorNumber = groundFloorIndex;
             } else {
                 // Remove old floor plan before continuing
@@ -334,7 +339,7 @@ public class Building {
         }
         // Reset floor number upon leaving building
         if (!isInsideBuilding) {
-            floorNumber = BUILDING_NO_FLOOR;
+            floorNumber = BUILDING_NO_FLOOR_NUMBER;
         }
     }
 

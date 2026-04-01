@@ -52,6 +52,34 @@ public class RecordingActivity extends AppCompatActivity {
 
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Back button handler
+        getOnBackPressedDispatcher()
+                .addCallback(
+                        this,
+                        new androidx.activity.OnBackPressedCallback(true) {
+                            @Override
+                            public void handleOnBackPressed() {
+                                androidx.fragment.app.Fragment currentFragment =
+                                        getSupportFragmentManager()
+                                                .findFragmentById(R.id.mainFragmentContainer);
+
+                                // If on the Correction screen, exit to Home
+                                if (currentFragment
+                                        instanceof
+                                        com.openpositioning.PositionMe.presentation
+                                                .fragment
+                                                .CorrectionFragment) {
+                                    finishFlow();
+                                } else {
+                                    // Otherwise, temporarily disable this behaviour and trigger the
+                                    // default back behaviour
+                                    setEnabled(false);
+                                    getOnBackPressedDispatcher().onBackPressed();
+                                    setEnabled(true);
+                                }
+                            }
+                        });
     }
 
     /** Show the StartLocationFragment (beginning of flow). */

@@ -97,6 +97,7 @@ public class RecordingFragment extends Fragment {
         this.sensorFusion = SensorFusion.getInstance();
         Context context = requireActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
+        sensorFusion.updateConstants();
         this.refreshDataHandler = new Handler();
     }
 
@@ -279,12 +280,9 @@ public class RecordingFragment extends Fragment {
 
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(
-                        newLocation, (float) Math.toDegrees(sensorFusion.passOrientation()));
+                trajectoryMapFragment.updatePDRLocation(
+                        newLocation, (float) Math.toDegrees(sensorFusion.getOrientation()));
             }
-
-            // Retrieve floorplans for nearby buildings
-            sensorFusion.requestFloorplans(newLocation);
         }
 
         // GNSS logic if you want to show GNSS error, etc.
@@ -301,11 +299,25 @@ public class RecordingFragment extends Fragment {
                     gnssError.setText(
                             String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
+                trajectoryMapFragment.updateGNSSLocation(gnssLocation);
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
             }
+        }
+
+        LatLng fusedPos = sensorFusion.getFusionEstimate();
+        // Fused position overlay
+        if (fusedPos != null && trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateFusionLocation(
+                    fusedPos, (float) Math.toDegrees(sensorFusion.getKalmanFilterOrientation()));
+        }
+
+        // Retrieve floor plans for nearby buildings only while outside of a building
+        if (fusedPos != null
+                && trajectoryMapFragment != null
+                && !trajectoryMapFragment.getIsInsideBuilding()) {
+            sensorFusion.requestFloorPlans(fusedPos);
         }
 
         // Update previous
@@ -313,7 +325,8 @@ public class RecordingFragment extends Fragment {
         previousPosY = pdrValues[1];
 
         // Building UI
-        textCampaignName.setText(sensorFusion.getCurrentBuilding());
+        String buildingName = sensorFusion.getCurrentBuilding().replace("_", " ");
+        textCampaignName.setText(buildingName);
         if (trajectoryMapFragment != null && trajectoryMapFragment.getIsInsideBuilding()) {
             textFloorNumberTitle.setVisibility(View.VISIBLE);
             textFloorNumber.setVisibility(View.VISIBLE);

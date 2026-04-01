@@ -59,6 +59,7 @@ public class TrajParser {
     public static class ReplayPoint {
         public LatLng pdrLocation; // PDR-derived location estimate
         public LatLng gnssLocation; // GNSS location (may be null if unavailable)
+        public LatLng fusionLocation; // Fusion location
         public float orientation; // Orientation in degrees
         public float speed; // Speed in meters per second
         public long timestamp; // Relative timestamp
@@ -78,11 +79,13 @@ public class TrajParser {
         public ReplayPoint(
                 LatLng pdrLocation,
                 LatLng gnssLocation,
+                LatLng fusionLocation,
                 float orientation,
                 float speed,
                 long timestamp) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
+            this.fusionLocation = fusionLocation;
             this.orientation = orientation;
             this.speed = speed;
             this.timestamp = timestamp;
@@ -125,6 +128,41 @@ public class TrajParser {
     private static class TestPointRecord {
         public long relativeTimestamp;
         public double latitude, longitude, altitude;
+    }
+
+    /** Represents a Fused (Corrected) position record. */
+    private static class FusionRecord {
+        public long relativeTimestamp;
+        public double latitude, longitude;
+    }
+
+    /** Parses Corrected Positions (Fusion) data from JSON. */
+    private static List<FusionRecord> parseFusionData(JsonArray fusionArray) {
+        List<FusionRecord> list = new ArrayList<>();
+        if (fusionArray == null) return list;
+
+        for (int i = 0; i < fusionArray.size(); i++) {
+            try {
+                JsonObject obj = fusionArray.get(i).getAsJsonObject();
+                FusionRecord record = new FusionRecord();
+                record.relativeTimestamp =
+                        obj.has("relativeTimestamp") ? obj.get("relativeTimestamp").getAsLong() : 0;
+                record.latitude = obj.has("latitude") ? obj.get("latitude").getAsDouble() : 0.0;
+                record.longitude = obj.has("longitude") ? obj.get("longitude").getAsDouble() : 0.0;
+                list.add(record);
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing Fusion record: " + e.getMessage());
+            }
+        }
+        return list;
+    }
+
+    /** Finds the closest Fusion record to the given timestamp. */
+    private static FusionRecord findClosestFusionRecord(
+            List<FusionRecord> list, long targetTimestamp) {
+        return list.stream()
+                .min(Comparator.comparingLong(f -> Math.abs(f.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
     }
 
     /**
@@ -175,6 +213,8 @@ public class TrajParser {
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
             List<TestPointRecord> testPointList =
                     parseTestPoints(root.getAsJsonArray("testPoints"));
+            List<FusionRecord> fusionList =
+                    parseFusionData(root.getAsJsonArray("correctedPositions"));
 
             Log.i(
                     TAG,
@@ -220,12 +260,20 @@ public class TrajParser {
                                 ? new LatLng(closestGnss.latitude, closestGnss.longitude)
                                 : null;
 
+                FusionRecord closestFusion =
+                        findClosestFusionRecord(fusionList, pdr.relativeTimestamp);
+                LatLng fusionLocation =
+                        closestFusion != null
+                                ? new LatLng(closestFusion.latitude, closestFusion.longitude)
+                                : null;
+
                 result.add(
                         new ReplayPoint(
                                 pdrLocation,
                                 gnssLocation,
+                                fusionLocation,
                                 orientationDeg,
-                                0f,
+                                speed,
                                 pdr.relativeTimestamp));
             }
 

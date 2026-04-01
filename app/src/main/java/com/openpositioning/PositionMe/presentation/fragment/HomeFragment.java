@@ -1,5 +1,8 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.POSITION_UOE_LAT;
+import static com.openpositioning.PositionMe.utils.UtilConstants.POSITION_UOE_LON;
+
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
@@ -196,7 +199,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         gnssStatusTextView.setText(message);
         gnssStatusTextView.setVisibility(View.VISIBLE);
 
-        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
+        LatLng edinburghLatLng = new LatLng(POSITION_UOE_LAT, POSITION_UOE_LON);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
         mMap.addMarker(
                 new MarkerOptions().position(edinburghLatLng).title("University of Edinburgh"));

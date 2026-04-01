@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_FUSION;
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_M_HOUSE;
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_NUCLEUS;
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_OUTSIDE;
@@ -29,10 +30,12 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PathView;
+import java.util.List;
 
 /**
  * A simple {@link Fragment} subclass. Corrections Fragment is displayed after a recording session
@@ -98,14 +101,39 @@ public class CorrectionFragment extends Fragment {
                         start = new LatLng(startPosition[0], startPosition[1]);
                         mMap.addMarker(new MarkerOptions().position(start).title("Start Position"));
 
-                        // Calculate zoom for demonstration
-                        double zoom =
-                                Math.log(
-                                                156543.03392f
-                                                        * Math.cos(startPosition[0] * Math.PI / 180)
-                                                        * scalingRatio)
-                                        / Math.log(2);
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) zoom));
+                        List<LatLng> fusionPath = sensorFusion.fusion.getLiveTrajectory();
+                        if (fusionPath != null && !fusionPath.isEmpty()) {
+                            mMap.addPolyline(
+                                    new PolylineOptions()
+                                            .addAll(fusionPath)
+                                            .color(COLOUR_PATH_FUSION)
+                                            .width(10f));
+
+                            // Tell map to ignore the top and bottom card/spacing
+                            float density = getResources().getDisplayMetrics().density;
+                            mMap.setPadding(0, (int) (120 * density), 0, (int) (300 * density));
+
+                            // Use LatLngBounds to frame the path on the screen
+                            if (fusionPath.size() > 1) {
+                                com.google.android.gms.maps.model.LatLngBounds.Builder
+                                        boundsBuilder =
+                                                new com.google.android.gms.maps.model.LatLngBounds
+                                                        .Builder();
+                                for (LatLng point : fusionPath) {
+                                    boundsBuilder.include(point);
+                                }
+                                // padding in pixels from the edge of the screen
+                                mMap.moveCamera(
+                                        CameraUpdateFactory.newLatLngBounds(
+                                                boundsBuilder.build(), 100));
+                            } else {
+                                mMap.moveCamera(
+                                        CameraUpdateFactory.newLatLngZoom(fusionPath.get(0), 18f));
+                            }
+                        } else {
+                            // Default if path is empty
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 18f));
+                        }
                     }
                 });
 
@@ -119,6 +147,7 @@ public class CorrectionFragment extends Fragment {
         this.averageStepLengthText = view.findViewById(R.id.averageStepView);
         this.stepLengthInput = view.findViewById(R.id.inputStepLength);
         this.pathView = view.findViewById(R.id.pathView1);
+        this.pathView.setVisibility(View.GONE);
 
         this.campaignSelect = view.findViewById(R.id.campaignSelectSpinner);
         this.campaignText = view.findViewById(R.id.correctedCampaingTextView);
@@ -226,7 +255,7 @@ public class CorrectionFragment extends Fragment {
                                     break;
                             }
                             // Log selection
-                            Log.d("CorrectionFragment", "Selected campaign: " + selectedCampaign);
+                            Log.d("CorrectionFragment", "Selected building: " + selectedCampaign);
                         }
 
                         @Override

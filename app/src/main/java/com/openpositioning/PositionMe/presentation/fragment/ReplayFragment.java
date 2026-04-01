@@ -16,6 +16,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,9 +42,10 @@ public class ReplayFragment extends Fragment {
 
     private static final String TAG = "ReplayFragment";
 
-    // GPS start location (received from ReplayActivity)
-    private float initialLat = 0f;
-    private float initialLon = 0f;
+    // GPS start location
+    private float initialLat;
+    private float initialLon;
+    private SensorFusion sensorFusion = SensorFusion.getInstance();
     private String filePath = "";
     private int lastIndex = -1;
 
@@ -66,15 +68,16 @@ public class ReplayFragment extends Fragment {
         // Retrieve transferred data from ReplayActivity
         if (getArguments() != null) {
             filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
-            initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
-            initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
         }
 
         // Log the received data
         Log.i(TAG, "ReplayFragment received data:");
         Log.i(TAG, "Trajectory file path: " + filePath);
-        Log.i(TAG, "Initial latitude: " + initialLat);
-        Log.i(TAG, "Initial longitude: " + initialLon);
+
+        // Get fallback location start using current GNSS
+        float[] startPosition = sensorFusion.getGNSSLatitude(false);
+        initialLat = startPosition[0];
+        initialLon = startPosition[1];
 
         // Check if file exists before parsing
         File trajectoryFile = new File(filePath);
@@ -134,9 +137,9 @@ public class ReplayFragment extends Fragment {
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
 
         // 1) Check if the file contains any GNSS data
-        boolean gnssExists = hasAnyGnssData(replayData);
+        boolean gnssExistsInFile = hasAnyGnssData(replayData);
 
-        if (gnssExists) {
+        if (gnssExistsInFile) {
             showGnssChoiceDialog();
         } else {
             // Setup map
@@ -176,7 +179,7 @@ public class ReplayFragment extends Fragment {
                     currentIndex = 0;
                     playbackSeekBar.setProgress(0);
                     Log.i(TAG, "Restart button pressed. Resetting playback to index 0.");
-                    trajectoryMapFragment.removeAllMarkers();
+                    trajectoryMapFragment.removeAllTimedMarkers();
                     updateMapForIndex(0);
                 });
 
@@ -246,7 +249,9 @@ public class ReplayFragment extends Fragment {
 
         new AlertDialog.Builder(requireContext())
                 .setTitle("Choose Starting Location")
-                .setMessage("GNSS data found. Use file's GNSS or your manual position?")
+                .setMessage(
+                        "GNSS data found in the trajectory.\n"
+                                + "Which GNSS position would you like to use?")
                 .setPositiveButton(
                         "Use File's GNSS",
                         (dialog, which) -> {
@@ -269,7 +274,7 @@ public class ReplayFragment extends Fragment {
                             dialog.dismiss();
                         })
                 .setNegativeButton(
-                        "Use Manual Set",
+                        "Use Current GNSS",
                         (dialog, which) -> {
                             // Re-parse with manual coords (or just use existing)
                             replayData =
@@ -292,7 +297,7 @@ public class ReplayFragment extends Fragment {
         // Set initial orientation if data exists
         if (!replayData.isEmpty()) {
             float initialOrientation = replayData.get(0).orientation;
-            trajectoryMapFragment.updateUserLocation(startPoint, initialOrientation);
+            trajectoryMapFragment.updatePDRLocation(startPoint, initialOrientation);
             Log.i(TAG, "Setting initial orientation: " + initialOrientation);
         }
     }
@@ -352,17 +357,23 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= newIndex; i++) {
                 TrajParser.ReplayPoint p = replayData.get(i);
-                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                trajectoryMapFragment.updatePDRLocation(p.pdrLocation, p.orientation);
                 if (p.gnssLocation != null) {
-                    trajectoryMapFragment.updateGNSS(p.gnssLocation);
+                    trajectoryMapFragment.updateGNSSLocation(p.gnssLocation);
+                }
+                if (p.fusionLocation != null) {
+                    trajectoryMapFragment.updateFusionLocation(p.fusionLocation, p.orientation);
                 }
             }
         } else {
             // Normal sequential forward step: add just the new point
             TrajParser.ReplayPoint p = replayData.get(newIndex);
-            trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+            trajectoryMapFragment.updatePDRLocation(p.pdrLocation, p.orientation);
             if (p.gnssLocation != null) {
-                trajectoryMapFragment.updateGNSS(p.gnssLocation);
+                trajectoryMapFragment.updateGNSSLocation(p.gnssLocation);
+            }
+            if (p.fusionLocation != null) {
+                trajectoryMapFragment.updateFusionLocation(p.fusionLocation, p.orientation);
             }
             if (p.testPoint != null) {
                 trajectoryMapFragment.addTimeMarker(

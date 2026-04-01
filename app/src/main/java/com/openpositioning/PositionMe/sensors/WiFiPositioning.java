@@ -34,26 +34,8 @@ public class WiFiPositioning {
     // URL for Wi-Fi positioning API
     private static final String URL_FINE = URL_API + API_POST_WIFI_FINE;
 
-    /**
-     * Getter for the WiFi positioning coordinates obtained using OpenPositioning API
-     *
-     * @return the user's coordinates based on OpenPositioning API
-     */
-    public LatLng getWifiLocation() {
-        return wifiLocation;
-    }
-
     // Store user's location obtained using WiFi positioning
     private LatLng wifiLocation;
-
-    /**
-     * Getter for the WiFi positioning floor obtained using OpenPositioning API
-     *
-     * @return the user's location based on OpenPositioning API
-     */
-    public int getFloor() {
-        return floor;
-    }
 
     // Store current floor of user, default value 0 (ground floor)
     private int floor = 0;
@@ -68,6 +50,24 @@ public class WiFiPositioning {
     public WiFiPositioning(Context context) {
         // Initialising the Request queue
         this.requestQueue = Volley.newRequestQueue(context.getApplicationContext());
+    }
+
+    /**
+     * Getter for the WiFi positioning coordinates obtained using OpenPositioning API
+     *
+     * @return the user's coordinates based on OpenPositioning API
+     */
+    public LatLng getWifiLocation() {
+        return wifiLocation;
+    }
+
+    /**
+     * Getter for the WiFi positioning floor obtained using OpenPositioning API
+     *
+     * @return the user's location based on OpenPositioning API
+     */
+    public int getFloor() {
+        return floor;
     }
 
     // TODO - Reduce these two functions into a single function (code duplication)

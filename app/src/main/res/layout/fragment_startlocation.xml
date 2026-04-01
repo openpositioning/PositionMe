@@ -36,15 +36,16 @@
                 app:layout_constraintEnd_toEndOf="parent">
 
                 <TextView
-                    android:layout_gravity="center"
-                    android:id="@+id/correctionInfoView"
+                    android:id="@+id/startLocationHeader"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_gravity="center"
                     android:layout_margin="16dp"
-                    android:text="@string/locationInstructions"
+                    android:text="@string/locationWaiting"
+                    android:textAlignment="center"
                     android:textAppearance="?attr/textAppearanceBodyLarge"
-                    android:textColor="@color/md_theme_onPrimary"
-                    android:textAlignment="center"/>
+                    android:textColor="@color/md_theme_onPrimary" />
+
             </com.google.android.material.card.MaterialCardView>
 
             <Button

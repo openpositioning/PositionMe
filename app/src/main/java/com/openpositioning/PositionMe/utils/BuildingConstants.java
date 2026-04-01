@@ -9,6 +9,7 @@ import android.graphics.Color;
  * @see com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment
  *     TrajectoryMapFragment
  * @see IndoorMapManager
+ * @see FloorPlan
  */
 public class BuildingConstants {
 
@@ -20,10 +21,14 @@ public class BuildingConstants {
     public static final String BUILDING_ELEMENT_STAIRS = "stairs";
     public static final String BUILDING_ELEMENT_LIFT = "lift";
 
+    public static final int BUILDING_NO_FLOOR_NUMBER = -1;
+    public static final String BUILDING_NO_FLOOR_NAME = "N/A";
+
     // Paths
     public static final int COLOUR_PATH_COLOUR = Color.RED;
     public static final int COLOUR_PATH_MONOCHROME = Color.BLACK;
     public static final int COLOUR_PATH_GNSS = Color.BLUE;
+    public static final int COLOUR_PATH_FUSION = Color.GREEN;
 
     // Floor plans
     public static final int COLOUR_FLOOR_PLAN_FILL_TRANSPARENT = Color.TRANSPARENT;

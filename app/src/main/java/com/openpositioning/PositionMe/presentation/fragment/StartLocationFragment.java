@@ -1,17 +1,25 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.POSITION_UOE_LAT;
+import static com.openpositioning.PositionMe.utils.UtilConstants.POSITION_UOE_LON;
 import static com.openpositioning.PositionMe.utils.UtilConstants.ZOOM_LEVEL_DEFAULT;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -21,7 +29,6 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
-import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 /**
@@ -35,19 +42,26 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
  * @see SensorFusion the class containing sensors and recording.
  */
 public class StartLocationFragment extends Fragment {
+    private static final String TAG = "StartLocationFragment";
 
     // Button to go to next fragment and save the location
-    private Button button;
+    private Button buttonStart;
     // Singleton SensorFusion class which stores data from all sensors
-    private SensorFusion sensorFusion = SensorFusion.getInstance();
+    private SensorFusion sensorFusion;
+    private boolean positionFound;
+    private LatLng positionWiFi;
+    private float[] positionGNSS;
+
     // Google maps LatLng object to pass location to the map
     private LatLng position;
     // Start position of the user to be stored
     private float[] startPosition = new float[2];
-    // Zoom level for the Google map
-    private float zoom = ZOOM_LEVEL_DEFAULT;
-    // Dummy variable for floor index
-    private int FloorNK;
+    private TextView startLocationHeader;
+    private GoogleMap gMap;
+
+    private Marker startMarker;
+    private SharedPreferences settings;
+    boolean debugEnabled;
 
     /** Public Constructor for the class. Left empty as not required */
     public StartLocationFragment() {
@@ -67,14 +81,11 @@ public class StartLocationFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
-        // Get current GPS location to display as default marker position
-        startPosition = sensorFusion.getGNSSLatitude(false);
-        // If no location found, zoom the map out
-        if (startPosition[0] == 0 && startPosition[1] == 0) {
-            zoom = 1f;
-        } else {
-            zoom = ZOOM_LEVEL_DEFAULT;
-        }
+        startLocationHeader = rootView.findViewById(R.id.startLocationHeader);
+        sensorFusion = SensorFusion.getInstance();
+        positionFound = false;
+        settings = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        debugEnabled = settings.getBoolean("debug_mode", false);
 
         // Initialize map fragment
         SupportMapFragment supportMapFragment =
@@ -99,40 +110,11 @@ public class StartLocationFragment extends Fragment {
                         mMap.getUiSettings().setRotateGesturesEnabled(true);
                         mMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                        // *** FIX: Clear any existing markers so the start marker isn’t duplicated
-                        // ***
-                        mMap.clear();
-
-                        // Add a marker at the current GPS location and move the camera
-                        position = new LatLng(startPosition[0], startPosition[1]);
-                        mMap.addMarker(
-                                new MarkerOptions()
-                                        .position(position)
-                                        .title("Start Position")
-                                        .draggable(true));
-                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
-
-                        // Drag listener for the marker to update the start position when dragged
-                        mMap.setOnMarkerDragListener(
-                                new GoogleMap.OnMarkerDragListener() {
-                                    /** {@inheritDoc} */
-                                    @Override
-                                    public void onMarkerDragStart(Marker marker) {}
-
-                                    /** {@inheritDoc} Updates the start position of the user. */
-                                    @Override
-                                    public void onMarkerDragEnd(Marker marker) {
-                                        startPosition[0] = (float) marker.getPosition().latitude;
-                                        startPosition[1] = (float) marker.getPosition().longitude;
-                                    }
-
-                                    /** {@inheritDoc} */
-                                    @Override
-                                    public void onMarkerDrag(Marker marker) {}
-                                });
+                        // Save for future reference
+                        gMap = mMap;
+                        positionFound = checkForPosition();
                     }
                 });
-
         return rootView;
     }
 
@@ -144,43 +126,130 @@ public class StartLocationFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        this.button = view.findViewById(R.id.startLocationDone);
-        this.button.setOnClickListener(
+        buttonStart = view.findViewById(R.id.startLocationDone);
+        buttonStart.setOnClickListener(
                 new View.OnClickListener() {
                     /**
-                     * {@inheritDoc} When button clicked the PDR recording can start and the start
-                     * position is stored for the {@link CorrectionFragment} to display. The {@link
-                     * RecordingFragment} is loaded.
+                     * {@inheritDoc}
+                     *
+                     * <p>Start a recording if the position is available, or rescan for positions if
+                     * not
                      */
                     @Override
                     public void onClick(View view) {
-                        float chosenLat = startPosition[0];
-                        float chosenLon = startPosition[1];
-
-                        // If the Activity is RecordingActivity
-                        if (requireActivity() instanceof RecordingActivity) {
-                            // Start sensor recording + set the start location
-                            sensorFusion.setStartGNSSLatitude(startPosition);
-                            sensorFusion.startRecording();
-
-                            // Now switch to the recording screen
-                            ((RecordingActivity) requireActivity()).showRecordingScreen();
-
-                            // If the Activity is ReplayActivity
-                        } else if (requireActivity() instanceof ReplayActivity) {
-                            // *Do not* cast to RecordingActivity here
-                            // Just call the Replay method
-                            ((ReplayActivity) requireActivity())
-                                    .onStartLocationChosen(chosenLat, chosenLon);
-
-                            // Otherwise (unexpected host)
+                        if (positionFound) {
+                            startRecording();
                         } else {
-                            // Optional: log or handle error
-                            Log.e(
-                                    "StartLocationFragment",
-                                    "Unknown host Activity: " + requireActivity());
+                            positionFound = checkForPosition();
                         }
                     }
                 });
+    }
+
+    /**
+     * Check {@link SensorFusion} for any available Wi-Fi and GNSS locations, prioritising Wi-Fi,
+     * and updates the UI elements as required.
+     *
+     * @return True if a location was found; false otherwise
+     */
+    private boolean checkForPosition() {
+        if (gMap == null) {
+            setUINoLocation();
+            return false;
+        }
+        positionWiFi = sensorFusion.getLatLngWifiPositioning();
+        if (positionWiFi != null) {
+            createStartMarker(positionWiFi);
+            setUIFoundLocation("Wi-Fi");
+            return true;
+        }
+
+        positionGNSS = sensorFusion.getGNSSLatitude(false);
+        if (positionGNSS[0] != 0 && positionGNSS[1] != 0) {
+            LatLng position = new LatLng(positionGNSS[0], positionGNSS[1]);
+            createStartMarker(position);
+            setUIFoundLocation("GNSS");
+            return true;
+        }
+
+        new Handler(Looper.getMainLooper())
+                .post(
+                        () ->
+                                Toast.makeText(
+                                                getContext(),
+                                                "No location found",
+                                                Toast.LENGTH_SHORT)
+                                        .show());
+        setUINoLocation();
+        return false;
+    }
+
+    /**
+     * Update the UI to display that a location has been found
+     *
+     * @param type The type (Wi-Fi, or GNSS) of location found
+     */
+    private void setUIFoundLocation(String type) {
+        startLocationHeader.setText(
+                "Start location found (" + type + ")\nPress \"Start\" to begin your recording");
+        buttonStart.setText("Start");
+    }
+
+    /**
+     * Update the UI to state that no location is available, and zoom the map to a default location
+     */
+    private void setUINoLocation() {
+        if (gMap != null) {
+            // Clear any existing markers so the start marker isn’t duplicated
+            gMap.clear();
+
+            // Add a marker at the current GPS location and move the camera
+            position = new LatLng(POSITION_UOE_LAT, POSITION_UOE_LON);
+            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, 16.5f));
+        }
+
+        startLocationHeader.setText("Waiting for starting location");
+        buttonStart.setText("Scan for Location");
+    }
+
+    /** Pass control over to the {@link RecordingFragment} to being a recording */
+    private void startRecording() {
+        float markerLat = (float) startMarker.getPosition().latitude;
+        float markerLon = (float) startMarker.getPosition().longitude;
+        startPosition = new float[] {markerLat, markerLon};
+
+        // If the Activity is RecordingActivity
+        if (requireActivity() instanceof RecordingActivity) {
+            // Start sensor recording + set the start location
+            sensorFusion.setStartLocation(startPosition);
+            sensorFusion.startRecording();
+
+            // Now switch to the recording screen
+            ((RecordingActivity) requireActivity()).showRecordingScreen();
+
+            // Otherwise (unexpected host)
+        } else {
+            // Optional: log or handle error
+            Log.w(TAG, "Unknown host Activity: " + requireActivity());
+        }
+    }
+
+    /**
+     * Draw a marker showing the start position on the map
+     *
+     * @param position The location the marker should be drawn to
+     */
+    private void createStartMarker(LatLng position) {
+        if (startMarker != null) {
+            startMarker.remove();
+            startMarker = null;
+        }
+        startMarker =
+                gMap.addMarker(
+                        new MarkerOptions()
+                                .position(position)
+                                .draggable(debugEnabled)
+                                .title("Start Position"));
+        gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, ZOOM_LEVEL_DEFAULT));
     }
 }
