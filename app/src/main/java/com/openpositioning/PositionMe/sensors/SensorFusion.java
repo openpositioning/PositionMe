@@ -194,6 +194,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float prevPdrX = 0f;
     private float prevPdrY = 0f;
 
+    // Rolling average of recent PDR step displacements — used to gauge movement trend.
+    // Smoothed over the last ~5 steps via exponential moving average (alpha = 0.3).
+    private float pdrTrendDx = 0f;
+    private float pdrTrendDy = 0f;
+    private static final float PDR_TREND_ALPHA = 0.3f;
+
     // Gyroscope-integrated heading with rotation-vector correction (radians)
     private float fusedHeading = 0f;
     private boolean headingInitialised = false;
@@ -552,6 +558,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (particleFilter.isInitialized()) {
                         float dx = newCords[0] - prevPdrX;
                         float dy = newCords[1] - prevPdrY;
+
+                        // Update PDR movement trend (exponential moving average)
+                        pdrTrendDx = PDR_TREND_ALPHA * dx + (1f - PDR_TREND_ALPHA) * pdrTrendDx;
+                        pdrTrendDy = PDR_TREND_ALPHA * dy + (1f - PDR_TREND_ALPHA) * pdrTrendDy;
 
                         // Save particle positions BEFORE prediction
                         float[][] prevParticles = particleFilter.getParticlesCopy();
@@ -1168,14 +1178,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                                         + " dist=" + jumpDist + "m rssi=" + avgRssi);
                             }
 
-                            // When stationary, WiFi is the primary position source.
-                            // Tighten noise and inflate EKF covariance so updates converge quickly.
+                            // When stationary, WiFi provides a position anchor.
+                            // Keep covariance inflation modest so the Kalman gain stays
+                            // below ~0.5 and a single erroneous fix cannot pull the state
+                            // more than a few metres in one step.
                             if (stationaryMs > 3000) {
-                                noiseStd = 2.0f;
-                                ekfPositioning.inflateCovariance(200.0f);
+                                noiseStd = 4.0f;
+                                ekfPositioning.inflateCovariance(10.0f);
                             } else if (isStationary) {
-                                noiseStd = 3.0f;
-                                ekfPositioning.inflateCovariance(50.0f);
+                                noiseStd = 6.0f;
+                                ekfPositioning.inflateCovariance(5.0f);
                             } else {
                                 // While moving, reduce noise further only if the particle cloud
                                 // is already widely dispersed.
@@ -1186,11 +1198,59 @@ public class SensorFusion implements SensorEventListener, Observer {
                             }
 
                             noiseStd = Math.max(noiseStd, 2.0f);
+
+                            // ── EKF-specific: PDR motion-consistency check ──────────────
+                            // When moving, compare WiFi correction direction against the
+                            // recent PDR movement trend. If they are near-opposite (cosine < 0),
+                            // the WiFi observation is pulling against the walk direction —
+                            // likely a fingerprint error. Inflate noise to dampen the pull.
+                            // Also apply a gradual step: blend toward the WiFi position rather
+                            // than jumping to it, so the trajectory stays smooth.
+                            float ekfNoiseStd = noiseStd;
+                            float[] ekfState = ekfPositioning.getBestEstimate();
+
+                            float corrDx  = enu[0] - ekfState[0];
+                            float corrDy  = enu[1] - ekfState[1];
+                            float corrMag = (float) Math.sqrt(corrDx * corrDx + corrDy * corrDy);
+
+                            // Direction consistency check (moving only):
+                            // if WiFi correction opposes recent PDR movement, inflate noise.
+                            if (!isStationary) {
+                                float trendMag = (float) Math.sqrt(
+                                        pdrTrendDx * pdrTrendDx + pdrTrendDy * pdrTrendDy);
+                                if (trendMag > 0.05f && corrMag > 1.0f) {
+                                    float cosAngle = (pdrTrendDx * corrDx + pdrTrendDy * corrDy)
+                                            / (trendMag * corrMag);
+                                    if (cosAngle < 0f) {
+                                        float backwardPenalty = 1f + 2f * (-cosAngle);
+                                        ekfNoiseStd *= backwardPenalty;
+                                        Log.d("SensorFusion", "EKF WiFi direction penalty ×"
+                                                + backwardPenalty + " cosAngle=" + cosAngle);
+                                    }
+                                }
+                            }
+
+                            // Gradual position update: cap the single-step displacement so one
+                            // erroneous WiFi fix cannot teleport the state.
+                            // Allow a larger step when stationary (WiFi is the only anchor)
+                            // but still cap it to limit damage from a bad fix.
+                            final float MAX_STEP_METRES = isStationary ? 2.0f : 1.5f;
+                            if (corrMag > MAX_STEP_METRES) {
+                                float blend       = MAX_STEP_METRES / corrMag;
+                                float gradualEast  = ekfState[0] + blend * corrDx;
+                                float gradualNorth = ekfState[1] + blend * corrDy;
+                                ekfPositioning.updateWithWifi(gradualEast, gradualNorth, ekfNoiseStd);
+                                Log.d("SensorFusion", "EKF WiFi capped step=" + MAX_STEP_METRES
+                                        + "m corrMag=" + corrMag + " noise=" + ekfNoiseStd);
+                                particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
+                                return;
+                            }
+
                             Log.d("SensorFusion", "WiFi update noiseStd=" + noiseStd
                                     + " apCount=" + apCount + " avgRssi=" + avgRssi
                                     + " jump=" + jumpDist + "m stationary=" + isStationary);
                             particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
-                            ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
+                            ekfPositioning.updateWithWifi(enu[0], enu[1], ekfNoiseStd);
                         }
                     }
                 }
@@ -1733,6 +1793,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastKnownFloor = 0;
         prevPdrX = 0f;
         prevPdrY = 0f;
+        pdrTrendDx = 0f;
+        pdrTrendDy = 0f;
         fusedHeading = 0f;
         headingInitialised = false;
         lastGyroTimestampMs = 0;
