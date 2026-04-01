@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.BuildConstants.DEBUG;
+
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -84,13 +86,9 @@ public class StartLocationFragment extends Fragment {
     private static final int FILL_COLOR_SELECTED = Color.argb(100, 33, 150, 243);
     private static final int STROKE_COLOR_SELECTED = Color.argb(255, 25, 118, 210);
 
-    /**
-     * Public Constructor for the class.
-     * Left empty as not required
-     */
-    public StartLocationFragment() {
-        // Required empty public constructor
-    }
+    /** Required empty public constructor. */
+    public StartLocationFragment() {}
+
 
     /**
      * {@inheritDoc}
@@ -104,6 +102,9 @@ public class StartLocationFragment extends Fragment {
             activity.getSupportActionBar().hide();
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
+
+        // Ensure WiFi scanning is running so WiFi floor data is cached before recording
+        sensorFusion.ensureWirelessScanning();
 
         // Obtain the start position from GPS data
         startPosition = sensorFusion.getGNSSLatitude(false);
@@ -127,6 +128,8 @@ public class StartLocationFragment extends Fragment {
                 mMap = googleMap;
                 setupMap();
                 requestBuildingData();
+                // Also request with Nucleus centre as fallback if GNSS is far from buildings
+                requestBuildingDataForKnownBuildings();
             }
         });
 
@@ -210,7 +213,7 @@ public class StartLocationFragment extends Fragment {
                         }
 
                         if (buildings.isEmpty()) {
-                            Log.d(TAG, "No buildings returned by API");
+                            if (DEBUG) Log.d(TAG, "No buildings returned by API");
                             if (instructionText != null) {
                                 instructionText.setText(R.string.noBuildingsFound);
                             }
@@ -231,6 +234,55 @@ public class StartLocationFragment extends Fragment {
     }
 
     /**
+     * Fallback: request floorplan for known building locations (Nucleus, Library)
+     * in case the GNSS-based request missed them.
+     */
+    private void requestBuildingDataForKnownBuildings() {
+        // Known centres: Nucleus and Library
+        double[][] knownBuildings = {
+                {55.9230, -3.1742},  // Nucleus
+                {55.9229, -3.1750},  // Library
+        };
+
+        FloorplanApiClient apiClient = new FloorplanApiClient();
+        List<String> observedMacs = new ArrayList<>();
+        List<com.openpositioning.PositionMe.sensors.Wifi> wifiList = sensorFusion.getWifiList();
+        if (wifiList != null) {
+            for (com.openpositioning.PositionMe.sensors.Wifi wifi : wifiList) {
+                String mac = wifi.getBssidString();
+                if (mac != null && !mac.isEmpty()) observedMacs.add(mac);
+            }
+        }
+
+        for (double[] loc : knownBuildings) {
+            apiClient.requestFloorplan((float) loc[0], (float) loc[1], observedMacs,
+                    new FloorplanApiClient.FloorplanCallback() {
+                        @Override
+                        public void onSuccess(List<FloorplanApiClient.BuildingInfo> buildings) {
+                            if (!isAdded() || buildings.isEmpty()) return;
+                            for (FloorplanApiClient.BuildingInfo b : buildings) {
+                                if (!floorplanBuildingMap.containsKey(b.getName())) {
+                                    floorplanBuildingMap.put(b.getName(), b);
+                                }
+                            }
+                            // Merge into sensorFusion cache
+                            sensorFusion.setFloorplanBuildings(
+                                    new ArrayList<>(floorplanBuildingMap.values()));
+                            // Draw outlines if not already drawn
+                            if (buildingPolygons.isEmpty() && mMap != null) {
+                                drawBuildingOutlines(buildings);
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(String error) {
+                            // Silent fallback failure
+                        }
+                    });
+        }
+    }
+
+    /**
      * Draws building outlines on the map as clickable coloured polygons.
      *
      * @param buildings list of building info objects containing outline polygons
@@ -239,7 +291,7 @@ public class StartLocationFragment extends Fragment {
         for (FloorplanApiClient.BuildingInfo building : buildings) {
             List<LatLng> outlinePoints = building.getOutlinePolygon();
             if (outlinePoints == null || outlinePoints.size() < 3) {
-                Log.w(TAG, "Skipping building with insufficient outline points: "
+                if (DEBUG) Log.w(TAG, "Skipping building with insufficient outline points: "
                         + building.getName());
                 continue;
             }
@@ -269,7 +321,7 @@ public class StartLocationFragment extends Fragment {
                 mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(
                         boundsBuilder.build(), 100));
             } catch (Exception e) {
-                Log.w(TAG, "Could not fit bounds", e);
+                if (DEBUG) Log.w(TAG, "Could not fit bounds", e);
             }
         }
     }
@@ -316,7 +368,7 @@ public class StartLocationFragment extends Fragment {
         // Update UI with building name
         updateBuildingInfoDisplay(buildingName);
 
-        Log.d(TAG, "Building selected: " + buildingName);
+        if (DEBUG) Log.d(TAG, "Building selected: " + buildingName);
     }
 
     /**
@@ -338,7 +390,7 @@ public class StartLocationFragment extends Fragment {
 
         List<FloorplanApiClient.FloorShapes> floors = building.getFloorShapesList();
         if (floors == null || floors.isEmpty()) {
-            Log.d(TAG, "No floor shape data available for: " + buildingName);
+            if (DEBUG) Log.d(TAG, "No floor shape data available for: " + buildingName);
             return;
         }
 
@@ -462,15 +514,32 @@ public class StartLocationFragment extends Fragment {
             float chosenLat = startPosition[0];
             float chosenLon = startPosition[1];
 
+            // Auto-detect building if user didn't explicitly click one
+            if (selectedBuildingId == null && !floorplanBuildingMap.isEmpty()) {
+                double bestDist = Double.MAX_VALUE;
+                for (java.util.Map.Entry<String, FloorplanApiClient.BuildingInfo> e
+                        : floorplanBuildingMap.entrySet()) {
+                    LatLng c = e.getValue().getCenter();
+                    double d = Math.hypot(c.latitude - chosenLat, c.longitude - chosenLon);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        selectedBuildingId = e.getKey();
+                    }
+                }
+                if (DEBUG) Log.i(TAG, "Auto-selected building: " + selectedBuildingId
+                        + " userPos=(" + startPosition[0] + "," + startPosition[1] + ")");
+            }
+
             // Save the building selection for campaign binding during upload
             if (selectedBuildingId != null) {
                 sensorFusion.setSelectedBuildingId(selectedBuildingId);
             }
 
             if (requireActivity() instanceof RecordingActivity) {
-                // Start sensor recording + set the start location
-                sensorFusion.startRecording();
+                // Set start location BEFORE startRecording so fusion gets the correct origin
                 sensorFusion.setStartGNSSLatitude(startPosition);
+                // Start sensor recording
+                sensorFusion.startRecording();
                 // Write trajectory_id, initial_position and initial heading to protobuf
                 sensorFusion.writeInitialMetadata();
 

@@ -112,13 +112,25 @@
     <!-- Building defaults -->
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
-    <string name="color">Color</string>
+    <string name="print_location">Print Location</string>
+    <string name="location_copied">Location copied to clipboard</string>
+    <string name="calibration_countdown">Calibrating: %1$ds remaining — Please do not move\nPlease choose the map style above</string>
+    <string name="calibration_countdown_indoor">Calibrating: %1$ds remaining\nPlease do not move</string>
     <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="wifiSwitch">📡 Show WiFi </string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
+    <string name="compassSwitch">🧭 Show Compass </string>
+    <string name="pdrPathSwitch">🔴 PDR Path </string>
+    <string name="fusedPathSwitch">🟣 Fused Path </string>
+    <string name="smoothPathSwitch">🟢 Smooth Path </string>
+    <string name="estimatedSwitch">🔮 Show Estimated </string>
+    <string name="weatherSwitch">🌤 Show Weather </string>
     <string name="auto_floor">❇️ Auto Floor </string>
+    <string name="navigatingSwitch">🧿 Navigating </string>
     <string name="gnss_error">GNSS error:</string>
+    <string name="wifi_error">WiFi error:</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>

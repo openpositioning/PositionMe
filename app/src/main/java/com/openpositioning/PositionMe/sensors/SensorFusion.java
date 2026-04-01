@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
+import static com.openpositioning.PositionMe.BuildConstants.DEBUG;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
@@ -19,6 +21,7 @@ import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.sensors.fusion.FusionManager;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -73,6 +76,7 @@ public class SensorFusion implements SensorEventListener {
     private MovementSensor magnetometerSensor;
     private MovementSensor stepDetectionSensor;
     private MovementSensor rotationSensor;
+    private MovementSensor magneticRotationSensor; // TYPE_ROTATION_VECTOR for initial heading calibration
     private MovementSensor gravitySensor;
     private MovementSensor linearAccelerationSensor;
 
@@ -87,6 +91,9 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
+
+    // Sensor fusion (particle filter)
+    private FusionManager fusionManager;
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
@@ -138,7 +145,13 @@ public class SensorFusion implements SensorEventListener {
         this.proximitySensor = new MovementSensor(context, Sensor.TYPE_PROXIMITY);
         this.magnetometerSensor = new MovementSensor(context, Sensor.TYPE_MAGNETIC_FIELD);
         this.stepDetectionSensor = new MovementSensor(context, Sensor.TYPE_STEP_DETECTOR);
-        this.rotationSensor = new MovementSensor(context, Sensor.TYPE_ROTATION_VECTOR);
+        // Use GAME_ROTATION_VECTOR (gyro+accel only, no magnetometer)
+        // to avoid indoor magnetic field distortion corrupting heading
+        this.rotationSensor = new MovementSensor(context, Sensor.TYPE_GAME_ROTATION_VECTOR);
+        // Also register TYPE_ROTATION_VECTOR (with magnetometer) for initial heading calibration.
+        // We compute the offset between magnetic north and GAME_ROTATION_VECTOR once at startup,
+        // then apply it as a fixed correction — giving absolute heading without magnetic drift.
+        this.magneticRotationSensor = new MovementSensor(context, Sensor.TYPE_ROTATION_VECTOR);
         this.gravitySensor = new MovementSensor(context, Sensor.TYPE_GRAVITY);
         this.linearAccelerationSensor = new MovementSensor(context, Sensor.TYPE_LINEAR_ACCELERATION);
 
@@ -160,9 +173,16 @@ public class SensorFusion implements SensorEventListener {
 
         this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
 
+        // Create fusion manager (particle filter)
+        this.fusionManager = new FusionManager();
+
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
                 state, pdrProcessing, pathView, recorder, bootTime);
+        this.eventHandler.setFusionManager(fusionManager);
+
+        // Wire WiFi positioning callback to fusion manager
+        this.wifiPositionManager.setFusionManager(fusionManager);
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -223,26 +243,37 @@ public class SensorFusion implements SensorEventListener {
      * <p>Should be called from {@link MainActivity} when resuming the application.</p>
      */
     public void resumeListening() {
+        // GAME_ROTATION_VECTOR may change its arbitrary reference frame when
+        // listeners are re-registered, so reset heading calibration to force
+        // recomputation from the next TYPE_ROTATION_VECTOR samples.
+        eventHandler.resetHeadingCalibration();
+
+        // Request 10000μs (100Hz). The device's OS scheduling only delivers ~48Hz
+        // at 20000μs. Requesting faster forces the HAL to deliver closer to 50Hz+.
+        // Server requires ≥50Hz, rejects >200Hz.
+        final int imuPeriodUs = 10000;
         accelerometerSensor.sensorManager.registerListener(this,
-                accelerometerSensor.sensor, 10000, (int) maxReportLatencyNs);
+                accelerometerSensor.sensor, imuPeriodUs, (int) maxReportLatencyNs);
         accelerometerSensor.sensorManager.registerListener(this,
-                linearAccelerationSensor.sensor, 10000, (int) maxReportLatencyNs);
+                linearAccelerationSensor.sensor, imuPeriodUs, (int) maxReportLatencyNs);
         accelerometerSensor.sensorManager.registerListener(this,
-                gravitySensor.sensor, 10000, (int) maxReportLatencyNs);
+                gravitySensor.sensor, imuPeriodUs, (int) maxReportLatencyNs);
         barometerSensor.sensorManager.registerListener(this,
                 barometerSensor.sensor, (int) 1e6);
         gyroscopeSensor.sensorManager.registerListener(this,
-                gyroscopeSensor.sensor, 10000, (int) maxReportLatencyNs);
+                gyroscopeSensor.sensor, imuPeriodUs, (int) maxReportLatencyNs);
         lightSensor.sensorManager.registerListener(this,
                 lightSensor.sensor, (int) 1e6);
         proximitySensor.sensorManager.registerListener(this,
                 proximitySensor.sensor, (int) 1e6);
         magnetometerSensor.sensorManager.registerListener(this,
-                magnetometerSensor.sensor, 10000, (int) maxReportLatencyNs);
+                magnetometerSensor.sensor, imuPeriodUs, (int) maxReportLatencyNs);
         stepDetectionSensor.sensorManager.registerListener(this,
                 stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this,
                 rotationSensor.sensor, (int) 1e6);
+        magneticRotationSensor.sensorManager.registerListener(this,
+                magneticRotationSensor.sensor, (int) 1e6);
         // Foreground service owns WiFi/BLE scanning during recording.
         if (!recorder.isRecording()) {
             startWirelessCollectors();
@@ -265,6 +296,7 @@ public class SensorFusion implements SensorEventListener {
             magnetometerSensor.sensorManager.unregisterListener(this);
             stepDetectionSensor.sensorManager.unregisterListener(this);
             rotationSensor.sensorManager.unregisterListener(this);
+            magneticRotationSensor.sensorManager.unregisterListener(this);
             linearAccelerationSensor.sensorManager.unregisterListener(this);
             gravitySensor.sensorManager.unregisterListener(this);
             stopWirelessCollectors();
@@ -303,14 +335,14 @@ public class SensorFusion implements SensorEventListener {
                 wifiProcessor.stopListening();
             }
         } catch (Exception e) {
-            System.err.println("WiFi stop failed");
+            if (DEBUG) System.err.println("WiFi stop failed");
         }
         try {
             if (bleProcessor != null) {
                 bleProcessor.stopListening();
             }
         } catch (Exception e) {
-            System.err.println("BLE stop failed");
+            if (DEBUG) System.err.println("BLE stop failed");
         }
     }
 
@@ -329,6 +361,65 @@ public class SensorFusion implements SensorEventListener {
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
 
+        // Reset fusion for new session
+        if (fusionManager != null) {
+            fusionManager.reset();
+
+            // Initialize fusion from user-selected start position (more reliable than indoor GNSS)
+            if (state.startLocation[0] != 0 || state.startLocation[1] != 0) {
+                fusionManager.initializeFromStartLocation(
+                        state.startLocation[0], state.startLocation[1]);
+            }
+
+            // Load wall constraints from cached floorplan data
+            String buildingId = recorder.getSelectedBuildingId();
+            if (DEBUG) android.util.Log.i("SensorFusion",
+                    "Wall loading: buildingId=" + buildingId
+                    + " cacheSize=" + floorplanBuildingCache.size()
+                    + " cacheKeys=" + floorplanBuildingCache.keySet());
+            FloorplanApiClient.BuildingInfo building = getFloorplanBuilding(buildingId);
+            if (building != null && building.getFloorShapesList() != null
+                    && !building.getFloorShapesList().isEmpty()) {
+                fusionManager.loadMapConstraints(
+                        building.getFloorShapesList(),
+                        building.getOutlinePolygon());
+                if (DEBUG) android.util.Log.i("SensorFusion",
+                        "Wall constraints loaded for: " + buildingId
+                        + " floors=" + building.getFloorShapesList().size()
+                        + " outlinePoints=" + (building.getOutlinePolygon() != null
+                                ? building.getOutlinePolygon().size() : 0));
+            } else {
+                if (DEBUG) android.util.Log.w("SensorFusion",
+                        "Primary building not found: building="
+                        + (building != null) + " hasShapes="
+                        + (building != null && building.getFloorShapesList() != null));
+                // Fallback: try the first available building in cache
+                for (FloorplanApiClient.BuildingInfo b : getFloorplanBuildings()) {
+                    if (DEBUG) android.util.Log.d("SensorFusion",
+                            "Fallback check: " + b.getName()
+                            + " hasShapes=" + (b.getFloorShapesList() != null)
+                            + " shapeCount=" + (b.getFloorShapesList() != null
+                                    ? b.getFloorShapesList().size() : 0));
+                    if (b.getFloorShapesList() != null
+                            && !b.getFloorShapesList().isEmpty()) {
+                        fusionManager.loadMapConstraints(
+                                b.getFloorShapesList(),
+                                b.getOutlinePolygon());
+                        if (DEBUG) android.util.Log.i("SensorFusion",
+                                "Wall constraints loaded (fallback): " + b.getName());
+                        break;
+                    }
+                }
+            }
+
+            // WiFi floor is unreliable (API often returns 0 regardless of actual floor).
+            // Location-aware CalDB in RecordingFragment.onCreate() will set the
+            // initial floor based on nearby calibration records instead.
+            int wifiFloor = wifiPositionManager.getWifiFloor();
+            if (DEBUG) android.util.Log.i("SensorFusion",
+                    "Fusion start: wifiFloor=" + wifiFloor + " (not used for seeding)");
+        }
+
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
 
@@ -338,8 +429,18 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Disables saving sensor values to the trajectory object.
-     * Also stops the foreground service since background collection is no longer needed.
+     * Pauses or resumes PDR step processing (heading calibration continues).
+     *
+     * @param paused true to pause, false to resume
+     */
+    public void setPdrPaused(boolean paused) {
+        if (eventHandler != null) eventHandler.setPdrPaused(paused);
+    }
+
+
+
+    /**
+     * Disables saving sensor values and stops the foreground collection service.
      *
      * @see TrajectoryRecorder#stopRecording()
      * @see SensorCollectionService
@@ -624,6 +725,94 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Ensures WiFi and BLE scanning is running. Safe to call multiple times.
+     * Called from StartLocationFragment so WiFi floor data is cached before recording.
+     */
+    public void ensureWirelessScanning() {
+        startWirelessCollectors();
+    }
+
+    /**
+     * Sets a callback to be notified when a WiFi floor response arrives.
+     * Used by autofloor toggle to re-seed initial floor from WiFi.
+     *
+     * @param callback callback to invoke on WiFi floor response, or null to clear
+     */
+    public void setWifiFloorCallback(WifiPositionManager.WifiFloorCallback callback) {
+        if (wifiPositionManager != null) {
+            wifiPositionManager.setWifiFloorCallback(callback);
+        }
+    }
+
+    /**
+     * Sets the initial floor for PDR processing.
+     * Called when floor is known from calibration DB or other sources.
+     */
+    public void setInitialFloor(int floor) {
+        if (pdrProcessing != null) {
+            pdrProcessing.setInitialFloor(floor);
+        }
+    }
+
+    /**
+     * Reseeds the floor to a WiFi-determined value during recording.
+     * Properly resets both PdrProcessing baro baseline (using current smoothed
+     * altitude) and FusionManager/ParticleFilter floor state.
+     * Use this instead of setInitialFloor + resetBaroBaseline to avoid the
+     * ordering bug where resetBaroBaseline sees floorsChanged=0.
+     *
+     * @param floor logical floor number (0=GF, 1=F1, …)
+     */
+    public void reseedFloor(int floor) {
+        if (pdrProcessing != null) {
+            pdrProcessing.reseedFloor(floor);
+        }
+        if (fusionManager != null) {
+            fusionManager.reseedFloor(floor);
+        }
+    }
+
+    /**
+     * Returns the current floor as tracked by the barometric floor detector
+     * in PdrProcessing. Accounts for initialFloorOffset, unlike raw elevation.
+     *
+     * @return logical floor number (0=GF, 1=F1, …)
+     */
+    public int getBaroFloor() {
+        return pdrProcessing != null ? pdrProcessing.getCurrentFloor() : 0;
+    }
+
+    /**
+     * Overrides the barometric floor height used by PdrProcessing.
+     * Call when the building is identified so floor detection uses the
+     * correct barometric altitude difference for that building.
+     */
+    public void setBaroFloorHeight(float height) {
+        if (pdrProcessing != null) {
+            pdrProcessing.setBaroFloorHeight(height);
+        }
+    }
+
+    /**
+     * Resets the barometric baseline after a confirmed floor change.
+     * This prevents long-term baro drift from accumulating.
+     *
+     * @param confirmedFloor the confirmed floor number
+     */
+    public void resetBaroBaseline(int confirmedFloor) {
+        if (pdrProcessing != null) {
+            pdrProcessing.resetBaroBaseline(confirmedFloor);
+        }
+    }
+
+    /**
+     * Returns the fusion manager for accessing the fused position.
+     */
+    public FusionManager getFusionManager() {
+        return fusionManager;
+    }
+
+    /**
      * Utility function to log the event frequency of each sensor.
      */
     public void logSensorFrequencies() {
@@ -645,6 +834,14 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+
+            // Only feed GPS provider to the particle filter.
+            if (fusionManager != null && location.getProvider() != null
+                    && location.getProvider().equals(android.location.LocationManager.GPS_PROVIDER)) {
+                fusionManager.onGnssPosition(
+                        location.getLatitude(), location.getLongitude(),
+                        location.getAccuracy());
+            }
         }
     }
 

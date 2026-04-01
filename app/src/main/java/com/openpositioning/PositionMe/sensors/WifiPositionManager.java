@@ -1,8 +1,11 @@
 package com.openpositioning.PositionMe.sensors;
 
+import static com.openpositioning.PositionMe.BuildConstants.DEBUG;
+
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.sensors.fusion.FusionManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -26,7 +29,21 @@ public class WifiPositionManager implements Observer {
 
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
+    private FusionManager fusionManager;
     private List<Wifi> wifiList;
+
+    /** One-shot or temporary callback for WiFi floor updates (e.g. autofloor re-seed). */
+    private volatile WifiFloorCallback wifiFloorCallback;
+
+    /** Callback interface for receiving WiFi floor responses. */
+    public interface WifiFloorCallback {
+        /**
+         * Called when a WiFi floor response arrives.
+         *
+         * @param floor resolved floor number
+         */
+        void onWifiFloor(int floor);
+    }
 
     /**
      * Creates a new WifiPositionManager.
@@ -38,6 +55,21 @@ public class WifiPositionManager implements Observer {
                                TrajectoryRecorder recorder) {
         this.wiFiPositioning = wiFiPositioning;
         this.recorder = recorder;
+    }
+
+    /** Injects the fusion manager so WiFi fixes feed the particle filter. */
+    public void setFusionManager(FusionManager fusionManager) {
+        this.fusionManager = fusionManager;
+    }
+
+    /**
+     * Sets a callback to be notified when a WiFi floor response arrives.
+     * Used by autofloor toggle to re-seed initial floor from WiFi.
+     *
+     * @param callback callback to invoke, or null to clear
+     */
+    public void setWifiFloorCallback(WifiFloorCallback callback) {
+        this.wifiFloorCallback = callback;
     }
 
     /**
@@ -56,16 +88,38 @@ public class WifiPositionManager implements Observer {
 
     /**
      * Creates a request to obtain a WiFi location for the obtained WiFi fingerprint.
+     * Uses the callback variant so the result can be forwarded to the fusion manager.
      */
     private void createWifiPositioningRequest() {
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
+                // API accepts integer BSSID format (returns 404 if no match).
+                // Colon MAC format is rejected with 400 by the server validation.
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+            if (DEBUG) Log.d("WifiPositionManager", "WiFi request: " + wifiAccessPoints.length() + " APs");
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    if (fusionManager != null && wifiLocation != null) {
+                        fusionManager.onWifiPosition(
+                                wifiLocation.latitude, wifiLocation.longitude, floor);
+                    }
+                    // Notify floor callback (used by autofloor re-seed)
+                    WifiFloorCallback cb = wifiFloorCallback;
+                    if (cb != null && floor >= 0) {
+                        cb.onWifiFloor(floor);
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    if (DEBUG) Log.w("WifiPositionManager", "WiFi positioning failed: " + message);
+                }
+            });
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());
         }
@@ -84,14 +138,10 @@ public class WifiPositionManager implements Observer {
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
-                public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
-                }
+                public void onSuccess(LatLng wifiLocation, int floor) { }
 
                 @Override
-                public void onError(String message) {
-                    // Handle the error response
-                }
+                public void onError(String message) { }
             });
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());

@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.data.remote;
 
+import static com.openpositioning.PositionMe.BuildConstants.DEBUG;
+
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -243,7 +245,7 @@ public class FloorplanApiClient {
                     }
 
                     String json = responseBody.string();
-                    Log.d(TAG, "Floorplan response length: " + json.length());
+                    if (DEBUG) Log.d(TAG, "Floorplan response length: " + json.length());
 
                     List<BuildingInfo> buildings = parseResponse(json);
                     postToMainThread(() -> callback.onSuccess(buildings));
@@ -267,17 +269,45 @@ public class FloorplanApiClient {
         List<BuildingInfo> buildings = new ArrayList<>();
         JSONArray array = new JSONArray(json);
 
+        if (DEBUG) Log.i(TAG, "=== FLOORPLAN API RESPONSE: " + array.length() + " building(s) ===");
         for (int i = 0; i < array.length(); i++) {
             JSONObject obj = array.getJSONObject(i);
             String name = obj.getString("name");
+
+            if (DEBUG) {
+                StringBuilder keys = new StringBuilder();
+                Iterator<String> keyIt = obj.keys();
+                while (keyIt.hasNext()) keys.append(keyIt.next()).append(", ");
+                Log.i(TAG, "[Building " + i + "] name=" + name + " | keys=[" + keys + "]");
+            }
+
             String outlineJson = obj.optString("outline", "");
             String mapShapesJson = obj.optString("map_shapes", "");
 
             List<LatLng> polygon = parseOutlineGeoJson(outlineJson);
+            if (DEBUG) Log.i(TAG, "  outline: " + polygon.size() + " vertices"
+                    + (outlineJson.length() > 200
+                    ? " | json[0..200]=" + outlineJson.substring(0, 200)
+                    : " | json=" + outlineJson));
+
             List<FloorShapes> floorShapes = parseMapShapes(mapShapesJson);
+            if (DEBUG) {
+                for (FloorShapes fs : floorShapes) {
+                    java.util.Map<String, Integer> typeCounts = new java.util.LinkedHashMap<>();
+                    for (MapShapeFeature f : fs.getFeatures()) {
+                        String key = f.getIndoorType() + "(" + f.getGeometryType() + ")";
+                        typeCounts.put(key, typeCounts.getOrDefault(key, 0) + 1);
+                    }
+                    Log.i(TAG, "  floor=" + fs.getDisplayName()
+                            + " | features=" + fs.getFeatures().size()
+                            + " | types=" + typeCounts);
+                }
+            }
+
             buildings.add(new BuildingInfo(name, outlineJson, mapShapesJson,
                     polygon, floorShapes));
         }
+        if (DEBUG) Log.i(TAG, "=== END FLOORPLAN API RESPONSE ===");
 
         return buildings;
     }
@@ -352,12 +382,30 @@ public class FloorplanApiClient {
     }
 
     /**
-     * Parses the map_shapes JSON string into a list of FloorShapes, sorted by floor key.
-     * The top-level JSON is an object with keys like "B1", "B2", etc. Each value is a
-     * GeoJSON FeatureCollection containing indoor features (walls, rooms, etc.).
+     * Maps a floor display name to a physical height order number.
+     * Lower numbers = lower physical floors.
+     * LG=-1, GF=0, F1=1, F2=2, F3=3, etc.
+     */
+    private static int floorNameToPhysicalOrder(String name) {
+        if (name == null) return 100;
+        String upper = name.toUpperCase().trim();
+        if (upper.equals("LG") || upper.equals("LOWER GROUND")) return -1;
+        if (upper.equals("GF") || upper.equals("G") || upper.equals("GROUND")) return 0;
+        // "F1","F2","F3"... or "1","2","3"...
+        try {
+            if (upper.startsWith("F")) return Integer.parseInt(upper.substring(1));
+            if (upper.startsWith("B")) return -Integer.parseInt(upper.substring(1)); // basement
+            return Integer.parseInt(upper);
+        } catch (NumberFormatException e) {
+            return 100; // unknown → put at end
+        }
+    }
+
+    /**
+     * Parses the map_shapes JSON into a list of FloorShapes sorted by physical floor height.
      *
-     * @param mapShapesJson the raw map_shapes JSON string from the API
-     * @return list of FloorShapes sorted by key (B1=index 0, B2=index 1, ...)
+     * @param mapShapesJson raw map_shapes JSON string from the API
+     * @return list of FloorShapes sorted by floor
      */
     private List<FloorShapes> parseMapShapes(String mapShapesJson) {
         List<FloorShapes> result = new ArrayList<>();
@@ -366,13 +414,21 @@ public class FloorplanApiClient {
         try {
             JSONObject root = new JSONObject(mapShapesJson);
 
-            // Collect and sort floor keys (B1, B2, B3...)
+            // Collect floor keys and sort by physical height order.
+            // API keys are like "B1","B2",... with display names like "LG","GF","F1","F2","F3".
+            // Alphabetical sort puts GF after F3 which is wrong.
+            // We parse display names first, then sort by a custom physical-height comparator.
             List<String> keys = new ArrayList<>();
             Iterator<String> it = root.keys();
             while (it.hasNext()) {
                 keys.add(it.next());
             }
-            Collections.sort(keys);
+            // Sort by display name physical order: LG < GF < F1 < F2 < F3 ...
+            Collections.sort(keys, (a, b) -> {
+                String nameA = root.optJSONObject(a) != null ? root.optJSONObject(a).optString("name", a) : a;
+                String nameB = root.optJSONObject(b) != null ? root.optJSONObject(b).optString("name", b) : b;
+                return floorNameToPhysicalOrder(nameA) - floorNameToPhysicalOrder(nameB);
+            });
 
             for (String key : keys) {
                 JSONObject floorCollection = root.getJSONObject(key);
@@ -440,7 +496,7 @@ public class FloorplanApiClient {
                     parts.add(parseCoordArray(coordinates.getJSONArray(0)));
                 }
             } else {
-                Log.d(TAG, "Unsupported geometry type in map_shapes: " + geoType);
+                if (DEBUG) Log.d(TAG, "Unsupported geometry type in map_shapes: " + geoType);
                 return null;
             }
 

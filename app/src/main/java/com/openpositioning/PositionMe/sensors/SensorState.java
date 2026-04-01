@@ -39,4 +39,10 @@ public class SensorState {
 
     // Step counting
     public volatile int stepCounter;
+
+    // Fused position from particle filter
+    public volatile double fusedLatitude;
+    public volatile double fusedLongitude;
+    public volatile int fusedFloor;
+    public volatile double fusedUncertainty;
 }

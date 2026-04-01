@@ -103,6 +103,19 @@
     </com.google.android.material.card.MaterialCardView>
 
 
+    <!-- Map type toggle (top-right) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/mapTypeToggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:src="@android:drawable/ic_dialog_map"
+        android:alpha="0.85"
+        app:fabSize="mini"
+        app:backgroundTint="@color/md_theme_light_surface"
+        app:layout_constraintTop_toBottomOf="@id/cardView"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/correction_done"
         android:layout_width="wrap_content"
@@ -121,6 +134,7 @@
         android:id="@+id/pathView1"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:visibility="gone"
         android:contentDescription="@string/path_drawing_descritpion"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
