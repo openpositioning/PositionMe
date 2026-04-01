@@ -31,34 +31,6 @@
             android:padding="8dp"
             android:gravity="center">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/gnssSwitch"/>
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/wifiSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/wifiSwitch"/>
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/pdrSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/pdrSwitch" />
-
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
-
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/settingsButton"
                 android:layout_width="wrap_content"
@@ -84,18 +56,21 @@
                     android:id="@+id/gnssSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="30dp"
+                    android:checked="true"
                     android:text="@string/gnssSwitch" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/wifiSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="30dp"
+                    android:checked="true"
                     android:text="@string/wifiSwitch" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/pdrSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="30dp"
+                    android:checked="true"
                     android:text="@string/pdrSwitch" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
