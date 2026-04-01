@@ -29,7 +29,7 @@ public class PositionFusionEngine {
 
     private static final double EARTH_RADIUS_M = 6378137.0;
 
-    private static final int PARTICLE_COUNT = 300;
+    private static final int PARTICLE_COUNT = 200;
     private static final double RESAMPLE_RATIO = 0.5;
     private static final double PDR_NOISE_STD_M = 0.55;
     private static final double INIT_STD_M = 2.0;
@@ -46,7 +46,7 @@ public class PositionFusionEngine {
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
-    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.15;
+    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.18;
     private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(5.0);
     private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(170.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
