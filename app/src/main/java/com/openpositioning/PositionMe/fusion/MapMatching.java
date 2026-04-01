@@ -118,7 +118,14 @@ public class MapMatching {
         return validParticles;
     }
 
-    /** TODO - JavaDocs */
+    /**
+     * Checks whether the movement from a current position to a new position crosses any wall on the
+     * current floor.
+     *
+     * @param currentEstimate the starting position as {@code [easting, northing]}
+     * @param newEstimate the proposed new position as {@code [easting, northing]}
+     * @return {@code true} if the movement crosses a wall segment, {@code false} otherwise
+     */
     public boolean checkWallCrossed(double[] currentEstimate, double[] newEstimate) {
         if (walls == null) return false;
 
@@ -206,7 +213,13 @@ public class MapMatching {
         return false;
     }
 
-    /** TODO - JavaDocs */
+    /**
+     * Checks whether a point lies inside any polygon in the given list of elements.
+     *
+     * @param elements list of polygons, each defined as an ordered list of {@code [x, y]} vertices
+     * @param point the test point as {@code [easting, northing]}
+     * @return {@code true} if the point is inside any of the polygons
+     */
     private boolean isPointInAnyElement(List<List<double[]>> elements, double[] point) {
         for (List<double[]> element : elements) {
             if (isPointInPolygon(point, element)) {
