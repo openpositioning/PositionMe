@@ -526,6 +526,10 @@ public class SensorFusion implements SensorEventListener {
         }
         if (fusionEngine != null) {
             fusionEngine.reset(startPosition[0], startPosition[1], 0);
+            // Anchor is now valid — immediately load wall geometry from cached building data
+            // so map matching is active from the very first step, not just after the first GNSS fix.
+            fusionEngine.updateMapMatchingContext(
+                    startPosition[0], startPosition[1], getFloorplanBuildings());
             updateFusedState();
         }
     }
@@ -703,14 +707,16 @@ public class SensorFusion implements SensorEventListener {
                 recorder.ensureInitialPosition(location.getLatitude(), location.getLongitude());
             }
             if (fusionEngine != null) {
-                fusionEngine.updateMapMatchingContext(
-                        location.getLatitude(),
-                        location.getLongitude(),
-                        getFloorplanBuildings());
+                // Update GNSS first so the local-frame anchor is established,
+                // then load wall geometry which is converted into that frame.
                 fusionEngine.updateGnss(
                         location.getLatitude(),
                         location.getLongitude(),
                         location.getAccuracy());
+                fusionEngine.updateMapMatchingContext(
+                        location.getLatitude(),
+                        location.getLongitude(),
+                        getFloorplanBuildings());
                 updateFusedState();
             }
             recorder.addGnssData(location);

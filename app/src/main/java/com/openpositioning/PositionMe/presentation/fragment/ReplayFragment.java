@@ -131,19 +131,32 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
+        // In replay mode every recorded position must be drawn; bypass the live-recording
+        // distance gate so even densely-sampled trajectories render fully.
+        trajectoryMapFragment.setReplayMode(true);
 
 
-        // 1) Check if the file contains any GNSS data
+
+        // 1) Determine best initial camera position:
+        //    Priority: user-chosen start → first replay point's actual position
+        LatLng bestInitialPosition = null;
+        if (initialLat != 0f || initialLon != 0f) {
+            bestInitialPosition = new LatLng(initialLat, initialLon);
+        } else if (!replayData.isEmpty() && replayData.get(0).pdrLocation != null) {
+            // GPS wasn't fixed at replay time — fall back to the trajectory's own start
+            bestInitialPosition = replayData.get(0).pdrLocation;
+            Log.i(TAG, "No GPS fix for camera; using first trajectory point: " + bestInitialPosition);
+        }
+
+        // 2) Check if the file contains any GNSS data
         boolean gnssExists = hasAnyGnssData(replayData);
 
         if (gnssExists) {
-            showGnssChoiceDialog();
+            showGnssChoiceDialog(bestInitialPosition);
         } else {
-            // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+            if (bestInitialPosition != null) {
+                Log.i(TAG, "Setting initial map position: " + bestInitialPosition);
+                trajectoryMapFragment.setInitialCameraPosition(bestInitialPosition);
             }
         }
 
@@ -250,9 +263,12 @@ public class ReplayFragment extends Fragment {
     /**
      * Show a simple dialog asking user to pick:
      * 1) GNSS from file
-     * 2) Lat/Lon from ReplayActivity arguments
+     * 2) Lat/Lon from ReplayActivity arguments (or trajectory start as fallback)
+     *
+     * @param fallbackPosition the best available camera position when the user
+     *                         chooses "Manual Set" (may be null if nothing is known)
      */
-    private void showGnssChoiceDialog() {
+    private void showGnssChoiceDialog(LatLng fallbackPosition) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Choose Starting Location")
                 .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
@@ -262,13 +278,18 @@ public class ReplayFragment extends Fragment {
                         reanchorReplayToGnss(firstGnss);
                         setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
                     } else {
-                        // Fallback if no valid GNSS found
-                        setupInitialMapPosition(initialLat, initialLon);
+                        if (fallbackPosition != null) {
+                            Log.i(TAG, "Setting camera to file GNSS fallback position: " + fallbackPosition);
+                            trajectoryMapFragment.setInitialCameraPosition(fallbackPosition);
+                        }
                     }
                     dialog.dismiss();
                 })
                 .setNegativeButton("Use Manual Set", (dialog, which) -> {
-                    setupInitialMapPosition(initialLat, initialLon);
+                    if (fallbackPosition != null) {
+                        Log.i(TAG, "Setting camera to manual/fallback position: " + fallbackPosition);
+                        trajectoryMapFragment.setInitialCameraPosition(fallbackPosition);
+                    }
                     dialog.dismiss();
                 })
                 .setCancelable(false)
@@ -368,7 +389,9 @@ public class ReplayFragment extends Fragment {
         boolean isSequentialForward = (newIndex == lastIndex + 1);
 
         if (!isSequentialForward) {
-            // Clear everything and redraw up to newIndex
+            // Clear everything and redraw history up to newIndex.
+            // Camera moves are suppressed during the bulk loop (replay mode) to avoid
+            // dozens of rapid camera jumps; we recentre on the final point afterwards.
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= newIndex; i++) {
                 TrajParser.ReplayPoint p = replayData.get(i);
@@ -377,12 +400,21 @@ public class ReplayFragment extends Fragment {
                     trajectoryMapFragment.updateGNSS(p.gnssLocation);
                 }
             }
+            // Recentre camera on the current position after the seek
+            TrajParser.ReplayPoint current = replayData.get(newIndex);
+            if (current.pdrLocation != null) {
+                trajectoryMapFragment.setInitialCameraPosition(current.pdrLocation);
+            }
         } else {
             // Normal sequential forward step: add just the new point
             TrajParser.ReplayPoint p = replayData.get(newIndex);
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
+            }
+            // Keep camera centred on the moving point during playback
+            if (p.pdrLocation != null) {
+                trajectoryMapFragment.setInitialCameraPosition(p.pdrLocation);
             }
         }
 

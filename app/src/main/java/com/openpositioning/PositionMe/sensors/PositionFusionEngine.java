@@ -29,7 +29,7 @@ public class PositionFusionEngine {
 
     private static final double EARTH_RADIUS_M = 6378137.0;
 
-    private static final int PARTICLE_COUNT = 300;
+    private static final int PARTICLE_COUNT = 500;
     private static final double RESAMPLE_RATIO = 0.5;
     private static final double PDR_NOISE_STD_M = 0.55;
     private static final double INIT_STD_M = 2.0;
@@ -39,13 +39,13 @@ public class PositionFusionEngine {
     private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 6.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
     private static final double MAX_OUTLIER_SIGMA_SCALE = 4.0;
-    private static final double OUTPUT_SMOOTHING_ALPHA = 0.20;
+    private static final double OUTPUT_SMOOTHING_ALPHA = 0.25;
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
-    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.10;
+    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.18;
     private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(4.0);
-    private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(45.0);
+    private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(60.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
     private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.50;
     private static final boolean ENABLE_WALL_SLIDE = true;
@@ -215,7 +215,6 @@ public class PositionFusionEngine {
                         continue;
                     }
                 }
-
                 continue;
             }
 
@@ -241,7 +240,9 @@ public class PositionFusionEngine {
      * GNSS measurement update. Accuracy is converted into measurement sigma.
      */
     public synchronized void updateGnss(double latDeg, double lonDeg, float accuracyMeters) {
-        double sigma = Math.max(accuracyMeters, 3.0f);
+        // Match WiFi sigma floor so both sources contribute equally indoors.
+        // When GNSS reports better accuracy outdoors it naturally gets a lower sigma.
+        double sigma = Math.max(accuracyMeters, 6.0f);
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
                     "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f",
@@ -315,6 +316,7 @@ public class PositionFusionEngine {
 
         FloorplanApiClient.BuildingInfo containing = null;
         LatLng current = new LatLng(currentLatDeg, currentLonDeg);
+        // First try the provided position (which may be the user's chosen start point).
         for (FloorplanApiClient.BuildingInfo b : buildings) {
             List<LatLng> outline = b.getOutlinePolygon();
             if (outline != null && outline.size() >= 3 && pointInPolygon(current, outline)) {
@@ -323,9 +325,23 @@ public class PositionFusionEngine {
             }
         }
 
+        // Fallback: GNSS is often unreliable indoors, placing the fix outside the building.
+        // If no match by polygon, try the local-frame anchor point (the user's start position)
+        // which is far more reliable than a live GNSS reading inside a building.
         if (containing == null) {
-            floorConstraints.clear();
-            activeBuildingName = null;
+            LatLng anchor = new LatLng(anchorLatDeg, anchorLonDeg);
+            for (FloorplanApiClient.BuildingInfo b : buildings) {
+                List<LatLng> outline = b.getOutlinePolygon();
+                if (outline != null && outline.size() >= 3 && pointInPolygon(anchor, outline)) {
+                    containing = b;
+                    break;
+                }
+            }
+        }
+
+        if (containing == null) {
+            // Neither GNSS nor anchor is inside any known building outline.
+            // Keep existing constraints rather than wiping them on a bad reading.
             return;
         }
 
@@ -628,8 +644,21 @@ public class PositionFusionEngine {
         double w = 1.0 / PARTICLE_COUNT;
         for (int i = 0; i < PARTICLE_COUNT; i++) {
             Particle p = new Particle();
-            p.xEast = x + random.nextGaussian() * INIT_STD_M;
-            p.yNorth = y + random.nextGaussian() * INIT_STD_M;
+            // Try a few candidate positions to avoid spawning inside a wall
+            double candidateX = x;
+            double candidateY = y;
+            for (int attempt = 0; attempt < 6; attempt++) {
+                double cx = x + random.nextGaussian() * INIT_STD_M;
+                double cy = y + random.nextGaussian() * INIT_STD_M;
+                if (!crossesWall(floor, x, y, cx, cy)) {
+                    candidateX = cx;
+                    candidateY = cy;
+                    break;
+                }
+                // Last attempt: fall back to exact measurement point
+            }
+            p.xEast = candidateX;
+            p.yNorth = candidateY;
             p.floor = floor;
             p.weight = w;
             p.wallPenaltyScore = 0.0;
@@ -679,8 +708,15 @@ public class PositionFusionEngine {
 
     private void roughenParticles() {
         for (Particle p : particles) {
-            p.xEast += random.nextGaussian() * ROUGHEN_STD_M;
-            p.yNorth += random.nextGaussian() * ROUGHEN_STD_M;
+            double oldX = p.xEast;
+            double oldY = p.yNorth;
+            double newX = oldX + random.nextGaussian() * ROUGHEN_STD_M;
+            double newY = oldY + random.nextGaussian() * ROUGHEN_STD_M;
+            if (!crossesWall(p.floor, oldX, oldY, newX, newY)) {
+                p.xEast = newX;
+                p.yNorth = newY;
+            }
+            // If roughening would cross a wall, leave particle in place
         }
     }
 
@@ -723,6 +759,50 @@ public class PositionFusionEngine {
         double lon = anchorLonDeg + Math.toDegrees(dLon);
 
         return new LatLng(lat, lon);
+    }
+
+    /**
+     * Attempts to slide a particle along the wall it would cross instead of stopping it dead.
+     * Projects the intended displacement onto the wall's direction vector and applies the
+     * parallel component only, so particles continue moving along corridors rather than
+     * piling up against walls.
+     *
+     * @return new [x, y] after sliding, or null if sliding is not possible
+     */
+    private double[] trySlideAlongWall(int floor, double x0, double y0, double cx, double cy) {
+        FloorConstraint fc = floorConstraints.get(floor);
+        if (fc == null || fc.walls.isEmpty()) return null;
+
+        Point2D start = new Point2D(x0, y0);
+        Point2D end   = new Point2D(cx, cy);
+
+        for (Segment wall : fc.walls) {
+            if (!segmentsIntersect(start, end, wall.a, wall.b)) continue;
+
+            double wallDx = wall.b.x - wall.a.x;
+            double wallDy = wall.b.y - wall.a.y;
+            double wallLen2 = wallDx * wallDx + wallDy * wallDy;
+            if (wallLen2 < 1e-9) continue;
+
+            // Project movement onto wall direction
+            double moveDx = cx - x0;
+            double moveDy = cy - y0;
+            double dot    = moveDx * wallDx + moveDy * wallDy;
+            double scale  = dot / wallLen2;
+
+            // Apply 70% of the parallel component to leave a small gap from the wall
+            double slideX = x0 + scale * wallDx * 0.70;
+            double slideY = y0 + scale * wallDy * 0.70;
+
+            // Discard negligible slides and slides that cross another wall
+            if (Math.hypot(slideX - x0, slideY - y0) < 0.05) return null;
+            if (!crossesWall(floor, x0, y0, slideX, slideY)) {
+                return new double[]{slideX, slideY};
+            }
+
+            break; // Sliding is also blocked — fall through to frozen
+        }
+        return null;
     }
 
     /** Returns true when segment (x0,y0)->(x1,y1) intersects any mapped wall segment. */

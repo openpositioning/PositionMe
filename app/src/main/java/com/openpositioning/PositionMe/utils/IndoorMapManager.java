@@ -53,16 +53,41 @@ public class IndoorMapManager {
     // Per-floor vector shape data for the current building
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
 
+    // Outline polygon of the current building — used as the orange base fill
+    private List<LatLng> currentBuildingOutline;
+
     // Average floor heights per building (meters), used for barometric auto-floor
     public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
 
     // Colours for different indoor feature types
-    private static final int WALL_STROKE = Color.argb(220, 25, 118, 210);
-    private static final int ROOM_STROKE = Color.argb(210, 33, 150, 243);
-    private static final int ROOM_FILL = Color.argb(60, 33, 150, 243);
-    private static final int DEFAULT_STROKE = Color.argb(170, 66, 165, 245);
+    // Walls — black stroke, transparent fill (structural outlines only)
+    private static final int WALL_STROKE       = Color.argb(255,   0,   0,   0);
+
+    // Rooms — blue fill, dark blue stroke
+    private static final int ROOM_STROKE       = Color.argb(200,  25, 118, 210);
+    private static final int ROOM_FILL         = Color.argb(180,  33, 150, 243);
+
+    // Corridors / hallways — lighter blue fill
+    private static final int CORRIDOR_STROKE   = Color.argb(180,  25, 118, 210);
+    private static final int CORRIDOR_FILL     = Color.argb(120,  33, 150, 243);
+
+    // Stairs — amber/orange so they pop as a navigation landmark
+    private static final int STAIRS_STROKE     = Color.argb(200, 230, 120,  20);
+    private static final int STAIRS_FILL       = Color.argb(180, 255, 200, 100);
+
+    // Lifts / elevators — violet, distinct from stairs
+    private static final int LIFT_STROKE       = Color.argb(200, 130,  60, 200);
+    private static final int LIFT_FILL         = Color.argb(180, 210, 170, 245);
+
+    // Unknown — blue same as rooms
+    private static final int UNKNOWN_STROKE    = Color.argb(180,  25, 118, 210);
+    private static final int UNKNOWN_FILL      = Color.argb(120,  33, 150, 243);
+
+    // Fallback for any unrecognised indoor type — blue fill, dark blue stroke
+    private static final int DEFAULT_STROKE    = Color.argb(200,  25, 118, 210);
+    private static final int DEFAULT_FILL      = Color.argb(180,  33, 150, 243);
     private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     /**
@@ -247,6 +272,7 @@ public class IndoorMapManager {
                 FloorplanApiClient.BuildingInfo building =
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
+                    currentBuildingOutline = building.getOutlinePolygon();
                     currentFloorShapes = normalizeFloorOrder(building.getFloorShapesList());
                     Log.i(TAG, "Loaded floorplan building=" + apiName
                             + " floors=" + (currentFloorShapes == null ? 0 : currentFloorShapes.size()));
@@ -282,6 +308,7 @@ public class IndoorMapManager {
                 currentBuilding = BUILDING_NONE;
                 currentFloor = 0;
                 currentFloorShapes = null;
+                currentBuildingOutline = null;
                 Log.i(TAG, "Indoor overlay disabled (left mapped buildings)");
             }
         } catch (Exception ex) {
@@ -301,6 +328,18 @@ public class IndoorMapManager {
         if (currentFloorShapes == null || floorIndex < 0
                 || floorIndex >= currentFloorShapes.size()) return;
 
+        // Draw building outline as a solid blue base fill so the interior
+        // reads as blue even when the API only provides wall line data.
+        if (currentBuildingOutline != null && currentBuildingOutline.size() >= 3) {
+            Polygon baseFill = gMap.addPolygon(new PolygonOptions()
+                    .addAll(currentBuildingOutline)
+                    .strokeColor(Color.TRANSPARENT)
+                    .strokeWidth(0f)
+                    .fillColor(Color.argb(180, 33, 150, 243))
+                    .zIndex(0f));
+            drawnPolygons.add(baseFill);
+        }
+
         FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(floorIndex);
         Log.d(TAG, "Draw floor index=" + floorIndex + " display=" + floor.getDisplayName()
             + " featureCount=" + floor.getFeatures().size());
@@ -311,11 +350,15 @@ public class IndoorMapManager {
             if ("MultiPolygon".equals(geoType) || "Polygon".equals(geoType)) {
                 for (List<LatLng> ring : feature.getParts()) {
                     if (ring.size() < 3) continue;
+                    // Walls get a thicker stroke; filled areas get a thinner one
+                    // so the fill colour is the dominant visual cue
+                    float sw = "wall".equals(indoorType) ? 5f : 2.5f;
                     Polygon p = gMap.addPolygon(new PolygonOptions()
                             .addAll(ring)
                             .strokeColor(getStrokeColor(indoorType))
-                            .strokeWidth(5f)
-                            .fillColor(getFillColor(indoorType)));
+                            .strokeWidth(sw)
+                            .fillColor(getFillColor(indoorType))
+                            .zIndex(getZIndex(indoorType)));
                     drawnPolygons.add(p);
                 }
             } else if ("MultiLineString".equals(geoType)
@@ -325,7 +368,7 @@ public class IndoorMapManager {
                     Polyline pl = gMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getStrokeColor(indoorType))
-                            .width(6f));
+                            .width("wall".equals(indoorType) ? 6f : 4f));
                     drawnPolylines.add(pl);
                 }
             }
@@ -343,15 +386,46 @@ public class IndoorMapManager {
     }
 
     /**
+     * Returns the z-index for a given indoor feature type so that fills render
+     * underneath structural elements (walls always draw on top).
+     *
+     * @param indoorType the indoor_type property value
+     * @return z-index float
+     */
+    private float getZIndex(String indoorType) {
+        if (indoorType == null) return 1f;
+        switch (indoorType) {
+            case "wall":       return 3f;   // always on top
+            case "stairs":
+            case "lift":
+            case "elevator":   return 2f;   // navigation features above room fills
+            case "room":       return 1f;
+            case "corridor":
+            case "hallway":    return 1f;
+            default:           return 0f;
+        }
+    }
+
+    /**
      * Returns the stroke colour for a given indoor feature type.
      *
      * @param indoorType the indoor_type property value
      * @return ARGB colour value
      */
     private int getStrokeColor(String indoorType) {
-        if ("wall".equals(indoorType)) return WALL_STROKE;
-        if ("room".equals(indoorType)) return ROOM_STROKE;
-        return DEFAULT_STROKE;
+        if (indoorType == null) return DEFAULT_STROKE;
+        switch (indoorType) {
+            case "wall":                return WALL_STROKE;
+            case "room":                return ROOM_STROKE;
+            case "corridor":
+            case "hallway":             return CORRIDOR_STROKE;
+            case "stairs":
+            case "staircase":           return STAIRS_STROKE;
+            case "lift":
+            case "elevator":            return LIFT_STROKE;
+            case "unknown":             return UNKNOWN_STROKE;
+            default:                    return DEFAULT_STROKE;
+        }
     }
 
     /**
@@ -361,8 +435,19 @@ public class IndoorMapManager {
      * @return ARGB colour value
      */
     private int getFillColor(String indoorType) {
-        if ("room".equals(indoorType)) return ROOM_FILL;
-        return Color.TRANSPARENT;
+        if (indoorType == null) return DEFAULT_FILL;
+        switch (indoorType) {
+            case "wall":                return Color.TRANSPARENT;
+            case "room":                return ROOM_FILL;
+            case "corridor":
+            case "hallway":             return CORRIDOR_FILL;
+            case "stairs":
+            case "staircase":           return STAIRS_FILL;
+            case "lift":
+            case "elevator":            return LIFT_FILL;
+            case "unknown":             return UNKNOWN_FILL;
+            default:                    return DEFAULT_FILL;
+        }
     }
 
     private List<FloorplanApiClient.FloorShapes> normalizeFloorOrder(

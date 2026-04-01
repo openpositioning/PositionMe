@@ -58,8 +58,11 @@ import java.util.List;
 public class TrajectoryMapFragment extends Fragment {
 
     private static final int MAX_OBSERVATION_MARKERS = 20;
-    private static final long TRAJECTORY_APPEND_MIN_INTERVAL_MS = 1000;
-    private static final double TRAJECTORY_APPEND_MIN_METERS = 0.60;
+    private static final long TRAJECTORY_APPEND_MIN_INTERVAL_MS = 500;
+    private static final double TRAJECTORY_APPEND_MIN_METERS = 0.70;
+
+    // When true the distance gate is bypassed so every recorded point is drawn
+    private boolean replayMode = false;
     private static final double OBSERVATION_CIRCLE_RADIUS_M = 1.4;
     private static final long GNSS_OBSERVATION_TTL_MS = 15000;
     private static final long WIFI_OBSERVATION_TTL_MS = 20000;
@@ -108,6 +111,14 @@ public class TrajectoryMapFragment extends Fragment {
 
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
+    private SwitchMaterial pdrPointsSwitch;
+    private SwitchMaterial gnssPointsSwitch;
+    private SwitchMaterial wifiPointsSwitch;
+
+    // Visibility flags for each observation type
+    private boolean showPdrPoints  = true;
+    private boolean showGnssPoints = true;
+    private boolean showWifiPoints = true;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
@@ -141,6 +152,9 @@ public class TrajectoryMapFragment extends Fragment {
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
         switchColorButton = null; // color button removed from layout
+        pdrPointsSwitch  = view.findViewById(R.id.pdrPointsSwitch);
+        gnssPointsSwitch = view.findViewById(R.id.gnssPointsSwitch);
+        wifiPointsSwitch = view.findViewById(R.id.wifiPointsSwitch);
 
         // Collapsible left panel
         View leftPanelContent = view.findViewById(R.id.leftPanelContent);
@@ -212,6 +226,26 @@ public class TrajectoryMapFragment extends Fragment {
                 gnssMarker = null;
             }
         });
+
+        // Data-point visibility toggles
+        if (pdrPointsSwitch != null) {
+            pdrPointsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showPdrPoints = isChecked;
+                setCircleBucketVisible(pdrObservationCircles, isChecked);
+            });
+        }
+        if (gnssPointsSwitch != null) {
+            gnssPointsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showGnssPoints = isChecked;
+                setCircleBucketVisible(gnssObservationCircles, isChecked);
+            });
+        }
+        if (wifiPointsSwitch != null) {
+            wifiPointsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showWifiPoints = isChecked;
+                setCircleBucketVisible(wifiObservationCircles, isChecked);
+            });
+        }
 
         // color button removed
 
@@ -337,7 +371,20 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Update the user's current location on the map, create or move orientation marker,
+     * Enables or disables replay mode.
+     * In replay mode the distance gate in {@link #maybeAppendTrajectoryPoint} is bypassed
+     * so every recorded position is drawn, regardless of how small the step is.
+     * Live recording should keep this false so that sensor noise is not committed to
+     * the polyline when the user is standing still.
+     *
+     * @param replay true when this fragment is displaying a recorded-trajectory replay
+     */
+    public void setReplayMode(boolean replay) {
+        this.replayMode = replay;
+    }
+
+    /**
+     * Update the user’s current location on the map, create or move orientation marker,
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
@@ -365,13 +412,18 @@ public class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
+            if (!replayMode) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
+            }
         } else {
             // Update marker position + orientation
             orientationMarker.setPosition(displayLocation);
             orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(displayLocation));
+            // In replay mode skip constant camera follow so seeking doesn't cause
+            // dozens of rapid camera moves; the camera was already set by setInitialCameraPosition.
+            if (!replayMode) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(displayLocation));
+            }
         }
 
         // Extend polyline if movement occurred
@@ -650,8 +702,12 @@ public class TrajectoryMapFragment extends Fragment {
                 ? UtilFunctions.distanceBetweenPoints(oldLocation, newLocation)
                 : UtilFunctions.distanceBetweenPoints(lastTrajectoryPoint, newLocation);
 
-        if ((now - lastTrajectoryAppendMs) >= TRAJECTORY_APPEND_MIN_INTERVAL_MS
-                || moved >= TRAJECTORY_APPEND_MIN_METERS) {
+        // Distance-only gate: never add a point just because time passed.
+        // WiFi/GNSS noise causes small constant drift in the estimate — a time-based
+        // condition would commit that drift to the polyline even when standing still.
+        // In replay mode every recorded position is drawn regardless of distance so
+        // densely-sampled trajectories are not filtered to a single dot.
+        if (replayMode || moved >= TRAJECTORY_APPEND_MIN_METERS) {
             points.add(newLocation);
             polyline.setPoints(points);
             lastTrajectoryPoint = newLocation;
@@ -675,13 +731,24 @@ public class TrajectoryMapFragment extends Fragment {
 
         pruneExpiredObservationCircles(bucket, timesBucket, ttlMs);
 
+        // Determine whether this new circle should start visible based on its bucket's toggle
+        boolean visibleNow;
+        if (bucket == gnssObservationCircles) {
+            visibleNow = showGnssPoints;
+        } else if (bucket == wifiObservationCircles) {
+            visibleNow = showWifiPoints;
+        } else {
+            visibleNow = showPdrPoints;
+        }
+
         Circle circle = gMap.addCircle(new CircleOptions()
             .center(location)
                 .radius(OBSERVATION_CIRCLE_RADIUS_M)
                 .strokeWidth(2f)
                 .strokeColor(strokeColor)
                 .fillColor(fillColor)
-                .zIndex(3f));
+                .zIndex(3f)
+                .visible(visibleNow));
 
         if (circle == null) {
             return;
@@ -735,6 +802,13 @@ public class TrajectoryMapFragment extends Fragment {
         clearObservationCircles(gnssObservationCircles, gnssObservationTimesMs);
         clearObservationCircles(wifiObservationCircles, wifiObservationTimesMs);
         clearObservationCircles(pdrObservationCircles, pdrObservationTimesMs);
+    }
+
+    /** Shows or hides every circle in a bucket without removing them from the map. */
+    private void setCircleBucketVisible(@NonNull List<Circle> bucket, boolean visible) {
+        for (Circle c : bucket) {
+            c.setVisible(visible);
+        }
     }
 
     private void clearObservationCircles(@NonNull List<Circle> bucket,

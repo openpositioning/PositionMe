@@ -28,10 +28,17 @@ public class WifiPositionManager implements Observer {
 
     private static final String WIFI_FINGERPRINT = "wf";
 
+    // Exponential moving average smoothing for WiFi positions.
+    // Prevents sudden large jumps from individual noisy scan results bugging out the trajectory.
+    private static final double EMA_ALPHA = 0.35;          // weight given to each new reading
+    private static final double JUMP_THRESHOLD_M = 10.0;   // beyond this distance, dampen the pull
+
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
     private List<Wifi> wifiList;
     private WifiFixListener wifiFixListener;
+    private LatLng smoothedWifiPosition = null;
+    private int lastSmoothedFloor = 0;
 
     /**
      * Creates a new WifiPositionManager.
@@ -82,7 +89,7 @@ public class WifiPositionManager implements Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     if (wifiFixListener != null && wifiLocation != null) {
-                        wifiFixListener.onWifiFix(wifiLocation, floor);
+                        wifiFixListener.onWifiFix(smoothWifiPosition(wifiLocation, floor), floor);
                     }
                 }
 
@@ -163,6 +170,43 @@ public class WifiPositionManager implements Observer {
      */
     public void setWifiFixListener(WifiFixListener wifiFixListener) {
         this.wifiFixListener = wifiFixListener;
+    }
+
+    /**
+     * Applies exponential moving average smoothing to consecutive WiFi positions.
+     * Large jumps (beyond JUMP_THRESHOLD_M) are dampened so a single bad scan cannot
+     * cause the position to bug out across the map. The floor resets the smoothed
+     * position when the user changes floor so cross-floor averaging is avoided.
+     */
+    private LatLng smoothWifiPosition(LatLng raw, int floor) {
+        if (smoothedWifiPosition == null || floor != lastSmoothedFloor) {
+            smoothedWifiPosition = raw;
+            lastSmoothedFloor = floor;
+            return raw;
+        }
+
+        // Flat-earth distance in metres between smoothed position and new raw fix
+        double dLat = (raw.latitude  - smoothedWifiPosition.latitude)  * 111320.0;
+        double dLon = (raw.longitude - smoothedWifiPosition.longitude)
+                * 111320.0 * Math.cos(Math.toRadians(smoothedWifiPosition.latitude));
+        double distM = Math.sqrt(dLat * dLat + dLon * dLon);
+
+        // Dampen large jumps proportionally — a 20 m jump gets half the normal weight
+        double alpha = (distM > JUMP_THRESHOLD_M)
+                ? EMA_ALPHA * (JUMP_THRESHOLD_M / distM)
+                : EMA_ALPHA;
+
+        double smoothLat = smoothedWifiPosition.latitude
+                + alpha * (raw.latitude  - smoothedWifiPosition.latitude);
+        double smoothLon = smoothedWifiPosition.longitude
+                + alpha * (raw.longitude - smoothedWifiPosition.longitude);
+
+        smoothedWifiPosition = new LatLng(smoothLat, smoothLon);
+        Log.d("WifiPositionManager", String.format(
+                "WiFi EMA raw=(%.6f,%.6f) dist=%.1fm alpha=%.2f smooth=(%.6f,%.6f)",
+                raw.latitude, raw.longitude, distM, alpha,
+                smoothLat, smoothLon));
+        return smoothedWifiPosition;
     }
 
     private String getBssidKey(Wifi wifi) {
