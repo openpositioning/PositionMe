@@ -100,6 +100,9 @@ public class RecordingFragment extends Fragment {
     // Last fused point that was actually rendered
     private LatLng lastSentFusedPosition = null;
 
+    // Last WiFi location sent to the map — avoids flooding wifiHistory with the same point
+    private LatLng lastSentWifiPosition = null;
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
@@ -401,9 +404,11 @@ public class RecordingFragment extends Fragment {
         // WiFi observation logic for colour-coded last N updates
         if (trajectoryMapFragment != null) {
             LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
-            Log.d("WiFiDebug", "RecordingFragment wifiLocation = " + wifiLocation);
-            if (wifiLocation != null) {
+            // Only add to history when the location has actually changed (new API response)
+            if (wifiLocation != null && !wifiLocation.equals(lastSentWifiPosition)) {
+                Log.d("WiFiDebug", "New WiFi fix: " + wifiLocation);
                 trajectoryMapFragment.updateWiFiObservation(wifiLocation);
+                lastSentWifiPosition = wifiLocation;
             }
         }
 

@@ -56,8 +56,13 @@ public class WifiPositionManager implements Observer {
 
     /**
      * Creates a request to obtain a WiFi location for the obtained WiFi fingerprint.
+     * Skipped if the scan returned no access points (would cause a 422 from the API).
      */
     private void createWifiPositioningRequest() {
+        if (this.wifiList == null || this.wifiList.isEmpty()) {
+            Log.d("WiFiDebug", "No APs in scan, skipping API call");
+            return;
+        }
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
@@ -65,7 +70,7 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            Log.d("WiFiDebug", "Sending fingerprint: " + wifiFingerPrint.toString());
+            Log.d("WiFiDebug", "Sending fingerprint with " + this.wifiList.size() + " APs: " + wifiFingerPrint.toString());
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());

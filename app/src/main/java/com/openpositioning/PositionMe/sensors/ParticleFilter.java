@@ -46,6 +46,14 @@ public class ParticleFilter {
         return initialized;
     }
 
+    /** Resets the filter so it can be re-initialised at a new origin. */
+    public void reset() {
+        initialized = false;
+        origin = null;
+        particles = null;
+        weights = null;
+    }
+
     public LatLng getOrigin() {
         return origin;
     }

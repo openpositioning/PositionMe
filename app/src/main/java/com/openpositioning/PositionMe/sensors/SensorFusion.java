@@ -606,6 +606,14 @@ public class SensorFusion implements SensorEventListener {
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];
         state.startLocation[1] = startPosition[1];
+
+        // Reset and re-seed the particle filter at the chosen start location.
+        // The filter may have been initialized earlier from a noisy indoor GPS fix;
+        // re-seeding here ensures the fused position starts at the user-confirmed location.
+        particleFilter.reset();
+        LatLng chosenStart = new LatLng(startPosition[0], startPosition[1]);
+        particleFilter.initialise(chosenStart, 5f); // 5 m spread — user just pinpointed their location
+        lastGnssForFilter = chosenStart;
     }
 
     /**
