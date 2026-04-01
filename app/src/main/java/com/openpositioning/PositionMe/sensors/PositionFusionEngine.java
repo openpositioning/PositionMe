@@ -39,11 +39,11 @@ public class PositionFusionEngine {
     private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 10.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
     private static final double MAX_OUTLIER_SIGMA_SCALE = 4.0;
-    private static final double OUTPUT_SMOOTHING_ALPHA = 0.25;
+    private static final double OUTPUT_SMOOTHING_ALPHA = 0.35;
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
-    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.18;
+    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.25;
     private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(4.0);
     private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(60.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;

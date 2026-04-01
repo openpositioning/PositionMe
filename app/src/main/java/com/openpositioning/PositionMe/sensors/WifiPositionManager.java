@@ -30,8 +30,8 @@ public class WifiPositionManager implements Observer {
 
     // Exponential moving average smoothing for WiFi positions.
     // Prevents sudden large jumps from individual noisy scan results bugging out the trajectory.
-    private static final double EMA_ALPHA = 0.35;          // weight given to each new reading
-    private static final double JUMP_THRESHOLD_M = 10.0;   // beyond this distance, dampen the pull
+    private static final double EMA_ALPHA = 0.45;          // higher alpha reduces lag in turns
+    private static final double JUMP_THRESHOLD_M = 18.0;   // avoid over-dampening legitimate corner corrections
 
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
