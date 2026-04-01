@@ -204,4 +204,36 @@ public class ExtendedKalmanFilter {
     }
 
     public boolean isInitialized() { return initialized; }
+
+    /**
+     * Computes the squared Mahalanobis distance between a candidate observation
+     * and the current predicted state, using the innovation covariance S = P + R·I.
+     *
+     * <p>For a 2-D position observation the result follows a chi-squared distribution
+     * with 2 degrees of freedom. Typical rejection thresholds:</p>
+     * <ul>
+     *   <li>95 % confidence boundary: 5.99</li>
+     *   <li>99 % confidence boundary: 9.21</li>
+     * </ul>
+     *
+     * @param measX    Observed East  position (metres)
+     * @param measY    Observed North position (metres)
+     * @param noiseStd Observation noise standard deviation (metres)
+     * @return squared Mahalanobis distance, or {@code Float.MAX_VALUE} if not initialized
+     */
+    public float mahalanobisDistanceSq(float measX, float measY, float noiseStd) {
+        if (!initialized) return Float.MAX_VALUE;
+        float r   = noiseStd * noiseStd;
+        float s00 = p00 + r;
+        float s01 = p01;
+        float s10 = p10;
+        float s11 = p11 + r;
+        float det = s00 * s11 - s01 * s10;
+        if (Math.abs(det) < 1e-10f) return Float.MAX_VALUE;
+        float innX = measX - stateX;
+        float innY = measY - stateY;
+        // d² = [innX innY] · S⁻¹ · [innX innY]ᵀ
+        float id = 1f / det;
+        return (innX * innX * s11 - 2f * innX * innY * s01 + innY * innY * s00) * id;
+    }
 }

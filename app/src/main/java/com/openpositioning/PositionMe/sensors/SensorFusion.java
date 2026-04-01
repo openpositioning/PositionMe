@@ -1230,6 +1230,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 }
                             }
 
+                            // Innovation gating: reject the WiFi fix for EKF if the observation
+                            // is statistically inconsistent with the predicted state.
+                            // Chi-squared 2-DOF 99% threshold = 9.21
+                            final float GATE_THRESHOLD_SQ = 9.21f;
+                            float mahaSq = ekfPositioning.mahalanobisDistanceSq(
+                                    enu[0], enu[1], ekfNoiseStd);
+                            if (mahaSq > GATE_THRESHOLD_SQ) {
+                                Log.d("SensorFusion", "EKF WiFi gated out mahaSq=" + mahaSq
+                                        + " threshold=" + GATE_THRESHOLD_SQ);
+                                particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
+                                return;
+                            }
+
                             // Gradual position update: cap the single-step displacement so one
                             // erroneous WiFi fix cannot teleport the state.
                             // Allow a larger step when stationary (WiFi is the only anchor)
