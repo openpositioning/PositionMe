@@ -334,17 +334,19 @@ public class RecordingFragment extends Fragment {
                         + ", lat=" + fusedPosition.latitude
                         + ", lng=" + fusedPosition.longitude);
 
-                // Send the fused position to the map:
-                // - updates marker position
-                // - rotates marker (orientation)
-                // - extends trajectory polyline
-                trajectoryMapFragment.updateUserLocation(
+                // Send the fused position to the map.
+                // updateUserLocation returns false when the Google Map is not ready yet
+                // (gMap == null during the brief window between fragment creation and
+                // onMapReady firing). In that case do NOT consume the first-point slot —
+                // keep lastSentFusedPosition null so the next tick retries as a first point.
+                boolean rendered = trajectoryMapFragment.updateUserLocation(
                         fusedPosition,
                         (float) Math.toDegrees(sensorFusion.passOrientation())
                 );
 
-                // Save this position as the last displayed one
-                lastSentFusedPosition = fusedPosition;
+                if (rendered) {
+                    lastSentFusedPosition = fusedPosition;
+                }
 
             } else {
                 Log.d("FUSED_TEST", "SKIPPED -> movedDistance=" + movedDistance);

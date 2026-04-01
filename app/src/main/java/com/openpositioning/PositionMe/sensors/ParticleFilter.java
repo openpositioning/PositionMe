@@ -14,7 +14,11 @@ public class ParticleFilter {
     private static final int NUM_PARTICLES = 200; // Number of particles
     private float[][] particles;
 
-    //[num particles][2] is {easting, northing} 
+    // [num particles][3] = {easting (m), northing (m), headingBias (rad)}
+    // headingBias is the estimated error between the phone's compass heading and the
+    // true walking direction.  It starts near zero and is implicitly corrected during
+    // movement as particles with the right bias land closer to GNSS/WiFi observations
+    // and therefore accumulate higher weights.
     private float[] weights; // Weights for each particle
     private LatLng origin; // Origin point for ENU conversion
 
@@ -25,21 +29,20 @@ public class ParticleFilter {
     private List<float[]> walls = new ArrayList<>();
 
     public void initialise(LatLng firstFix, float accuracyMeters) {
-        if (initialized) return;          // ignore subsequent calls, DONE
+        if (initialized) return;          // ignore subsequent calls
         this.origin = firstFix;
-        this.particles = new float[NUM_PARTICLES][2];
-
-
-        this.weights = new float[NUM_PARTICLES];
+        this.particles = new float[NUM_PARTICLES][3];
+        this.weights   = new float[NUM_PARTICLES];
         float spread = accuracyMeters;
 
         for (int i = 0; i < NUM_PARTICLES; i++) {
-            particles[i][0] = (float) (random.nextGaussian() * spread); // east
-            particles[i][1] = (float) (random.nextGaussian() * spread); // north
+            particles[i][0] = (float) (random.nextGaussian() * spread);        // east
+            particles[i][1] = (float) (random.nextGaussian() * spread);        // north
+            particles[i][2] = (float) (random.nextGaussian() * INITIAL_BIAS_STD); // heading bias
             weights[i] = 1.0f / NUM_PARTICLES;
         }
         initialized = true;
-        Log.d(TAG, "Initialized at " + firstFix + " accuraccy is =" + accuracyMeters + "m");
+        Log.d(TAG, "Initialized at " + firstFix + " accuracy=" + accuracyMeters + "m");
     }
 
     public boolean isInitialized() {

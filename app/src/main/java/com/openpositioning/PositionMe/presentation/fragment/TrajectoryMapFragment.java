@@ -657,8 +657,14 @@ public class TrajectoryMapFragment extends Fragment {
      * @param newLocation The new location to plot.
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
-    public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
-        if (gMap == null) return;
+    /**
+     * Update the user's current location on the map.
+     *
+     * @return true if the map was ready and the update was rendered;
+     *         false if {@code gMap} was not yet initialised (caller should retry).
+     */
+    public boolean updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+        if (gMap == null) return false;
 
         // Apply selected smoothing filter before rendering
         LatLng displayLocation = applySmoothing(newLocation);
@@ -766,6 +772,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
             wasIndoorMapSet = nowIndoorMapSet;
         }
+        return true;
     }
 
 
