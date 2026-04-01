@@ -21,6 +21,9 @@ public class ParticleFilter {
     private boolean initialized = false;
     private final Random random = new Random();
 
+    // Wall segments: {x1, y1, x2, y2} in ENU
+    private List<float[]> walls = new ArrayList<>();
+
     public void initialise(LatLng firstFix, float accuracyMeters) {
         if (initialized) return;          // ignore subsequent calls, DONE
         this.origin = firstFix;
@@ -47,9 +50,13 @@ public class ParticleFilter {
         return origin;
     }
 
+    public void setWalls(List<float[]> wallSegments) {
+        this.walls = wallSegments;
+    }
 
-    public static final float HEADING_NOISE_STD = 0.01f; //TODO CHANGE LATER??
-    public static final float STRIDE_LENGTH_NOISE_STD = 0.01f; // WE CAN TUNE THESE NOISE PARAMETERS BASED ON EXPECTED SENSOR ACCURACY AND ENVIRONMENTAL CONDITIONS
+
+    public static final float HEADING_NOISE_STD = 0.05f; //TODO CHANGE LATER? -- JAPJOT
+    public static final float STRIDE_LENGTH_NOISE_STD = 0.05f; // WE CAN TUNE THESE NOISE PARAMETERS BASED ON EXPECTED SENSOR ACCURACY AND ENVIRONMENTAL CONDITIONS
 
     public void predict(float deltaEasting, float deltaNorthing) {
         if (!initialized) return; // ignore if not initialized
@@ -64,10 +71,98 @@ public class ParticleFilter {
             float noisyStride = stride + (float) (random.nextGaussian() * STRIDE_LENGTH_NOISE_STD);
 
             // Update particle position based on noisy heading and stride
-            particles[i][0] += noisyStride * Math.cos(noisyHeading); // update east
-            particles[i][1] += noisyStride * Math.sin(noisyHeading); // update north
+
+            //JAPJOT: ive commented this out to add wall collision checking, we need to check if the line from old position to new position intersects any walls, if it does, we can either discard the particle (set weight to 0) 
+            // or reflect it off the wall (more complex). and particles that hit walls will be reflected in opposite direction
+            //like dvd logo
+
+            // particles[i][0] += noisyStride * Math.cos(noisyHeading); // update east
+            // particles[i][1] += noisyStride * Math.sin(noisyHeading); // update north
+
+
+            float oldX = particles[i][0];
+            float oldY = particles[i][1];
+            float newX = oldX + noisyStride * (float) Math.cos(noisyHeading);
+            float newY = oldY + noisyStride * (float) Math.sin(noisyHeading);
+
+            if (intersectsWall(oldX, oldY, newX, newY)) {
+                // Simple reflection: reverse direction and reduce stride (simulate energy loss)
+                float reflectedHeading = (float) (noisyHeading + Math.PI); // reverse direction
+                float reducedStride = noisyStride * 0.5f; // reduce stride to simulate energy loss
+
+                particles[i][0] = oldX + reducedStride * (float) Math.cos(reflectedHeading);
+                particles[i][1] = oldY + reducedStride * (float) Math.sin(reflectedHeading);
+
+                //weights[i] = 0f; could also delete the particle
+            } else {
+                particles[i][0] = newX;
+                particles[i][1] = newY;
+            }
+        }
+        normalizeWeightsAndResample();
+    }
+
+    private boolean intersectsWall(float x1, float y1, float x2, float y2) { 
+        // Check if the line segment from (x1, y1) to (x2, y2) intersects any wall segment
+        if (walls == null || walls.isEmpty()) return false;
+        for (float[] wall : walls) {
+            if (doIntersect(x1, y1, x2, y2, wall[0], wall[1], wall[2], wall[3])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    
+
+
+    private boolean doIntersect(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
+        float den = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1); //calculate the denominator of the intersection formula
+        if (den == 0) return false;
+        // Calculate the intersection point using the parametric form of the line segments
+        float ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / den;
+        float ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / den;
+        return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
+    }
+
+    private void normalizeWeightsAndResample() {
+        float weightSum = 0f;
+        for (float w : weights) weightSum += w;
+
+        if (weightSum < 1e-6) {
+            // All particles hit a wall or died, re-initialize around current best or uniform
+            for (int i = 0; i < NUM_PARTICLES; i++) {
+                weights[i] = 1.0f / NUM_PARTICLES;
+                // Add some jitter to avoid collapse if we just reset positions
+            }
+            return;
         }
 
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            weights[i] /= weightSum;
+        }
+
+        // Resample only if effective sample size is low or every step (simple version: every step)
+        resample();
+    }
+
+    private void resample() {
+        float[][] newParticles = new float[NUM_PARTICLES][2];
+        float step = 1.0f / NUM_PARTICLES;
+        float cumulativeWeight = weights[0];
+        float randomStart = random.nextFloat() * step;
+        int j = 0;
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            float threshold = randomStart + i * step;
+            while (threshold > cumulativeWeight && j < NUM_PARTICLES - 1) {
+                j++;
+                cumulativeWeight += weights[j];
+            }
+            newParticles[i][0] = particles[j][0];
+            newParticles[i][1] = particles[j][1];
+        }
+        particles = newParticles;
+        for (int i = 0; i < NUM_PARTICLES; i++) weights[i] = 1.0f / NUM_PARTICLES;
     }
 
     public void updateGNSS(LatLng gnssPosition, float gnssAccuracy) {
@@ -91,7 +186,7 @@ public class ParticleFilter {
             float distanceSquared = dx * dx + dy * dy;
 
             // Calculate weight using Gaussian likelihood
-            weights[i] = (float) Math.exp(-distanceSquared / (2 * variance));
+            weights[i] *= (float) Math.exp(-distanceSquared / (2 * variance));
             weightSum += weights[i];
         }
 
@@ -107,31 +202,7 @@ public class ParticleFilter {
             }
         }
 
-        //resample particles
-
-        float[][] newParticles = new float[NUM_PARTICLES][2]; // New array for resampled particles
-        float step = 1.0f / NUM_PARTICLES; // Step size for resampling
-        float cumulativeWeight = weights[0];  // Cumulative weight for resampling
-
-        float random1 = random.nextFloat() * step; //random start point for resampling
-
-        int j = 0; // Index for particles
-        for (int i = 0; i < NUM_PARTICLES; i++) {
-            float threshold = random1 + i * step; // Threshold for selecting particle
-            while (threshold > cumulativeWeight && j < NUM_PARTICLES - 1) { // Move to the next particle
-                j++;
-
-                cumulativeWeight += weights[j]; // Move to next particle
-            }
-            newParticles[i][0] = particles[j][0]; // Resample east
-            newParticles[i][1] = particles[j][1]; // Resample north
-        }
-        particles = newParticles; // Replace old particles with resampled particles
-
-        //reset
-        for (int i = 0; i < NUM_PARTICLES; i++) {
-            weights[i] = 1.0f / NUM_PARTICLES; // Reset weights to uniform after resampling
-        }
+        resample();
         Log.d(TAG, "GNSS UPDATE" + " GNSS position: " + gnssPosition + " accuracy: " + gnssAccuracy + "m" + (mx + ", " + my));
 
 
@@ -154,7 +225,7 @@ public class ParticleFilter {
             float distanceSquared = dx * dx + dy * dy;
 
             // Calculate weight using Gaussian likelihood
-            weights[i] = (float) Math.exp(-distanceSquared / (2 * variance));
+            weights[i] *= (float) Math.exp(-distanceSquared / (2 * variance));
             weightSum += weights[i];
         }
 
@@ -170,31 +241,7 @@ public class ParticleFilter {
             }
         }
 
-        //resample particles
-
-        float[][] newParticles = new float[NUM_PARTICLES][2]; // New array for resampled particles
-        float step = 1.0f / NUM_PARTICLES; // Step size for resampling
-        float cumulativeWeight = weights[0];  // Cumulative weight for resampling
-
-        float random1 = random.nextFloat() * step; //random start point for resampling
-
-        int j = 0; // Index for particles
-        for (int i = 0; i < NUM_PARTICLES; i++) {
-            float threshold = random1 + i * step; // Threshold for selecting particle
-            while (threshold > cumulativeWeight && j < NUM_PARTICLES - 1) { // Move to the next particle
-                j++;
-
-                cumulativeWeight += weights[j]; // Move to next particle
-            }
-            newParticles[i][0] = particles[j][0]; // Resample east
-            newParticles[i][1] = particles[j][1]; // Resample north
-        }
-        particles = newParticles; // Replace old particles with resampled particles
-
-        //reset
-        for (int i = 0; i < NUM_PARTICLES; i++) {
-            weights[i] = 1.0f / NUM_PARTICLES; // Reset weights to uniform after resampling
-        }
+        resample();
         Log.d(TAG, "wifi UPDATE" + " WiFi position: " + wifiPosition + " accuracy: " + wifiAccuracy + "m" + (mx + ", " + my));
 
 
@@ -218,4 +265,3 @@ public class ParticleFilter {
     }
 
 }
-

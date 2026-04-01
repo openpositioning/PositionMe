@@ -2,7 +2,6 @@ package com.openpositioning.PositionMe.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.PointF;
 import android.hardware.SensorManager;
 
 import androidx.preference.PreferenceManager;
@@ -11,14 +10,14 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.OptionalDouble;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.List;
 
 /**
  * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
- * Coordinates are relative to the session start, in meters (x east, y north). Elevation is
+ *  * Coordinates are relative to the session start, in meters (x east, y north). Elevation is
  * relative to the initial barometer median. Attempts to estimate current floor and elevator use.
  *
  * @author Mate Stodulka
@@ -44,8 +43,9 @@ public class PdrProcessing {
     // Settings for accessing shared variables
     private SharedPreferences settings;
 
+
     // Centralized map-matching thresholds (currently informational only)
-    private final MapMatchingConfig mapMatchingConfig;
+    private MapMatchingConfig mapMatchingConfig;
 
     // Step length
     private float stepLength;
@@ -57,13 +57,14 @@ public class PdrProcessing {
     private float positionY;
 
     // Optional wall geometry in meters (polylines)
-    private List<List<PointF>> walls;
+    //private List<List<PointF>> walls;
 
     // Vertical movement calculation
     private Float[] startElevationBuffer;
     private float startElevation;
     private int setupIndex = 0;
     private float elevation;
+
     // Floor-to-floor height in meters (manual setting)
     private int floorHeight;
     private int currentFloor;
@@ -87,15 +88,12 @@ public class PdrProcessing {
      * @param context   Application context for variable access.
      */
     public PdrProcessing(Context context) {
-        this(context, new MapMatchingConfig());
-    }
-
-    public PdrProcessing(Context context, MapMatchingConfig mapMatchingConfig) {
         // Initialise settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
-        this.mapMatchingConfig = mapMatchingConfig;
         // Check if estimate or manual values should be used
         this.useManualStep = this.settings.getBoolean("manual_step_values", false);
+        
+        // this.mapMatchingConfig = mapMatchingConfig;
         if(useManualStep) {
             try {
                 // Retrieve manual step  length
@@ -135,11 +133,12 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", (int) mapMatchingConfig.baroHeightThreshold);
+        this.floorHeight = settings.getInt("floor_height", 4); 
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+
     }
 
     /**
@@ -182,16 +181,9 @@ public class PdrProcessing {
         float x = (float) (stepLength * Math.cos(adaptedHeading));
         float y = (float) (stepLength * Math.sin(adaptedHeading));
 
-        // Apply wall collision correction if walls are provided
-        PointF previous = new PointF(this.positionX, this.positionY);
-        PointF candidate = new PointF(this.positionX + x, this.positionY + y);
-        if (walls != null && !walls.isEmpty()) {
-            candidate = WallCollisionCorrector.correct(previous, candidate, walls);
-        }
-
         // Update position values
-        this.positionX = candidate.x;
-        this.positionY = candidate.y;
+        this.positionX += x;
+        this.positionY += y;
 
         // return current position
         return new float[]{this.positionX, this.positionY};
@@ -224,20 +216,6 @@ public class PdrProcessing {
             // Add to buffer
             this.elevationList.putNewest(absoluteElevation);
 
-            // Check if there was floor movement
-            // Check if there is enough data to evaluate
-            if(this.elevationList.isFull()) {
-                // Check average of elevation array
-                List<Float> elevationMemory = this.elevationList.getListCopy();
-                OptionalDouble currentAvg = elevationMemory.stream().mapToDouble(f -> f).average();
-                float finishAvg = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : 0;
-
-                // Check if we moved floor by comparing with start position
-                if(Math.abs(finishAvg - startElevation) > this.floorHeight) {
-                    // Change floors - 'floor' division
-                    this.currentFloor += (finishAvg - startElevation)/this.floorHeight;
-                }
-            }
             // Return current elevation
             return elevation;
         }
@@ -301,6 +279,14 @@ public class PdrProcessing {
         return this.elevation;
     }
 
+    public float getStartElevation() {
+        return this.startElevation;
+    }
+
+    public CircularFloatBuffer getElevationList() {
+        return this.elevationList;
+    }
+
     /**
      * Get the current floor number as estimated by the PDR class.
      *
@@ -308,6 +294,14 @@ public class PdrProcessing {
      */
     public int getCurrentFloor() {
         return this.currentFloor;
+    }
+
+    public void setCurrentFloor(int floor) {
+        this.currentFloor = floor;
+    }
+
+    public int getFloorHeightValue() {
+        return this.floorHeight;
     }
 
     /**
@@ -409,7 +403,7 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", (int) mapMatchingConfig.baroHeightThreshold);
+        this.floorHeight = settings.getInt("floor_height", 4);
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
@@ -431,13 +425,6 @@ public class PdrProcessing {
 
         //Return average step length
         return averageStepLength;
-    }
-
-    /**
-     * Inject wall polylines (meters) for collision correction. Optional.
-     */
-    public void setWalls(List<List<PointF>> walls) {
-        this.walls = walls;
     }
 
 }
