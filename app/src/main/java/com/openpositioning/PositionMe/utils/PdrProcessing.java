@@ -33,11 +33,22 @@ public class PdrProcessing {
     private static final int elevationSeconds = 4;
     // Number of samples (0.01 seconds)
     private static final int accelSamples = 100;
+    private static final int MIN_FLOOR_HEIGHT_METERS = 4;
     // Threshold used to detect significant movement
     private static final float movementThreshold = 0.3f; // m/s^2
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
+    private static final float DEFAULT_FALLBACK_STEP_METERS = 0.70f;
+    private static final float MIN_STEP_METERS = 0.30f;
+    private static final float MAX_STEP_METERS = 1.25f;
+    private static final long MIN_CADENCE_INTERVAL_MS = 280L;
+    private static final long MAX_CADENCE_INTERVAL_MS = 2400L;  // was 1600L — extend cadence model to cover slow walking (~0.4 Hz)
+    private static final float MIN_CADENCE_HZ = 0.45f;          // was 0.75f — consistent with above
+    private static final float MAX_CADENCE_HZ = 2.85f;
+    private static final float CADENCE_REFERENCE_HZ = 1.80f;
+    private static final float CADENCE_STEP_GAIN = 0.18f;
+    private static final float STEP_SMOOTHING_ALPHA = 0.34f;
     //endregion
 
     //region Instance variables
@@ -103,27 +114,10 @@ public class PdrProcessing {
         this.positionX = 0f;
         this.positionY = 0f;
         this.elevation = 0f;
-
-
-        if(this.settings.getBoolean("overwrite_constants", false)) {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(Integer.parseInt(settings.getString("elevation_seconds", "4")));
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-            this.horizontalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-        }
-        else {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(elevationSeconds);
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(accelSamples);
-            this.horizontalAccel = new CircularFloatBuffer(accelSamples);
-        }
+        initialiseMotionAndElevationBuffers();
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = getConfiguredFloorHeightMeters();
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
@@ -139,28 +133,31 @@ public class PdrProcessing {
      * @param accelMagnitudeOvertime    recorded acceleration magnitudes since the last step.
      * @param headingRad                heading relative to magnetic north in radians.
      */
-    public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
-        if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
-            return new float[]{this.positionX, this.positionY};  // Return current position without update
-                                                                // - TODO - temporary solution of the empty list issue
-        }
-
+    public float[] updatePdr(long currentStepEnd,
+                             List<Double> accelMagnitudeOvertime,
+                             float headingRad,
+                             long stepIntervalMs) {
         // Change angle so zero rad is east
-        float adaptedHeading = (float) (Math.PI/2 - headingRad);
+        float safeHeading = (Float.isNaN(headingRad) || Float.isInfinite(headingRad)) ? 0f : headingRad;
+        float adaptedHeading = (float) (Math.PI/2 - safeHeading);
 
-        // check if accelMagnitudeOvertime is empty
-        if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()) {
-            // return current position, do not update
-            return new float[]{this.positionX, this.positionY};
-        }
-        
+        float candidateStep = this.stepLength;
+        boolean hasAccelWindow = accelMagnitudeOvertime != null
+                && accelMagnitudeOvertime.size() >= MIN_REQUIRED_SAMPLES;
+
         // Calculate step length
-        if(!useManualStep) {
-            //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
-            // Estimate stride
-            this.stepLength = weibergMinMax(accelMagnitudeOvertime);
-            // System.err.println("Step Length" + stepLength);
+        if (!useManualStep) {
+            float cadenceStep = estimateCadenceAdaptiveStep(stepIntervalMs);
+            if (hasAccelWindow) {
+                float weibergStep = weibergMinMax(accelMagnitudeOvertime);
+                candidateStep = blendStrideEstimate(weibergStep, cadenceStep, accelMagnitudeOvertime);
+            } else {
+                candidateStep = cadenceStep;
+            }
+        } else if (candidateStep <= 0f) {
+            candidateStep = resolveFallbackStepLength();
         }
+        this.stepLength = smoothStepEstimate(candidateStep);
 
         // Increment aggregate variables
         sumStepLength += stepLength;
@@ -176,6 +173,68 @@ public class PdrProcessing {
 
         // return current position
         return new float[]{this.positionX, this.positionY};
+    }
+
+    private float blendStrideEstimate(float weibergStep,
+                                      float cadenceStep,
+                                      List<Double> accelMagnitudeOvertime) {
+        float safeWeibergStep = clamp(
+                weibergStep > 0f ? weibergStep : resolveFallbackStepLength(),
+                MIN_STEP_METERS,
+                MAX_STEP_METERS
+        );
+        float safeCadenceStep = clamp(
+                cadenceStep > 0f ? cadenceStep : resolveFallbackStepLength(),
+                MIN_STEP_METERS,
+                MAX_STEP_METERS
+        );
+
+        float accelPeak = computePeakAcceleration(accelMagnitudeOvertime);
+        float accelConfidence = 0f;
+        if (accelPeak > 0f) {
+            accelConfidence = clamp((accelPeak - 0.7f) / 1.8f, 0f, 1f);
+        }
+
+        float cadenceWeight = 0.32f - 0.18f * accelConfidence;
+        cadenceWeight = clamp(cadenceWeight, 0.12f, 0.32f);
+        return safeWeibergStep * (1f - cadenceWeight) + safeCadenceStep * cadenceWeight;
+    }
+
+    private float estimateCadenceAdaptiveStep(long stepIntervalMs) {
+        float baseStep = this.stepLength > 0f ? this.stepLength : resolveFallbackStepLength();
+        if (stepIntervalMs < MIN_CADENCE_INTERVAL_MS || stepIntervalMs > MAX_CADENCE_INTERVAL_MS) {
+            return clamp(baseStep, MIN_STEP_METERS, MAX_STEP_METERS);
+        }
+
+        float cadenceHz = 1000f / Math.max(1f, (float) stepIntervalMs);
+        cadenceHz = clamp(cadenceHz, MIN_CADENCE_HZ, MAX_CADENCE_HZ);
+        float cadenceDelta = clamp(cadenceHz - CADENCE_REFERENCE_HZ, -0.90f, 0.90f);
+        float cadenceScale = 1f + CADENCE_STEP_GAIN * cadenceDelta;
+        return clamp(baseStep * cadenceScale, MIN_STEP_METERS, MAX_STEP_METERS);
+    }
+
+    private float smoothStepEstimate(float candidateStep) {
+        float safeCandidateStep = clamp(candidateStep, MIN_STEP_METERS, MAX_STEP_METERS);
+        if (useManualStep) {
+            return safeCandidateStep;
+        }
+        float previousStep = this.stepLength > 0f ? this.stepLength : resolveFallbackStepLength();
+        float smoothedStep = previousStep + STEP_SMOOTHING_ALPHA * (safeCandidateStep - previousStep);
+        return clamp(smoothedStep, MIN_STEP_METERS, MAX_STEP_METERS);
+    }
+
+    private float resolveFallbackStepLength() {
+        if (this.stepLength > 0f) {
+            return this.stepLength;
+        }
+        try {
+            int userStepCm = this.settings.getInt("user_step_length", 75);
+            if (userStepCm > 20) {
+                return userStepCm / 100f;
+            }
+        } catch (Exception ignored) {
+        }
+        return DEFAULT_FALLBACK_STEP_METERS;
     }
 
     /**
@@ -204,21 +263,6 @@ public class PdrProcessing {
             this.elevation = absoluteElevation - startElevation;
             // Add to buffer
             this.elevationList.putNewest(absoluteElevation);
-
-            // Check if there was floor movement
-            // Check if there is enough data to evaluate
-            if(this.elevationList.isFull()) {
-                // Check average of elevation array
-                List<Float> elevationMemory = this.elevationList.getListCopy();
-                OptionalDouble currentAvg = elevationMemory.stream().mapToDouble(f -> f).average();
-                float finishAvg = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : 0;
-
-                // Check if we moved floor by comparing with start position
-                if(Math.abs(finishAvg - startElevation) > this.floorHeight) {
-                    // Change floors - 'floor' division
-                    this.currentFloor += (finishAvg - startElevation)/this.floorHeight;
-                }
-            }
             // Return current elevation
             return elevation;
         }
@@ -255,10 +299,24 @@ public class PdrProcessing {
 
         // determine which constant to use based on settings
         if (this.settings.getBoolean("overwrite_constants", false)) {
-            return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
+            return bounce * getPositiveFloatPreference("weiberg_k", K) * 2;
         }
 
         return bounce * K * 2;
+    }
+
+    private float computePeakAcceleration(List<Double> accelMagnitude) {
+        if (accelMagnitude == null || accelMagnitude.isEmpty()) {
+            return 0f;
+        }
+        double peak = 0.0;
+        for (Double sample : accelMagnitude) {
+            if (sample == null || Double.isNaN(sample) || Double.isInfinite(sample)) {
+                continue;
+            }
+            peak = Math.max(peak, Math.abs(sample));
+        }
+        return (float) peak;
     }
 
     /**
@@ -303,6 +361,9 @@ public class PdrProcessing {
      * @return          boolean true if currently in an elevator, false otherwise.
      */
     public boolean estimateElevator(float[] gravity, float[] acc) {
+        if (gravity == null || acc == null || gravity.length < 3 || acc.length < 3) {
+            return false;
+        }
         // Standard gravity
         float g = SensorManager.STANDARD_GRAVITY;
         // get horizontal and vertical acceleration magnitude
@@ -319,23 +380,16 @@ public class PdrProcessing {
         this.horizontalAccel.putNewest(horizontalAcc);
         // Once buffer is full, evaluate data
         if(this.verticalAccel.isFull() && this.horizontalAccel.isFull()) {
-
-            // calculate average vertical accel
-            List<Float> verticalMemory = this.verticalAccel.getListCopy();
-            OptionalDouble optVerticalAvg = verticalMemory.stream().mapToDouble(Math::abs).average();
-            float verticalAvg = optVerticalAvg.isPresent() ? (float) optVerticalAvg.getAsDouble() : 0;
-
-
-            // calculate average horizontal accel
-            List<Float> horizontalMemory = this.horizontalAccel.getListCopy();
-            OptionalDouble optHorizontalAvg = horizontalMemory.stream().mapToDouble(Math::abs).average();
-            float horizontalAvg = optHorizontalAvg.isPresent() ? (float) optHorizontalAvg.getAsDouble() : 0;
+            CircularFloatBuffer.SnapshotStats verticalStats = this.verticalAccel.getSnapshotStats();
+            CircularFloatBuffer.SnapshotStats horizontalStats = this.horizontalAccel.getSnapshotStats();
+            float verticalAvg = verticalStats.averageAbs;
+            float horizontalAvg = horizontalStats.averageAbs;
 
             //System.err.println("LIFT: Vertical: " + verticalAvg);
             //System.err.println("LIFT: Horizontal: " + horizontalAvg);
 
             if(this.settings.getBoolean("overwrite_constants", false)) {
-                float eps = Float.parseFloat(settings.getString("epsilon", "0.18"));
+                float eps = getNonNegativeFloatPreference("epsilon", epsilon);
                 return horizontalAvg < eps && verticalAvg > movementThreshold;
             }
             // Check if there is minimal horizontal and significant vertical movement
@@ -372,29 +426,64 @@ public class PdrProcessing {
         this.positionY = 0f;
         this.elevation = 0f;
 
-        if(this.settings.getBoolean("overwrite_constants", false)) {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(Integer.parseInt(settings.getString("elevation_seconds", "4")));
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-            this.horizontalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-        }
-        else {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(elevationSeconds);
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(accelSamples);
-            this.horizontalAccel = new CircularFloatBuffer(accelSamples);
-        }
+        initialiseMotionAndElevationBuffers();
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = getConfiguredFloorHeightMeters();
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+    }
+
+    private void initialiseMotionAndElevationBuffers() {
+        if (this.settings.getBoolean("overwrite_constants", false)) {
+            this.elevationList = new CircularFloatBuffer(
+                    getPositiveIntPreference("elevation_seconds", elevationSeconds)
+            );
+            int configuredAccelSamples = getPositiveIntPreference("accel_samples", accelSamples);
+            this.verticalAccel = new CircularFloatBuffer(configuredAccelSamples);
+            this.horizontalAccel = new CircularFloatBuffer(configuredAccelSamples);
+            return;
+        }
+
+        this.elevationList = new CircularFloatBuffer(elevationSeconds);
+        this.verticalAccel = new CircularFloatBuffer(accelSamples);
+        this.horizontalAccel = new CircularFloatBuffer(accelSamples);
+    }
+
+    private int getConfiguredFloorHeightMeters() {
+        return Math.max(MIN_FLOOR_HEIGHT_METERS, settings.getInt("floor_height", MIN_FLOOR_HEIGHT_METERS));
+    }
+
+    private int getPositiveIntPreference(String key, int defaultValue) {
+        try {
+            String value = settings.getString(key, Integer.toString(defaultValue));
+            int parsed = Integer.parseInt(value);
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (RuntimeException e) {
+            return defaultValue;
+        }
+    }
+
+    private float getPositiveFloatPreference(String key, float defaultValue) {
+        try {
+            String value = settings.getString(key, Float.toString(defaultValue));
+            float parsed = Float.parseFloat(value);
+            return parsed > 0f ? parsed : defaultValue;
+        } catch (RuntimeException e) {
+            return defaultValue;
+        }
+    }
+
+    private float getNonNegativeFloatPreference(String key, float defaultValue) {
+        try {
+            String value = settings.getString(key, Float.toString(defaultValue));
+            float parsed = Float.parseFloat(value);
+            return parsed >= 0f ? parsed : defaultValue;
+        } catch (RuntimeException e) {
+            return defaultValue;
+        }
     }
 
     /**
@@ -403,6 +492,9 @@ public class PdrProcessing {
      * @return  average step length in meters.
      */
     public float getAverageStepLength(){
+        if (stepCount <= 0) {
+            return stepLength > 0f ? stepLength : DEFAULT_FALLBACK_STEP_METERS;
+        }
         //Calculate average step length
         float averageStepLength = sumStepLength/(float) stepCount;
 
@@ -412,6 +504,16 @@ public class PdrProcessing {
 
         //Return average step length
         return averageStepLength;
+    }
+
+    private float clamp(float value, float min, float max) {
+        if (value < min) {
+            return min;
+        }
+        if (value > max) {
+            return max;
+        }
+        return value;
     }
 
 }

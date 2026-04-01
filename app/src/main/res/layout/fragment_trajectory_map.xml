@@ -20,53 +20,144 @@
         android:id="@+id/mapControlCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+        android:layout_marginStart="14dp"
+        android:layout_marginTop="14dp"
+        app:cardBackgroundColor="#F7FFFFFF"
         app:cardElevation="6dp"
-        app:cardCornerRadius="12dp"
+        app:cardCornerRadius="22dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent"
+        app:strokeColor="@color/md_theme_outlineVariant"
+        app:strokeWidth="1dp">
 
         <LinearLayout
+            android:id="@+id/mapControlContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:paddingStart="10dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="8dp"
+            android:gravity="start">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
+            <LinearLayout
+                android:id="@+id/mapControlHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch"
-                android:textSize="12sp" />
+                android:background="@android:color/transparent"
+                android:gravity="center_vertical"
+                android:minHeight="40dp"
+                android:orientation="horizontal"
+                android:paddingStart="10dp"
+                android:paddingEnd="2dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
+                <TextView
+                    android:id="@+id/mapControlTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/map_controls_title"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/mapControlToggleButton"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="6dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/map_controls_collapse"
+                    android:src="@android:drawable/arrow_up_float"
+                    app:tint="@color/md_theme_onSurface" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/mapControlList"
+                android:layout_width="220dp"
                 android:layout_height="wrap_content"
-                android:text="@string/auto_floor"
-                android:textSize="12sp" />
+                android:layout_marginTop="6dp"
+                android:orientation="vertical"
+                android:gravity="start">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:backgroundTint="@android:color/holo_red_dark"
-                android:textColor="@android:color/white"
-                android:text="@string/color"
-                android:textSize="12sp"
-                android:padding="0dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp" />
+                <!-- Keep the initial GNSS toggle state in sync with the fragment default. -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/gnssSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/gnssSwitch"
+                    android:textSize="12sp" />
 
-            <Spinner
-                android:id="@+id/mapSwitchSpinner"
-                android:layout_width="100dp"
-                android:layout_height="40dp"
-                android:layout_marginTop="4dp"
-                android:spinnerMode="dropdown" />
+                <!-- Toggles WiFi observation markers. -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/wifiObservationSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/wifi_observation_switch"
+                    android:textSize="12sp" />
 
+                <!-- Toggles PDR observation markers. -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/pdrObservationSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/pdr_observation_switch"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/autoFloor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/auto_floor"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/smoothDisplaySwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:text="@string/smooth_display"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/lineColorButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:backgroundTint="@android:color/holo_red_dark"
+                    android:textColor="@android:color/white"
+                    android:text="@string/color"
+                    android:textSize="12sp"
+                    android:padding="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp" />
+
+                <Spinner
+                    android:id="@+id/mapSwitchSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:spinnerMode="dropdown" />
+
+                <!-- Selects how many recent observation markers remain visible. -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/observation_count_label"
+                    android:textSize="12sp" />
+
+                <!-- Presets include 1, 2, 3, and a custom count. -->
+                <Spinner
+                    android:id="@+id/observationCountSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:spinnerMode="dropdown" />
+
+            </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -74,18 +165,22 @@
         android:id="@+id/floorControlCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+        android:layout_marginTop="92dp"
+        android:layout_marginEnd="14dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#F7FFFFFF"
         app:cardElevation="6dp"
-        app:cardCornerRadius="12dp"
+        app:cardCornerRadius="20dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent"
+        app:strokeColor="@color/md_theme_outlineVariant"
+        app:strokeWidth="1dp">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="8dp"
+            android:padding="10dp"
             android:gravity="center_horizontal">
 
             <TextView

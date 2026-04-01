@@ -31,20 +31,17 @@ public class PathView extends View {
     // Defines paint and canvas
     private Paint drawPaint;
     // Path of straight lines
-    private Path path = new Path();
+    private final Path path = new Path();
     // Array lists of integers to store coordinates
-    private static ArrayList<Float> xCoords = new ArrayList<Float>();
-    private static ArrayList<Float> yCoords = new ArrayList<Float>();
+    private final ArrayList<Float> xCoords = new ArrayList<>();
+    private final ArrayList<Float> yCoords = new ArrayList<>();
     // Scaling ratio for multiplying PDR coordinates to fill the screen size
-    private static float scalingRatio;
+    private float scalingRatio = 1f;
     // Instantiate correction fragment for passing it the scaling ratio
-    private CorrectionFragment correctionFragment = new CorrectionFragment();
-    // Boolean flag to avoid rescaling trajectory when view is redrawn
-    private static boolean firstTimeOnDraw = true;
-    //Variable to only draw when the variable is true
-    private static boolean draw = true;
-    //Variable to only draw when the variable is true
-    private static boolean reDraw = false;
+    private final CorrectionFragment correctionFragment = new CorrectionFragment();
+    // Track whether the next draw should apply initial scaling or a user-requested rescale.
+    private boolean needsInitialScale = true;
+    private boolean needsRescale = false;
 
     /**
      * Public default constructor for PathView. The constructor initialises the view with a context
@@ -90,76 +87,26 @@ public class PathView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        //If drawing for first time scale trajectory to fit screen
-        if(this.draw){
-            // If there are no coordinates, don't draw anything
-            if (xCoords.size() == 0)
-                return;
+        if (xCoords.isEmpty()) {
+            return;
+        }
 
-            //Scale trajectory to fit screen
+        if (needsInitialScale) {
             scaleTrajectory();
-
-            // Start a new path at the center of the view
-            path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
-            }
-
-            //Draw path
-            canvas.drawPath(path, drawPaint);
-
-            //Ensure path not redrawn
-            draw = false;
-
+            needsInitialScale = false;
+            needsRescale = false;
+        } else if (needsRescale) {
+            rescaleAroundCenter();
+            needsRescale = false;
         }
-        //If redrawing due to scaling of the average step length
-        else if(reDraw){
-            // If there are no coordinates, don't draw anything
-            if (xCoords.size() == 0)
-                return;
 
-            //Clear old path
-            path.reset();
-
-            // Iterate over all coordinates, shifting to the center and scaling then returning to original location
-            for (int i = 0; i < xCoords.size(); i++) {
-                float newXCoord = (xCoords.get(i) - getWidth()/2) * scalingRatio + getWidth()/2;
-                xCoords.set(i, newXCoord);
-                float newYCoord = (yCoords.get(i) - getHeight()/2) * scalingRatio + getHeight()/2;
-                yCoords.set(i, newYCoord);
-            }
-
-            // Start a new path at the center of the view
-            path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
-            }
-
-            canvas.drawPath(path, drawPaint);
-
-            //Ensure path not redrawn when screen is resized
-            reDraw = false;
+        path.reset();
+        path.moveTo(getWidth() / 2f, getHeight() / 2f);
+        for (int i = 1; i < xCoords.size(); i++) {
+            path.lineTo(xCoords.get(i), yCoords.get(i));
         }
-        else{
 
-            // If there are no coordinates, don't draw anything
-            if (xCoords.size() == 0)
-                return;
-
-            // Start a new path at the center of the view
-            path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
-            }
-
-            canvas.drawPath(path, drawPaint);
-        }
+        canvas.drawPath(path, drawPaint);
     }
 
     /**
@@ -169,6 +116,9 @@ public class PathView extends View {
      * @param newCords An array containing the newly calculated coordinates to be added.
      */
     public void drawTrajectory(float[] newCords) {
+        if (newCords == null || newCords.length < 2) {
+            return;
+        }
         // Add x coordinates
         xCoords.add(newCords[0]);
         // Negate the y coordinate and add it to the yCoords list, since screen coordinates
@@ -187,22 +137,24 @@ public class PathView extends View {
         int centerY = getHeight() / 2;
 
         // Calculate the scaling that would be required in each direction
-        float xRightRange = (getWidth() / 2) / (Math.abs(Collections.max(xCoords)));
-        float xLeftRange = (getWidth() / 2) / (Math.abs(Collections.min(xCoords)));
-        float yTopRange = (getHeight() / 2) / (Math.abs(Collections.max(yCoords)));
-        float yBottomRange = (getHeight() / 2) / (Math.abs(Collections.min(yCoords)));
+        float xRightRange = safeAxisScale(Collections.max(xCoords), getWidth() / 2f);
+        float xLeftRange = safeAxisScale(Collections.min(xCoords), getWidth() / 2f);
+        float yTopRange = safeAxisScale(Collections.max(yCoords), getHeight() / 2f);
+        float yBottomRange = safeAxisScale(Collections.min(yCoords), getHeight() / 2f);
 
         // Take the minimum scaling ratio to ensure all points fit within the view
         float minRatio = Math.min(Math.min(xRightRange, xLeftRange), Math.min(yTopRange, yBottomRange));
 
         // Add margins to the scaling ratio
         scalingRatio = 0.9f * minRatio;
+        if (!Float.isFinite(scalingRatio) || scalingRatio <= 0f) {
+            scalingRatio = 1f;
+        }
 
         // Limit scaling ratio to an equivalent of zoom of 21 in google maps
         if (scalingRatio >= 23.926) {
             scalingRatio = 23.926f;
         }
-        System.out.println("Adjusted scaling ratio: " + scalingRatio);
 
         // Set the scaling ratio for the correction fragment for setting Google Maps zoom
         correctionFragment.setScalingRatio(scalingRatio);
@@ -216,6 +168,25 @@ public class PathView extends View {
         }
     }
 
+    private void rescaleAroundCenter() {
+        float centerX = getWidth() / 2f;
+        float centerY = getHeight() / 2f;
+        for (int i = 0; i < xCoords.size(); i++) {
+            float newXCoord = (xCoords.get(i) - centerX) * scalingRatio + centerX;
+            float newYCoord = (yCoords.get(i) - centerY) * scalingRatio + centerY;
+            xCoords.set(i, newXCoord);
+            yCoords.set(i, newYCoord);
+        }
+    }
+
+    private float safeAxisScale(float extent, float halfSize) {
+        float safeExtent = Math.abs(extent);
+        if (safeExtent < 1e-4f) {
+            return Float.MAX_VALUE;
+        }
+        return halfSize / safeExtent;
+    }
+
     /**
      * Method called when PathView is detached from its window. {@link PathView#xCoords} and
      * {@link PathView#yCoords} are cleared so that path can start from 0 for next recording.
@@ -223,11 +194,7 @@ public class PathView extends View {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        // Reset trajectory
-        xCoords.clear();
-        yCoords.clear();
-        //New recording so must scale trajectory
-        draw = true;
+        clearTrajectory();
     }
 
     /**
@@ -238,28 +205,23 @@ public class PathView extends View {
      * @param newScale
      */
     public void redraw(float newScale){
+        if (!Float.isFinite(newScale) || newScale <= 0f) {
+            return;
+        }
         //Set scaling ratio based on user input
         scalingRatio = newScale;
         //Enable redrawing of path
-        reDraw = true;
+        needsRescale = true;
     }
 
 
     public void clearTrajectory() {
-
-        if (path != null) {
-            path.reset();
-        }
-
-
-        if (xCoords != null) {
-            xCoords.clear();
-        }
-        if (yCoords != null) {
-            yCoords.clear();
-        }
-
-
+        path.reset();
+        xCoords.clear();
+        yCoords.clear();
+        scalingRatio = 1f;
+        needsInitialScale = true;
+        needsRescale = false;
         invalidate();
     }
 

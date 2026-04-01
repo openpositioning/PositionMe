@@ -59,7 +59,8 @@
             app:key="floor_height"
             app:title="@string/floor_height"
             app:showSeekBarValue="true"
-            app:defaultValue="75"
+            app:defaultValue="4"
+            android:min="4"
             android:max="10"/>
     </PreferenceCategory>
 

@@ -7,6 +7,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+
 import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.UploadFragment;
@@ -57,6 +58,14 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
      */
     @Override
     public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        // Upload button click is handled per-position in onBindViewHolder to avoid
+        // getAdapterPosition() returning NO_ID after RecyclerView recycles this holder.
+        DownloadClickListener listener = listenerReference.get();
+        if (listener != null) {
+            int pos = getAdapterPosition();
+            if (pos != RecyclerView.NO_ID) {
+                listener.onPositionClicked(pos);
+            }
+        }
     }
 }

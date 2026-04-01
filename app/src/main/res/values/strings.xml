@@ -102,6 +102,10 @@
     <string name="filter_coefficient_title">Orientation filter coefficient</string>
     <string name="wifi_scan_interval">Scan interval for wifi networks. A scan takes approximately two seconds.</string>
     <string name="wifi_scan_title">WiFi interval</string>
+    <string name="settings_value_positive_integer">Enter a whole number greater than 0</string>
+    <string name="settings_value_positive_number">Enter a number greater than 0</string>
+    <string name="settings_value_non_negative_number">Enter a number greater than or equal to 0</string>
+    <string name="settings_value_unit_interval">Enter a number between 0 and 1</string>
     <!-- Mobile data Preferences -->
     <string name="mobile_data_title">Sync using mobile data</string>
     <string name="mobile_data_summary_off">The app will only send data through a WiFi connection</string>
@@ -110,11 +114,22 @@
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Color</string>
-    <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="gnssSwitch">Show GNSS</string>
+    <string name="wifi_observation_switch">Show WiFi Obs</string>
+    <string name="pdr_observation_switch">Show PDR Obs</string>
+    <string name="observation_count_label">Observation N</string>
+    <string name="custom_observation_count">Custom...</string>
+    <string name="custom_observation_count_title">Custom observation count</string>
+    <string name="custom_observation_count_hint">Enter a positive integer</string>
+    <string name="custom_observation_count_invalid">Please enter a positive integer</string>
+    <string name="map_controls_title">Controls</string>
+    <string name="map_controls_collapse">Collapse controls</string>
+    <string name="map_controls_expand">Expand controls</string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
-    <string name="auto_floor">❇️ Auto Floor </string>
+    <string name="auto_floor">Auto Floor</string>
+    <string name="smooth_display">Smooth</string>
     <string name="gnss_error">GNSS error:</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
@@ -136,5 +151,15 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
+    <string name="home_start_from_recording">Start from recording.</string>
+    <string name="quick_tools">Quick tools</string>
+    <string name="map_preview_title">Map preview</string>
+    <string name="live_positioning">Live positioning</string>
+    <string name="recording_status">Recording</string>
+    <string name="add_tag">Add tag</string>
+    <string name="recording_name_title">Name this recording</string>
+    <string name="recording_name_hint">Recording name</string>
+    <string name="save_recording_name">Save</string>
+    <string name="recording_name_default">Recording</string>
 
 </resources>

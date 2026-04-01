@@ -272,7 +272,7 @@ public class ReplayFragment extends Fragment {
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }
@@ -283,7 +283,7 @@ public class ReplayFragment extends Fragment {
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return point.gnssLocation;
             }
         }
         return null; // None found
@@ -302,7 +302,7 @@ public class ReplayFragment extends Fragment {
             Log.i(TAG, "Playing index: " + currentIndex);
             updateMapForIndex(currentIndex);
             currentIndex++;
-            playbackSeekBar.setProgress(currentIndex);
+            playbackSeekBar.setProgress(Math.min(currentIndex, replayData.size() - 1));
 
             if (currentIndex < replayData.size()) {
                 playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);

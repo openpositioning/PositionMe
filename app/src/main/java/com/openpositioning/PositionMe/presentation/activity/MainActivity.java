@@ -35,6 +35,7 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 
 
+import java.util.ArrayList;
 import java.util.Objects;
 
 /**
@@ -61,6 +62,10 @@ import java.util.Objects;
  * @author Virginia Cangelosi
  */
 public class MainActivity extends AppCompatActivity implements Observer {
+    private static final String PREF_FLOOR_HEIGHT = "floor_height";
+    private static final String PREF_FLOOR_HEIGHT_MIGRATED = "floor_height_bounds_migrated";
+    private static final int DEFAULT_FLOOR_HEIGHT_METERS = 4;
+    private static final int MAX_FLOOR_HEIGHT_METERS = 10;
 
 
     //region Instance variables
@@ -111,6 +116,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
         // Get handle for settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(this);
+        migrateLegacyFloorHeightPreference();
         settings.edit().putBoolean("permanentDeny", false).apply();
 
         // Initialize SensorFusion early so that its context is set
@@ -121,8 +127,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
         multiplePermissionsLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestMultiplePermissions(),
                 result -> {
-                    boolean locationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
-                    boolean activityGranted = result.getOrDefault(Manifest.permission.ACTIVITY_RECOGNITION, false);
+                    boolean locationGranted = hasLocationPermission();
+                    boolean activityGranted = hasActivityRecognitionPermission();
 
                     if (locationGranted && activityGranted) {
                         // Both permissions granted
@@ -176,22 +182,22 @@ public class MainActivity extends AppCompatActivity implements Observer {
         new Handler().postDelayed(() -> {
             if (isActivityVisible()) {
                 // Check if both permissions are granted
-                boolean locationGranted = ContextCompat.checkSelfPermission(
-                        this, Manifest.permission.ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED;
-
-                boolean activityGranted = ContextCompat.checkSelfPermission(
-                        this, Manifest.permission.ACTIVITY_RECOGNITION
-                ) == PackageManager.PERMISSION_GRANTED;
+                boolean locationGranted = hasLocationPermission();
+                boolean activityGranted = hasActivityRecognitionPermission();
 
                 if (!locationGranted || !activityGranted) {
-                    // Request both permissions using ActivityResultLauncher
-                    multiplePermissionsLauncher.launch(new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                    });
-                    multiplePermissionsLauncher.launch(new String[]{
-                            Manifest.permission.ACTIVITY_RECOGNITION
-                    });
+                    ArrayList<String> missingPermissions = new ArrayList<>();
+                    if (!locationGranted) {
+                        missingPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
+                    }
+                    if (!activityGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        missingPermissions.add(Manifest.permission.ACTIVITY_RECOGNITION);
+                    }
+                    if (!missingPermissions.isEmpty()) {
+                        multiplePermissionsLauncher.launch(
+                                missingPermissions.toArray(new String[0])
+                        );
+                    }
                 } else {
                     // Both permissions are already granted
                     allPermissionsObtained();
@@ -206,6 +212,43 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
     private boolean isActivityVisible() {
         return !isFinishing() && !isDestroyed();
+    }
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasActivityRecognitionPermission() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                || ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACTIVITY_RECOGNITION
+        ) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
+     * Clamps stored floor-height preferences into the effective supported range once.
+     */
+    private void migrateLegacyFloorHeightPreference() {
+        if (settings == null || settings.getBoolean(PREF_FLOOR_HEIGHT_MIGRATED, false)) {
+            return;
+        }
+
+        SharedPreferences.Editor editor = settings.edit();
+        if (settings.contains(PREF_FLOOR_HEIGHT)) {
+            int storedValue = settings.getInt(PREF_FLOOR_HEIGHT, DEFAULT_FLOOR_HEIGHT_METERS);
+            int clampedValue = Math.max(
+                    DEFAULT_FLOOR_HEIGHT_METERS,
+                    Math.min(MAX_FLOOR_HEIGHT_METERS, storedValue)
+            );
+            if (storedValue != clampedValue) {
+                editor.putInt(PREF_FLOOR_HEIGHT, clampedValue);
+            }
+        }
+        editor.putBoolean(PREF_FLOOR_HEIGHT_MIGRATED, true).apply();
     }
 
 
@@ -358,9 +401,11 @@ public class MainActivity extends AppCompatActivity implements Observer {
      * Task that displays negative toast on the main UI thread.
      * Called when {@link ServerCommunications} fails to upload a trajectory.
      */
-    private final Runnable displayToastTaskFailure = () -> {
-//            Toast.makeText(MainActivity.this, "Failed to complete trajectory upload", Toast.LENGTH_SHORT).show();
-    };
+    private final Runnable displayToastTaskFailure = () -> Toast.makeText(
+            MainActivity.this,
+            "Failed to upload trajectory",
+            Toast.LENGTH_SHORT
+    ).show();
 
     //endregion
 }

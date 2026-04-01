@@ -85,7 +85,14 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      */
     private void loadDownloadRecords() {
         try {
-            File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
+            File downloadsFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if (downloadsFolder == null) {
+                Log.w("TrajDownloadListAdapter", "Downloads directory is unavailable.");
+                return;
+            }
+
+            ServerCommunications.downloadRecords.clear();
+            File file = new File(downloadsFolder, "download_records.json");
             if (file.exists()) {
                 // Read the file line by line to reduce memory usage.
                 StringBuilder jsonBuilder = new StringBuilder();
@@ -98,7 +105,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
                 // Parse the JSON content.
                 JSONObject jsonObject = new JSONObject(jsonBuilder.toString());
-                ServerCommunications.downloadRecords.clear();
 
                 // Preallocate HashMap capacity to reduce resizing overhead.
                 int estimatedSize = jsonObject.length();
@@ -128,7 +134,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 System.out.println("Download records file not found.");
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e("TrajDownloadListAdapter", "Failed to load download records.", e);
         }
     }
 
@@ -142,12 +148,15 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             return;
         }
         // Create a FileObserver for the directory where the file is located.
-        fileObserver = new FileObserver(downloadsFolder.getAbsolutePath(), FileObserver.MODIFY) {
+        fileObserver = new FileObserver(
+                downloadsFolder.getAbsolutePath(),
+                FileObserver.CREATE | FileObserver.MODIFY | FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO
+        ) {
             @Override
             public void onEvent(int event, String path) {
                 // Only act if the modified file is "download_records.json".
                 if (path != null && path.equals("download_records.json")) {
-                    Log.i("FileObserver", "download_records.json has been modified.");
+                    Log.i("TrajDownloadListAdapter", "download_records.json changed. event=" + event);
                     // On file modification, load the records and update the UI on the main thread.
                     new Handler(Looper.getMainLooper()).post(() -> {
                         loadDownloadRecords();
@@ -156,6 +165,21 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             }
         };
         fileObserver.startWatching();
+    }
+
+    private File resolveDownloadedFile(JSONObject recordDetails) {
+        if (recordDetails == null) {
+            return null;
+        }
+
+        String fileName = recordDetails.optString("file_name", null);
+        File downloadsFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (fileName == null || downloadsFolder == null) {
+            return null;
+        }
+
+        File file = new File(downloadsFolder, fileName);
+        return file.isFile() ? file : null;
     }
 
     /**
@@ -197,30 +221,27 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
         // Parse and format the submission date.
         String dateSubmittedStr = responseItems.get(position).get("date_submitted");
-        assert dateSubmittedStr != null;
-        holder.getTrajDate().setText(
-                dateFormat.format(
-                        LocalDateTime.parse(dateSubmittedStr.split("\\.")[0])
-                )
-        );
+        if (dateSubmittedStr != null) {
+            try {
+                // Strip sub-seconds; support both ISO 'T' and space separator
+                String datePart = dateSubmittedStr.split("\\.")[0].replace(' ', 'T');
+                holder.getTrajDate().setText(dateFormat.format(LocalDateTime.parse(datePart)));
+            } catch (Exception e) {
+                holder.getTrajDate().setText(dateSubmittedStr);
+            }
+        } else {
+            holder.getTrajDate().setText("N/A");
+        }
 
         // Determine if the trajectory is already downloaded by checking the records.
         JSONObject recordDetails = ServerCommunications.downloadRecords.get(id);
-        boolean matched = recordDetails != null;
-        String filePath = null;
+        File downloadedFile = resolveDownloadedFile(recordDetails);
+        boolean matched = downloadedFile != null;
+        String filePath = downloadedFile != null ? downloadedFile.getAbsolutePath() : null;
 
         if (matched) {
-            try {
-                String fileName = recordDetails.optString("file_name", null);
-                if (fileName != null) {
-                    File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
-                    filePath = file.getAbsolutePath();
-                }
-                // Set the button state to "downloaded".
-                setButtonState(holder.downloadButton, 1);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            // Set the button state to "downloaded".
+            setButtonState(holder.downloadButton, 1);
         } else if (downloadingTrajIds.contains(id)) {
             // If the item is still being downloaded, set the button state to "downloading".
             setButtonState(holder.downloadButton, 2);
@@ -245,6 +266,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                     context.startActivity(intent);
                 }
             } else {
+                if (downloadingTrajIds.contains(trajId)) {
+                    return;
+                }
                 // If the item is not downloaded, trigger the download action.
                 listener.onPositionClicked(position);
                 // Mark the trajectory as downloading.
@@ -266,6 +290,15 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     @Override
     public int getItemCount() {
         return responseItems.size();
+    }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        if (fileObserver != null) {
+            fileObserver.stopWatching();
+            fileObserver = null;
+        }
     }
 
     /**

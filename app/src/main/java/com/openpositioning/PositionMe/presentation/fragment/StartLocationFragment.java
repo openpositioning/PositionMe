@@ -22,7 +22,6 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
@@ -46,10 +45,6 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     // Zoom level for the Google map
     private float zoom = 19f;
-    // Instance for managing indoor building overlays (if any)
-    private NucleusBuildingManager nucleusBuildingManager;
-    // Dummy variable for floor index
-    private int FloorNK;
 
     /**
      * Public Constructor for the class.
@@ -72,8 +67,24 @@ public class StartLocationFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
-        // Obtain the start position from the GPS data from the SensorFusion class
-        startPosition = sensorFusion.getGNSSLatitude(false);
+        // Prefer fresh Wi-Fi anchor first; fallback to GNSS when Wi-Fi is unavailable.
+        LatLng latestWifi = sensorFusion.getLatestWifiLatLng();
+        LatLng latestGnss = sensorFusion.getLatestGnssLatLng();
+        boolean wifiFresh = latestWifi != null && sensorFusion.isLatestWifiFresh();
+        boolean gnssFresh = latestGnss != null && sensorFusion.isLatestGnssFresh();
+        if (wifiFresh) {
+            startPosition[0] = (float) latestWifi.latitude;
+            startPosition[1] = (float) latestWifi.longitude;
+        } else if (gnssFresh) {
+            startPosition[0] = (float) latestGnss.latitude;
+            startPosition[1] = (float) latestGnss.longitude;
+        } else {
+            startPosition = sensorFusion.getGNSSLatitude(false);
+            if ((startPosition[0] == 0f && startPosition[1] == 0f) && latestWifi != null) {
+                startPosition[0] = (float) latestWifi.latitude;
+                startPosition[1] = (float) latestWifi.longitude;
+            }
+        }
         // If no location found, zoom the map out
         if (startPosition[0] == 0 && startPosition[1] == 0) {
             zoom = 1f;
@@ -102,12 +113,9 @@ public class StartLocationFragment extends Fragment {
                 mMap.getUiSettings().setRotateGesturesEnabled(true);
                 mMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                // *** FIX: Clear any existing markers so the start marker isn’t duplicated ***
+                // *** FIX: Clear any existing markers so the start marker isn't duplicated ***
                 mMap.clear();
-
-                // Create NucleusBuildingManager instance (if needed)
-                nucleusBuildingManager = new NucleusBuildingManager(mMap);
-                nucleusBuildingManager.getIndoorMapManager().hideMap();
+                // Assignment 2: no local indoor bitmap overlay, only API/Google map.
 
                 // Add a marker at the current GPS location and move the camera
                 position = new LatLng(startPosition[0], startPosition[1]);
@@ -169,9 +177,9 @@ public class StartLocationFragment extends Fragment {
 
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
-                    // Start sensor recording + set the start location
-                    sensorFusion.startRecording();
+                    // Set the start location first, then start recording with this origin.
                     sensorFusion.setStartGNSSLatitude(startPosition);
+                    sensorFusion.startRecording();
 
                     // Now switch to the recording screen
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
@@ -191,16 +199,4 @@ public class StartLocationFragment extends Fragment {
         });
     }
 
-    /**
-     * Switches the indoor map to the specified floor.
-     *
-     * @param floorIndex the index of the floor to switch to
-     */
-    private void switchFloorNU(int floorIndex) {
-        FloorNK = floorIndex; // Set the current floor index
-        if (nucleusBuildingManager != null) {
-            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
-            nucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
-        }
-    }
 }

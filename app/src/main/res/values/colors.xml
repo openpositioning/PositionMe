@@ -13,6 +13,13 @@
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
     <color name="red">#FE0000</color>
+    <color name="home_tile_history">#DCE9F2</color>
+    <color name="home_tile_live">#D7F2FF</color>
+    <color name="home_tile_info">#E3E1FF</color>
+    <color name="home_tile_indoor">#EEF1F6</color>
+    <color name="record_status_red">#D86C7D</color>
+    <color name="record_pill_blue">#2C8CF7</color>
+    <color name="record_cancel_outline">#8F4B45</color>
 
     <!-- Light Theme Colors -->
     <color name="md_theme_light_primary">#6750A4</color>

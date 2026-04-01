@@ -1,7 +1,5 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -15,7 +13,6 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -30,12 +27,20 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.Building;
 import com.openpositioning.PositionMe.data.remote.FloorPlan;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.utils.VenueSelectionHelper;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * New code guide:
+ * 1. Requests nearby teaching venues on map startup.
+ * 2. Draws selectable building outlines for manual venue selection.
+ * 3. Renders floor walls for the selected building.
+ * 4. Persists the chosen venue for upload and fusion workflows.
+ */
 public class IndoorMapDisplayFragment extends Fragment implements OnMapReadyCallback {
 
     private static final String TAG = "IndoorMapFragment";
@@ -122,6 +127,7 @@ public class IndoorMapDisplayFragment extends Fragment implements OnMapReadyCall
         });
     }
 
+    // Loads the default venue set used in the assignment demo area.
     private void requestAllBuildings() {
         loadedBuildingNames.clear();
         mMap.clear();
@@ -157,6 +163,7 @@ public class IndoorMapDisplayFragment extends Fragment implements OnMapReadyCall
         });
     }
 
+    // Adds only new buildings so repeated scans do not duplicate outlines.
     private void addBuildingsToMap(List<Building> newBuildings) {
         if (mMap == null) return;
 
@@ -169,6 +176,7 @@ public class IndoorMapDisplayFragment extends Fragment implements OnMapReadyCall
         }
     }
 
+    // Draws a color-coded outline that can be tapped to select a venue.
     private void drawSingleBuildingOutline(Building building) {
         if (building.getOutline() == null || building.getOutline().isEmpty()) return;
 
@@ -198,15 +206,11 @@ public class IndoorMapDisplayFragment extends Fragment implements OnMapReadyCall
         polygon.setTag(building);
     }
 
+    // Persists the selected venue and switches the fragment to floor-view mode.
     private void onBuildingSelected(Building building) {
         this.selectedBuilding = building;
-
-        // Save selected venue (campaign) to SharedPreferences
         String venueName = building.getName();
-        String campaignName = venueName.toLowerCase().replace(" ", "_");
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
-        prefs.edit().putString("current_campaign", campaignName).apply();
-
+        VenueSelectionHelper.persistSelectedBuilding(requireContext(), venueName);
         Toast.makeText(getContext(), "Venue set to: " + venueName, Toast.LENGTH_SHORT).show();
 
         // Select default floor (G or 0)
@@ -238,6 +242,7 @@ public class IndoorMapDisplayFragment extends Fragment implements OnMapReadyCall
         }
     }
 
+    // Redraws only the wall geometry for the currently selected floor.
     private void drawCurrentFloorWalls() {
         // Clear previous lines
         for (Polyline line : currentFloorLines) {
@@ -266,6 +271,7 @@ public class IndoorMapDisplayFragment extends Fragment implements OnMapReadyCall
         }
     }
 
+    // Shows floor controls only after a building has been selected.
     private void updateUIState(boolean isVisible) {
         int v = isVisible ? View.VISIBLE : View.GONE;
         if (floorText != null) floorText.setVisibility(v);

@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +23,7 @@ import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -47,9 +49,13 @@ public class MeasurementsFragment extends Fragment {
     // UI elements
     private ConstraintLayout sensorMeasurementList;
     private RecyclerView wifiListView;
+    private WifiListAdapter wifiListAdapter;
+    private TextView[][] sensorValueViews;
+    private String[][] lastRenderedSensorStrings;
     // List of string resource IDs
     private int[] prefaces;
     private int[] gnssPrefaces;
+    private long lastWifiSignature = Long.MIN_VALUE;
 
 
     /**
@@ -76,7 +82,7 @@ public class MeasurementsFragment extends Fragment {
         gnssPrefaces =  new int[]{R.string.lati, R.string.longi};
 
         // Create new handler to refresh the UI.
-        this.refreshDataHandler = new Handler();
+        this.refreshDataHandler = new Handler(Looper.getMainLooper());
     }
 
     /**
@@ -90,7 +96,6 @@ public class MeasurementsFragment extends Fragment {
         // Inflate the layout for this fragment
         View rootView = inflater.inflate(R.layout.fragment_measurements, container, false);
         getActivity().setTitle("Sensor Measurements");
-        this.refreshDataHandler.post(refreshTableTask);
         return rootView;
     }
 
@@ -110,8 +115,9 @@ public class MeasurementsFragment extends Fragment {
      */
     @Override
     public void onResume() {
-        refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         super.onResume();
+        refreshDataHandler.removeCallbacks(refreshTableTask);
+        refreshDataHandler.post(refreshTableTask);
     }
 
     /**
@@ -122,9 +128,128 @@ public class MeasurementsFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
-        wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
+        sensorMeasurementList = view.findViewById(R.id.sensorMeasurementList);
+        wifiListView = view.findViewById(R.id.wifiList);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        wifiListView.setHasFixedSize(true);
+        wifiListAdapter = new WifiListAdapter(requireContext(), java.util.Collections.emptyList());
+        wifiListView.setAdapter(wifiListAdapter);
+        cacheSensorValueViews();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        refreshDataHandler.removeCallbacks(refreshTableTask);
+        sensorMeasurementList = null;
+        wifiListView = null;
+        wifiListAdapter = null;
+        sensorValueViews = null;
+        lastRenderedSensorStrings = null;
+        lastWifiSignature = Long.MIN_VALUE;
+    }
+
+    private void cacheSensorValueViews() {
+        SensorTypes[] sensorTypes = SensorTypes.values();
+        sensorValueViews = new TextView[sensorTypes.length][];
+        lastRenderedSensorStrings = new String[sensorTypes.length][];
+
+        if (sensorMeasurementList == null) {
+            return;
+        }
+
+        int childCount = sensorMeasurementList.getChildCount();
+        int rowCount = Math.min(sensorTypes.length, childCount);
+        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+            View rowCard = sensorMeasurementList.getChildAt(rowIndex);
+            if (!(rowCard instanceof CardView)) {
+                continue;
+            }
+            View rowContent = ((CardView) rowCard).getChildAt(0);
+            if (!(rowContent instanceof ConstraintLayout)) {
+                continue;
+            }
+
+            ConstraintLayout currentRow = (ConstraintLayout) rowContent;
+            int valueCount = Math.max(0, currentRow.getChildCount() - 1);
+            TextView[] rowViews = new TextView[valueCount];
+            String[] rowStrings = new String[valueCount];
+            for (int valueIndex = 0; valueIndex < valueCount; valueIndex++) {
+                View valueView = currentRow.getChildAt(valueIndex + 1);
+                if (valueView instanceof TextView) {
+                    rowViews[valueIndex] = (TextView) valueView;
+                }
+            }
+            sensorValueViews[rowIndex] = rowViews;
+            lastRenderedSensorStrings[rowIndex] = rowStrings;
+        }
+    }
+
+    private void updateSensorTable(@NonNull Map<SensorTypes, float[]> sensorValueMap) {
+        if (sensorValueViews == null || lastRenderedSensorStrings == null) {
+            return;
+        }
+        for (SensorTypes st : SensorTypes.values()) {
+            int sensorIndex = st.ordinal();
+            TextView[] rowViews = sensorValueViews[sensorIndex];
+            String[] lastRowStrings = lastRenderedSensorStrings[sensorIndex];
+            float[] values = sensorValueMap.get(st);
+            if (rowViews == null || lastRowStrings == null || values == null) {
+                continue;
+            }
+            int valueCount = Math.min(values.length, rowViews.length);
+            for (int i = 0; i < valueCount; i++) {
+                TextView valueView = rowViews[i];
+                if (valueView == null) {
+                    continue;
+                }
+                String valueString;
+                if (values.length == 1) {
+                    valueString = getString(R.string.level, String.format(Locale.US, "%.2f", values[i]));
+                } else if (values.length == 2) {
+                    int wrapper = (st == SensorTypes.GNSSLATLONG) ? gnssPrefaces[i] : prefaces[i];
+                    valueString = getString(wrapper, String.format(Locale.US, "%.2f", values[i]));
+                } else {
+                    valueString = getString(prefaces[i], String.format(Locale.US, "%.2f", values[i]));
+                }
+                if (!valueString.equals(lastRowStrings[i])) {
+                    valueView.setText(valueString);
+                    lastRowStrings[i] = valueString;
+                }
+            }
+        }
+    }
+
+    private void updateWifiList(@Nullable List<Wifi> wifiObjects) {
+        if (wifiListAdapter == null) {
+            return;
+        }
+        long signature = computeWifiSignature(wifiObjects);
+        if (signature == lastWifiSignature) {
+            return;
+        }
+        lastWifiSignature = signature;
+        wifiListAdapter.submitItems(wifiObjects);
+    }
+
+    private long computeWifiSignature(@Nullable List<Wifi> wifiObjects) {
+        if (wifiObjects == null || wifiObjects.isEmpty()) {
+            return 0L;
+        }
+        long signature = 1469598103934665603L;
+        for (Wifi wifi : wifiObjects) {
+            if (wifi == null) {
+                continue;
+            }
+            signature ^= wifi.getBssid();
+            signature *= 1099511628211L;
+            signature ^= wifi.getLevel();
+            signature *= 1099511628211L;
+            signature ^= wifi.getFrequency();
+            signature *= 1099511628211L;
+        }
+        signature ^= wifiObjects.size();
+        return signature;
     }
 
     /**
@@ -139,37 +264,15 @@ public class MeasurementsFragment extends Fragment {
     private final Runnable refreshTableTask = new Runnable() {
         @Override
         public void run() {
+            if (!isAdded() || sensorMeasurementList == null) {
+                return;
+            }
             // Get all the values from SensorFusion
             Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
-            // Loop through UI elements and update the values
-            for(SensorTypes st : SensorTypes.values()) {
-                CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
-                ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
-                float[] values = sensorValueMap.get(st);
-                for (int i = 0; i < values.length; i++) {
-                    String valueString;
-                    // Set string wrapper based on data type.
-                    if(values.length == 1) {
-                        valueString = getString(R.string.level, String.format("%.2f", values[0]));
-                    }
-                    else if(values.length == 2){
-                        if(st == SensorTypes.GNSSLATLONG)
-                            valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
-                        else
-                            valueString = getString(prefaces[i], String.format("%.2f", values[i]));
-                    }
-                    else{
-                        valueString = getString(prefaces[i], String.format("%.2f", values[i]));
-                    }
-                    ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
-                }
-            }
+            updateSensorTable(sensorValueMap);
             // Get all WiFi values - convert to list of strings
             List<Wifi> wifiObjects = sensorFusion.getWifiList();
-            // If there are WiFi networks visible, update the recycler view with the data.
-            if(wifiObjects != null) {
-                wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
-            }
+            updateWifiList(wifiObjects);
             // Restart the data updater task in REFRESH_TIME milliseconds.
             refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         }

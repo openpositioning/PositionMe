@@ -166,18 +166,23 @@ public class FilesFragment extends Fragment implements Observer {
             for (int i = 0; i < jsonArray.length(); i++) {
                 JSONObject trajectoryEntry = jsonArray.getJSONObject(i);
                 Map<String, String> entryMap = new HashMap<>();
-                entryMap.put("owner_id", String.valueOf(trajectoryEntry.get("owner_id")));
-                entryMap.put("date_submitted", (String) trajectoryEntry.get("date_submitted"));
-                entryMap.put("id", String.valueOf(trajectoryEntry.get("id")));
+                entryMap.put("owner_id", String.valueOf(trajectoryEntry.opt("owner_id")));
+                // Use optString to safely handle null values without ClassCastException
+                entryMap.put("date_submitted", trajectoryEntry.optString("date_submitted", ""));
+                entryMap.put("id", String.valueOf(trajectoryEntry.opt("id")));
+                entryMap.put("server_position", String.valueOf(i));
                 // Add decoded map to list of entries
                 entryList.add(entryMap);
             }
-        } catch (JSONException e) {
-            System.err.println("JSON reading failed");
-            e.printStackTrace();
+        } catch (Exception e) {
+            android.util.Log.e("FilesFragment", "Failed to parse info response", e);
         }
         // Sort the list by the ID fields of the maps
-        entryList.sort(Comparator.comparing(m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(Comparator.naturalOrder())));
+        try {
+            entryList.sort(Comparator.comparing(m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(Comparator.naturalOrder())));
+        } catch (Exception e) {
+            android.util.Log.w("FilesFragment", "Sort failed, using original order", e);
+        }
         return entryList;
     }
 
@@ -200,9 +205,11 @@ public class FilesFragment extends Fragment implements Observer {
             Map<String, String> selectedItem = entryList.get(position);
             String id = selectedItem.get("id");
             String dateSubmitted = selectedItem.get("date_submitted");
+            // Use the original server position so ZIP entry index matches server order
+            int serverPosition = 0;
+            try { serverPosition = Integer.parseInt(selectedItem.get("server_position")); } catch (Exception ignored) {}
 
-            // Pass ID and date_submitted
-            serverCommunications.downloadTrajectory(position, id, dateSubmitted);
+            serverCommunications.downloadTrajectory(serverPosition, id, dateSubmitted);
 
 //            new AlertDialog.Builder(getContext())
 //                    .setTitle("File downloaded")

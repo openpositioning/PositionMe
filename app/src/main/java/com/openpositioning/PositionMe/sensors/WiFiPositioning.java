@@ -28,10 +28,25 @@ import org.json.JSONObject;
  * @author Arun Gopalakrishnan
  */
 public class WiFiPositioning {
+    private static final String FINE_POSITIONING_URL = "https://openpositioning.org/api/position/fine";
+
+    public enum PositioningMode {
+        FINE(FINE_POSITIONING_URL),
+        COARSE(FINE_POSITIONING_URL);
+
+        private final String endpointUrl;
+
+        PositioningMode(String endpointUrl) {
+            this.endpointUrl = endpointUrl;
+        }
+
+        public String getEndpointUrl() {
+            return endpointUrl;
+        }
+    }
+
     // Queue for storing the POST requests made
     private RequestQueue requestQueue;
-    // URL for WiFi positioning API
-    private static final String url="https://openpositioning.org/api/position/fine";
 
     /**
      * Getter for the WiFi positioning coordinates obtained using openpositioning API
@@ -81,9 +96,15 @@ public class WiFiPositioning {
      * @param jsonWifiFeatures WiFi Fingerprint from device
      */
     public void request(JSONObject jsonWifiFeatures) {
+        request(jsonWifiFeatures, PositioningMode.FINE);
+    }
+
+    public void request(JSONObject jsonWifiFeatures, PositioningMode positioningMode) {
         // Creating the POST request using WiFi fingerprint (a JSON object)
         JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
-                Request.Method.POST, url, jsonWifiFeatures,
+                Request.Method.POST,
+                resolveEndpoint(positioningMode),
+                jsonWifiFeatures,
                 // Parses the response to obtain the WiFi location and WiFi floor
                 response -> {
                     try {
@@ -132,9 +153,17 @@ public class WiFiPositioning {
      * @param callback callback function to allow user to use location when ready
      */
     public void request( JSONObject jsonWifiFeatures, final VolleyCallback callback) {
+        request(jsonWifiFeatures, PositioningMode.FINE, callback);
+    }
+
+    public void request(JSONObject jsonWifiFeatures,
+                        PositioningMode positioningMode,
+                        final VolleyCallback callback) {
         // Creating the POST request using WiFi fingerprint (a JSON object)
         JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
-                Request.Method.POST, url, jsonWifiFeatures,
+                Request.Method.POST,
+                resolveEndpoint(positioningMode),
+                jsonWifiFeatures,
                 response -> {
                     try {
                         Log.d("jsonObject",response.toString());
@@ -168,6 +197,10 @@ public class WiFiPositioning {
         );
         // Adds the request to the request queue
         requestQueue.add(jsonObjectRequest);
+    }
+
+    private String resolveEndpoint(PositioningMode positioningMode) {
+        return FINE_POSITIONING_URL;
     }
 
     /**

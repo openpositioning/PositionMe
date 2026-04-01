@@ -64,7 +64,7 @@ public class Wifi {
      */
     @Override
     public String toString() {
-        String macStr = String.format("%012X", bssid); // 转为16进制
+        String macStr = String.format("%012X", bssid);
         StringBuilder formattedMac = new StringBuilder();
         for (int i = 0; i < macStr.length(); i += 2) {
             if (i > 0) formattedMac.append(":");

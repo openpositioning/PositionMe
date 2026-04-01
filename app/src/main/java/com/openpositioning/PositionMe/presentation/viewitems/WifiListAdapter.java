@@ -10,6 +10,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.Wifi;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -22,8 +24,8 @@ import java.util.List;
  */
 public class WifiListAdapter extends RecyclerView.Adapter<WifiViewHolder> {
 
-    Context context;
-    List<Wifi> items;
+    private final Context context;
+    private final List<Wifi> items;
 
     /**
      * Default public constructor with context for inflating views and list to be displayed.
@@ -35,7 +37,20 @@ public class WifiListAdapter extends RecyclerView.Adapter<WifiViewHolder> {
      */
     public WifiListAdapter(Context context, List<Wifi> items) {
         this.context = context;
-        this.items = items;
+        this.items = new ArrayList<>();
+        submitItems(items);
+    }
+
+    public void submitItems(List<Wifi> items) {
+        this.items.clear();
+        if (items != null && !items.isEmpty()) {
+            this.items.addAll(items);
+        }
+        notifyDataSetChanged();
+    }
+
+    public List<Wifi> getItems() {
+        return Collections.unmodifiableList(items);
     }
 
     /**

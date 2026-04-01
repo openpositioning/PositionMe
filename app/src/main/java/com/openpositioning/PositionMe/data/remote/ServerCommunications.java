@@ -2,9 +2,6 @@ package com.openpositioning.PositionMe.data.remote;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,14 +9,14 @@ import android.util.Log;
 import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
+
 import com.openpositioning.PositionMe.Traj;
 import com.google.protobuf.util.JsonFormat;
-import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.VenueSelectionHelper;
 
 import org.json.JSONObject;
 
@@ -32,23 +29,21 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.Files;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
 
 import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
-import okhttp3.OkHttp;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -60,27 +55,27 @@ import android.graphics.BitmapFactory;
 import org.json.JSONArray;
 import org.json.JSONException;
 import java.util.Collections;
-import java.util.Comparator;
 
 /**
  * Handles communications with the server through HTTPs.
+ *
+ * New code guide:
+ * 1. Campaign-aware upload entry points for live and local trajectories.
+ * 2. Compatibility upload fallback strategy for server payload formats.
+ * 3. Download helpers for ZIP trajectory exports and local record tracking.
+ * 4. Building and floor-plan requests for indoor map rendering.
  */
 public class ServerCommunications implements Observable {
 
-    private static final String TAG = "ServerDebug";
-    // verify ServerCommunications is loaded (appears even without upload)
-    static {
-        Log.d(TAG, "[DBG] ServerCommunications loaded");
-    }
+    private static final String TAG = "ServerCommunications";
+    private static final String LEGACY_UPLOAD_CAMPAIGN = "murchison_house";
+    private static final MediaType PROTO_MEDIA_TYPE = MediaType.parse("application/octet-stream");
+    private static final double MIN_SERVER_UPLOAD_DURATION_SEC = 30.0;
 
 
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     private final Context context;
     private Traj.Trajectory trajectory;
-    private ConnectivityManager connMgr;
-    private boolean isWifiConn;
-    private boolean isMobileConn;
-    private SharedPreferences settings;
 
     private String infoResponse;
     private boolean success;
@@ -89,12 +84,11 @@ public class ServerCommunications implements Observable {
     private static final String userKey = "LY31NlnGAe9vN-HvQJWTZg";
     private static final String masterKey = "ewireless";
 
-    private static final String uploadURL =
+    private static final String uploadFallbackURL =
             "https://openpositioning.org/api/live/trajectory/upload/" + userKey
                     + "/?key=" + masterKey;
-    private static final String downloadURL =
-            "https://openpositioning.org/api/live/trajectory/download/" + userKey
-                    + "?skip=0&limit=30&key=" + masterKey;
+    private static final String downloadBaseURL =
+            "https://openpositioning.org/api/live/trajectory/download/" + userKey;
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
@@ -103,209 +97,59 @@ public class ServerCommunications implements Observable {
             "https://openpositioning.org/api/live/floorplan/request/" + userKey
                     + "?key=" + masterKey;
 
-    private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
     public ServerCommunications(Context context) {
         this.context = context;
-        this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.observers = new ArrayList<>();
     }
 
     public void sendInfo(Traj.Trajectory trajectory) {
         this.trajectory = trajectory;
-
-        Log.d(TAG, "[DBG] sendInfo() called");
-        Log.i(TAG, "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i(TAG, "Light Data size: " + trajectory.getLightDataCount());
-        Log.i(TAG, "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i(TAG, "WiFi Data size: " + trajectory.getWifiFingerprintsCount());
-        Log.i(TAG, "APS Data size: " + trajectory.getApsDataCount());
-        Log.i(TAG, "PDR Data size: " + trajectory.getPdrDataCount());
-        Log.i(TAG, "Mag Data size: " + trajectory.getMagnetometerDataCount());
     }
 
     /**
-     * Uploads trajectory to server with specified campaign.
+     * Uploads a freshly recorded trajectory using the selected venue campaign.
      */
     public void sendTrajectory(Traj.Trajectory sentTrajectory, String campaign) {
-        Log.e(TAG, "sendTrajectory called from: "
-                + android.util.Log.getStackTraceString(new Throwable()).split("\n")[2]);
-
-        if (campaign == null || campaign.isEmpty()) {
-            campaign = "murchison_house";
-        }
-
-        String dynamicUrl = "https://openpositioning.org/api/live/trajectory/upload/" + campaign + "/" + userKey + "/?key=" + masterKey;
-
-        // Confirm sendTrajectory is invoked and log upload URL
-        Log.e(TAG, "new >>> ENTER sendTrajectory <<< campaign=" + campaign + " url=" + dynamicUrl);
-        // Added: log key field counts before upload (diagnose empty wifi_fingerprints)
-        Log.d(TAG, "[DBG] sendTrajectory counts:"
-                + " imu=" + sentTrajectory.getImuDataCount()
-                + " wifi=" + sentTrajectory.getWifiFingerprintsCount()
-                + " pdr=" + sentTrajectory.getPdrDataCount()
-                + " test_points=" + sentTrajectory.getTestPointsCount());
-
-        // Verify PDR duration on the trajectory being uploaded
-        try {
-            int pdrCount = sentTrajectory.getPdrDataCount();
-            if (pdrCount > 1) {
-                long t0 = sentTrajectory.getPdrData(0).getRelativeTimestamp();
-                long t1 = sentTrajectory.getPdrData(pdrCount - 1).getRelativeTimestamp();
-                double dtSec = (t1 - t0) / 1000.0;
-                Log.e(TAG, "UPLOAD PDR duration: " + dtSec + "s (t0=" + t0 + ", t1=" + t1 + ") count=" + pdrCount);
-            } else {
-                Log.e(TAG, "UPLOAD PDR duration: insufficient pdr_data count=" + pdrCount);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "UPLOAD PDR duration check failed: " + e.getMessage(), e);
-        }
-        // Check whether PDR positions actually change (server may drop constant positions)
-        try {
-            int pdrCount = sentTrajectory.getPdrDataCount();
-            float minX = Float.POSITIVE_INFINITY, maxX = Float.NEGATIVE_INFINITY;
-            float minY = Float.POSITIVE_INFINITY, maxY = Float.NEGATIVE_INFINITY;
-
-            for (int i = 0; i < pdrCount; i++) {
-                float x = sentTrajectory.getPdrData(i).getX();
-                float y = sentTrajectory.getPdrData(i).getY();
-                minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-                minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-            }
-
-            Log.e(TAG, "UPLOAD PDR range: x=[" + minX + "," + maxX + "], y=[" + minY + "," + maxY + "], count=" + pdrCount);
-        } catch (Exception e) {
-            Log.e(TAG, "UPLOAD PDR range check failed: " + e.getMessage(), e);
-        }
-        // Debug: show first/last 3 PDR samples to confirm timestamps are really present in protobuf
-        try {
-            int n = sentTrajectory.getPdrDataCount();
-            Log.e(TAG, "UPLOAD PDR count=" + n);
-
-            for (int i = 0; i < Math.min(3, n); i++) {
-                long ts = sentTrajectory.getPdrData(i).getRelativeTimestamp();
-                float x = sentTrajectory.getPdrData(i).getX();
-                float y = sentTrajectory.getPdrData(i).getY();
-                Log.e(TAG, "UPLOAD PDR first[" + i + "]: t=" + ts + " x=" + x + " y=" + y);
-            }
-
-            for (int i = Math.max(0, n - 3); i < n; i++) {
-                long ts = sentTrajectory.getPdrData(i).getRelativeTimestamp();
-                float x = sentTrajectory.getPdrData(i).getX();
-                float y = sentTrajectory.getPdrData(i).getY();
-                Log.e(TAG, "UPLOAD PDR last[" + i + "]: t=" + ts + " x=" + x + " y=" + y);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "UPLOAD PDR sample dump failed: " + e.getMessage(), e);
-        }
-        // Dump JSON field names to identify which field the server expects as position_data
-        try {
-            String json = com.google.protobuf.util.JsonFormat.printer().print(sentTrajectory);
-            Log.e(TAG, "UPLOAD Trajectory JSON (first 1200 chars): " + json.substring(0, Math.min(1200, json.length())));
-        } catch (Exception e) {
-            Log.e(TAG, "UPLOAD JSON dump failed: " + e.getMessage(), e);
-        }
-        // Locate possible position field names in JSON and print surrounding snippet
-        try {
-            String json = com.google.protobuf.util.JsonFormat.printer().print(sentTrajectory);
-
-            String[] keys = new String[] {
-                    "\"pdrData\"", "\"pdr_data\"", "\"pdr\"", "\"pdrPositions\"",
-                    "\"positionData\"", "\"position_data\"", "\"positions\"", "\"position\"",
-                    "\"relativePosition\"", "\"relativePositions\"",
-                    "\"startTimestamp\"", "\"start_timestamp\""
-            };
-
-            for (String k : keys) {
-                int idx = json.indexOf(k);
-                if (idx >= 0) {
-                    int start = Math.max(0, idx - 200);
-                    int end = Math.min(json.length(), idx + 800);
-                    Log.e(TAG, "JSON contains " + k + " at " + idx + " snippet:\n" + json.substring(start, end));
-                } else {
-                    Log.e(TAG, "JSON missing key: " + k);
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "JSON key search failed: " + e.getMessage(), e);
-        }
-
-
-        File file;
-        try {
-            String fileName = "upload_" + System.currentTimeMillis() + ".proto";
-            file = new File(context.getCacheDir(), fileName);
-            FileOutputStream fos = new FileOutputStream(file);
-            fos.write(sentTrajectory.toByteArray());
-            fos.close();
-
-            // Verify temp upload file is written successfully
-            Log.d(TAG, "[DBG] tempUploadFile path=" + file.getAbsolutePath()
-                    + " exists=" + file.exists()
-                    + " size=" + file.length());
-        } catch (IOException e) {
-            Log.e(TAG, "sendTrajectory: file write failed: " + e.getMessage(), e);
-            e.printStackTrace();
+        String validationMessage = validateTrajectoryForServerUpload(sentTrajectory);
+        if (validationMessage != null) {
+            success = false;
+            infoResponse = validationMessage;
+            Log.w(TAG, infoResponse);
+            notifyObservers(1);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, infoResponse, Toast.LENGTH_LONG).show());
             return;
         }
 
-        OkHttpClient client = new OkHttpClient();
-        RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", file.getName(),
-                        RequestBody.create(MediaType.parse("application/octet-stream"), file))
-                .build();
+        String resolvedCampaign = resolveCampaign(campaign);
+        Log.i(TAG, "Uploading trajectory to campaign=" + resolvedCampaign
+                + " (test_points=" + sentTrajectory.getTestPointsCount() + ")");
 
-        Request request = new Request.Builder()
-                .url(dynamicUrl)
-                .post(requestBody)
-                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                .build();
+        String fileName = "upload_" + System.currentTimeMillis() + ".proto";
+        byte[] rawBytes = sentTrajectory.toByteArray();
+        byte[] compatBytes = null;
+        try {
+            compatBytes = TrajectoryUploadCompat.toServerBytes(sentTrajectory);
+        } catch (Exception e) {
+            Log.w(TAG, "Compatibility payload generation failed for live upload", e);
+        }
 
-        // Added: log sendTrajectory request headers
-        Log.d(TAG, "[DBG] sendTrajectory headers=" + request.headers().toString());
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                Log.e(TAG, "sendTrajectory onFailure: " + e.getMessage(), e);
-                e.printStackTrace();
-                success = false;
-                notifyObservers(1);
-                if (file.exists()) file.delete();
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                String bodyStr = null;
-                try (ResponseBody responseBody = response.body()) {
-                    bodyStr = (responseBody != null) ? responseBody.string() : null;
-                    Log.d(TAG, "[DBG] sendTrajectory response code=" + response.code()
-                            + " message=" + response.message()
-                            + " body=" + bodyStr);
-
-                    success = response.isSuccessful();
-                    notifyObservers(1);
-                    if (file.exists()) file.delete();
-                }
-            }
-        });
+        List<UploadAttempt> attempts = buildUploadAttempts(resolvedCampaign, rawBytes, compatBytes);
+        executeUploadAttempt(attempts, 0, fileName, null);
     }
 
+    /** Uploads a local trajectory file; calls onSuccess on main thread if upload succeeds. */
+    public void uploadLocalTrajectory(File localTrajectory) {
+        uploadLocalTrajectory(localTrajectory, null);
+    }
 
     /**
      * Uploads a local trajectory file to the API server.
+     * @param onSuccess Optional Runnable invoked on the main thread after a successful upload.
      */
-    public void uploadLocalTrajectory(File localTrajectory) {
-        OkHttpClient client = new OkHttpClient();
-
-        // upload entry log
-        Log.d(TAG, "[DBG] uploadLocalTrajectory() called"
-                + " path=" + (localTrajectory == null ? "null" : localTrajectory.getAbsolutePath())
-                + " exists=" + (localTrajectory != null && localTrajectory.exists())
-                + " size=" + (localTrajectory != null && localTrajectory.exists() ? localTrajectory.length() : -1));
-
+    public void uploadLocalTrajectory(File localTrajectory, Runnable onSuccess) {
         if (localTrajectory == null) {
             success = false;
             infoResponse = "Upload failed: localTrajectory is null";
@@ -314,95 +158,48 @@ public class ServerCommunications implements Observable {
             return;
         }
 
-        // log filename (check naming)
-        Log.d(TAG, "[DBG] uploading filename=" + localTrajectory.getName());
+        String resolvedCampaign = resolveCampaign(null);
+        Log.i(TAG, "Uploading local trajectory " + localTrajectory.getName()
+                + " to campaign=" + resolvedCampaign);
 
-        RequestBody fileRequestBody;
-
-        // Change (also a debug point): protobuf is binary, avoid text/plain
-        MediaType protoType = MediaType.parse("application/octet-stream");
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            try {
-                byte[] fileBytes = Files.readAllBytes(localTrajectory.toPath());
-                // log byte length
-                Log.d(TAG, "[DBG] readAllBytes length=" + (fileBytes == null ? -1 : fileBytes.length));
-                fileRequestBody = RequestBody.create(protoType, fileBytes);
-            } catch (IOException e) {
-                Log.e(TAG, "readAllBytes failed: " + e.getMessage(), e);
-                fileRequestBody = RequestBody.create(protoType, localTrajectory);
-            }
-        } else {
-            fileRequestBody = RequestBody.create(protoType, localTrajectory);
+        byte[] rawBytes;
+        byte[] compatBytes = null;
+        try {
+            rawBytes = readFileBytes(localTrajectory);
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to read local trajectory for upload", e);
+            success = false;
+            infoResponse = "Upload failed: could not prepare trajectory payload";
+            notifyObservers(1);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
+            return;
         }
 
-        RequestBody requestBody = new MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("file", localTrajectory.getName(), fileRequestBody)
-                .build();
-
-        // log uploadURL
-        Log.d(TAG, "[DBG] uploadURL=" + uploadURL);
-
-        Request request = new Request.Builder()
-                .url(uploadURL)
-                .post(requestBody)
-                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                .build();
-
-        // log request headers
-        Headers headers = request.headers();
-        Log.d(TAG, "[DBG] request headers=" + headers.toString());
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
+        try {
+            Traj.Trajectory localTrajectoryProto = Traj.Trajectory.parseFrom(rawBytes);
+            String validationMessage = validateTrajectoryForServerUpload(localTrajectoryProto);
+            if (validationMessage != null) {
                 success = false;
-
-                // network failure log
-                infoResponse = "Upload onFailure: " + e.getClass().getSimpleName() + " - " + e.getMessage();
-                Log.e(TAG, infoResponse, e);
-
+                infoResponse = validationMessage;
+                Log.w(TAG, infoResponse);
                 notifyObservers(1);
-
                 new Handler(Looper.getMainLooper()).post(() ->
-                        Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
+                        Toast.makeText(context, infoResponse, Toast.LENGTH_LONG).show());
+                return;
             }
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to parse local trajectory for validation; continuing upload attempt", e);
+        }
 
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                String bodyStr = null;
-                try (ResponseBody responseBody = response.body()) {
-                    bodyStr = (responseBody != null) ? responseBody.string() : null;
+        try {
+            compatBytes = TrajectoryUploadCompat.localFileToServerBytes(localTrajectory);
+        } catch (Exception e) {
+            Log.w(TAG, "Compatibility payload generation failed for local upload", e);
+        }
 
-                    // log HTTP status code and response body
-                    Log.d(TAG, "[DBG] Upload response code=" + response.code()
-                            + " message=" + response.message()
-                            + " body=" + bodyStr);
-
-                    if (!response.isSuccessful()) {
-                        success = false;
-                        infoResponse = "Upload failed: HTTP " + response.code()
-                                + " " + response.message()
-                                + (bodyStr != null ? (", body=" + bodyStr) : "");
-
-                        Log.e(TAG, infoResponse);
-                        notifyObservers(1);
-
-                        new Handler(Looper.getMainLooper()).post(() ->
-                                Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
-                        return;
-                    }
-
-                    success = true;
-                    infoResponse = "Upload success: HTTP " + response.code();
-                    Log.i(TAG, infoResponse);
-
-                    notifyObservers(1);
-
-                }
-            }
-        });
+        List<UploadAttempt> attempts = buildUploadAttempts(resolvedCampaign, rawBytes, compatBytes);
+        executeUploadAttempt(attempts, 0, localTrajectory.getName(), onSuccess);
     }
     /**
      * Loads download records from a JSON file.
@@ -427,11 +224,11 @@ public class ServerCommunications implements Observable {
                         String id = record.getString("id");
                         downloadRecords.put(id, record);
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.w(TAG, "Skipping malformed download record", e);
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e(TAG, "Failed to load download records", e);
             }
         }
     }
@@ -479,7 +276,7 @@ public class ServerCommunications implements Observable {
                 writer.flush();
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Failed to save download record", e);
         }
     }
 
@@ -489,9 +286,10 @@ public class ServerCommunications implements Observable {
     public void downloadTrajectory(int position, String id, String dateSubmitted) {
         loadDownloadRecords();
         OkHttpClient client = new OkHttpClient();
+        String downloadUrl = buildDownloadUrl(position);
 
         Request request = new Request.Builder()
-                .url(downloadURL)
+                .url(downloadUrl)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
@@ -499,24 +297,34 @@ public class ServerCommunications implements Observable {
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+                Log.e(TAG, "downloadTrajectory failed", e);
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-
-                    InputStream inputStream = responseBody.byteStream();
-                    ZipInputStream zipInputStream = new ZipInputStream(inputStream);
-                    java.util.zip.ZipEntry zipEntry;
-                    int zipCount = 0;
-                    while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipCount == position) break;
-                        zipCount++;
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "downloadTrajectory HTTP error: " + response.code());
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, "Download failed: HTTP " + response.code(), Toast.LENGTH_SHORT).show());
+                    if (response.body() != null) response.body().close();
+                    return;
+                }
+                InputStream inputStream = null;
+                ZipInputStream zipInputStream = null;
+                ByteArrayOutputStream byteArrayOutputStream = null;
+                try {
+                    inputStream = response.body().byteStream();
+                    zipInputStream = new ZipInputStream(inputStream);
+                    ZipEntry zipEntry = findMatchingZipEntry(zipInputStream, id, position);
+                    if (zipEntry == null) {
+                        Log.e(TAG, "downloadTrajectory: position " + position
+                                + " / id " + id + " not found in ZIP from " + downloadUrl);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(context, "Download failed: trajectory not found", Toast.LENGTH_SHORT).show());
+                        return;
                     }
 
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    byteArrayOutputStream = new ByteArrayOutputStream();
                     byte[] buffer = new byte[1024];
                     int bytesRead;
                     while ((bytesRead = zipInputStream.read(buffer)) != -1) {
@@ -524,11 +332,11 @@ public class ServerCommunications implements Observable {
                     }
 
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
-                    Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
+                    Traj.Trajectory receivedTrajectory = TrajectoryUploadCompat.parseServerBytes(byteArray);
                     logDataSize(receivedTrajectory);
 
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
-                    String fileName = "trajectory_" + dateSubmitted + ".txt";
+                    String fileName = buildDownloadedTrajectoryFileName(id, dateSubmitted);
 
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
                     if (appSpecificDownloads != null && !appSpecificDownloads.exists()) {
@@ -540,18 +348,275 @@ public class ServerCommunications implements Observable {
                         String receivedTrajectoryString = JsonFormat.printer().print(receivedTrajectory);
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
-                    } finally {
-                        zipInputStream.closeEntry();
-                        byteArrayOutputStream.close();
-                        zipInputStream.close();
-                        inputStream.close();
                     }
 
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
                     loadDownloadRecords();
+
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, "Download complete", Toast.LENGTH_SHORT).show());
+
+                } catch (Exception e) {
+                    Log.e(TAG, "downloadTrajectory processing failed", e);
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, "Download failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                } finally {
+                    if (byteArrayOutputStream != null) try { byteArrayOutputStream.close(); } catch (IOException ignored) {}
+                    if (zipInputStream != null) try { zipInputStream.close(); } catch (IOException ignored) {}
+                    if (inputStream != null) try { inputStream.close(); } catch (IOException ignored) {}
+                    if (response.body() != null) response.body().close();
                 }
             }
         });
+    }
+
+    private ZipEntry findMatchingZipEntry(ZipInputStream zipInputStream, String id, int fallbackPosition)
+            throws IOException {
+        if (zipInputStream == null) {
+            return null;
+        }
+
+        String expectedName = id == null ? null : id + ".pkt";
+        ZipEntry zipEntry;
+        int zipCount = 0;
+
+        while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+            String entryName = zipEntry.getName();
+            if (expectedName != null && expectedName.equals(entryName)) {
+                Log.i(TAG, "Matched download ZIP entry by id: " + entryName);
+                return zipEntry;
+            }
+            if (expectedName == null && zipCount == fallbackPosition) {
+                Log.w(TAG, "Falling back to ZIP entry position " + fallbackPosition);
+                return zipEntry;
+            }
+            zipCount++;
+        }
+        return null;
+    }
+
+    private String buildDownloadedTrajectoryFileName(String id, String dateSubmitted) {
+        String safeId = sanitizeFileComponent(id, "trajectory");
+        String safeDate = sanitizeFileComponent(dateSubmitted, "download");
+        return String.format(Locale.US, "trajectory_%s_%s.txt", safeId, safeDate);
+    }
+
+    private String sanitizeFileComponent(String value, String fallback) {
+        if (value == null || value.trim().isEmpty()) {
+            return fallback;
+        }
+        String sanitized = Pattern.compile("[^\\p{L}\\p{N}._-]+")
+                .matcher(value.trim())
+                .replaceAll("_");
+        sanitized = sanitized.replaceAll("_+", "_");
+        sanitized = sanitized.replaceAll("^[_ .-]+|[_ .-]+$", "");
+        return sanitized.isEmpty() ? fallback : sanitized;
+    }
+
+    private String resolveCampaign(String campaign) {
+        String resolvedCampaign = campaign;
+        if (resolvedCampaign == null || resolvedCampaign.trim().isEmpty()) {
+            resolvedCampaign = VenueSelectionHelper.getSelectedCampaign(context);
+        }
+        if (resolvedCampaign == null || resolvedCampaign.trim().isEmpty()) {
+            return LEGACY_UPLOAD_CAMPAIGN;
+        }
+        if (VenueSelectionHelper.DEFAULT_CAMPAIGN.equals(resolvedCampaign)) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(
+                    context.getApplicationContext());
+            String storedCampaign = prefs.getString(VenueSelectionHelper.PREF_CURRENT_CAMPAIGN, null);
+            String storedBuilding = prefs.getString(VenueSelectionHelper.PREF_SELECTED_BUILDING, null);
+            boolean hasExplicitVenue = (storedCampaign != null && !storedCampaign.trim().isEmpty())
+                    || (storedBuilding != null && !storedBuilding.trim().isEmpty());
+            if (!hasExplicitVenue) {
+                return LEGACY_UPLOAD_CAMPAIGN;
+            }
+        }
+        return resolvedCampaign;
+    }
+
+    private String buildCampaignUploadUrl(String campaign) {
+        String resolvedCampaign = resolveCampaign(campaign);
+        return "https://openpositioning.org/api/live/trajectory/upload/"
+                + resolvedCampaign + "/" + userKey + "/?key=" + masterKey;
+    }
+
+    private String buildDownloadUrl(int position) {
+        int limit = Math.max(position + 1, 30);
+        return downloadBaseURL + "?skip=0&limit=" + limit + "&key=" + masterKey;
+    }
+
+    // Builds a retry chain across current and legacy-compatible upload payloads.
+    private List<UploadAttempt> buildUploadAttempts(String preferredCampaign, byte[] rawBytes,
+                                                    byte[] compatBytes) {
+        List<UploadAttempt> attempts = new ArrayList<>();
+        addUploadAttempt(attempts, preferredCampaign, rawBytes, "raw/current");
+        if (compatBytes != null) {
+            addUploadAttempt(attempts, preferredCampaign, compatBytes, "compat/legacy");
+        }
+        if (!LEGACY_UPLOAD_CAMPAIGN.equals(preferredCampaign)) {
+            addUploadAttempt(attempts, LEGACY_UPLOAD_CAMPAIGN, rawBytes, "raw/current fallback");
+            if (compatBytes != null) {
+                addUploadAttempt(attempts, LEGACY_UPLOAD_CAMPAIGN, compatBytes,
+                        "compat/legacy fallback");
+            }
+        }
+        return attempts;
+    }
+
+    private void addUploadAttempt(List<UploadAttempt> attempts, String campaign, byte[] payload,
+                                  String label) {
+        String resolvedCampaign = resolveCampaign(campaign);
+        for (UploadAttempt existing : attempts) {
+            if (existing.campaign.equals(resolvedCampaign)
+                    && Arrays.equals(existing.payload, payload)) {
+                return;
+            }
+        }
+        attempts.add(new UploadAttempt(resolvedCampaign, payload, label));
+    }
+
+    // Tries each upload strategy in sequence until one is accepted by the API.
+    private void executeUploadAttempt(List<UploadAttempt> attempts, int attemptIndex, String fileName,
+                                      Runnable onSuccess) {
+        if (attemptIndex >= attempts.size()) {
+            success = false;
+            infoResponse = "Upload failed: no upload strategy succeeded";
+            Log.e(TAG, infoResponse);
+            notifyObservers(1);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
+            return;
+        }
+
+        UploadAttempt attempt = attempts.get(attemptIndex);
+        Log.i(TAG, "Upload attempt " + (attemptIndex + 1) + "/" + attempts.size()
+                + " using campaign=" + attempt.campaign
+                + " payload=" + attempt.label
+                + " bytes=" + attempt.payload.length);
+
+        OkHttpClient client = new OkHttpClient();
+        RequestBody requestBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", fileName,
+                        RequestBody.create(PROTO_MEDIA_TYPE, attempt.payload))
+                .build();
+
+        Request request = new Request.Builder()
+                .url(buildCampaignUploadUrl(attempt.campaign))
+                .post(requestBody)
+                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "Upload failed on attempt " + (attemptIndex + 1), e);
+                success = false;
+                infoResponse = "Upload failed: " + e.getClass().getSimpleName() + " - " + e.getMessage();
+                notifyObservers(1);
+                new Handler(Looper.getMainLooper()).post(() ->
+                        Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String bodyStr = null;
+                try (ResponseBody responseBody = response.body()) {
+                    bodyStr = (responseBody != null) ? responseBody.string() : null;
+                    if (response.isSuccessful()) {
+                        success = true;
+                        infoResponse = "Upload successful!";
+                        Log.i(TAG, "Upload succeeded on attempt " + (attemptIndex + 1)
+                                + ": HTTP " + response.code());
+                        if (bodyStr != null && !bodyStr.trim().isEmpty()) {
+                            Log.i(TAG, "Upload response body: " + bodyStr);
+                        }
+                        notifyObservers(1);
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show();
+                            if (onSuccess != null) {
+                                onSuccess.run();
+                            }
+                        });
+                        return;
+                    }
+
+                    String failureMessage = "Upload failed: HTTP " + response.code()
+                            + " " + response.message();
+                    if (bodyStr != null && !bodyStr.trim().isEmpty()) {
+                        Log.e(TAG, failureMessage + ", body=" + bodyStr);
+                    } else {
+                        Log.e(TAG, failureMessage);
+                    }
+
+                    if (attemptIndex + 1 < attempts.size()) {
+                        Log.w(TAG, "Retrying upload with next compatibility strategy");
+                        executeUploadAttempt(attempts, attemptIndex + 1, fileName, onSuccess);
+                        return;
+                    }
+
+                    success = false;
+                    infoResponse = failureMessage;
+                    notifyObservers(1);
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
+                }
+            }
+        });
+    }
+
+    private byte[] readFileBytes(File file) throws IOException {
+        try (InputStream inputStream = new FileInputStream(file);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            return outputStream.toByteArray();
+        }
+    }
+
+    // Rejects uploads that are known to fail the server-side minimum-duration check.
+    private String validateTrajectoryForServerUpload(Traj.Trajectory trajectory) {
+        if (trajectory == null) {
+            return "Upload failed: trajectory is empty";
+        }
+        double imuDurationSec = calculateDurationSec(
+                trajectory.getImuDataCount(),
+                index -> trajectory.getImuData(index).getRelativeTimestamp());
+        if (imuDurationSec >= MIN_SERVER_UPLOAD_DURATION_SEC) {
+            return null;
+        }
+        return "Upload skipped: server requires at least "
+                + String.format(java.util.Locale.US, "%.0f", MIN_SERVER_UPLOAD_DURATION_SEC)
+                + "s of recorded trajectory data.";
+    }
+
+    private double calculateDurationSec(int count, TimestampProvider timestampProvider) {
+        if (count <= 1) {
+            return 0.0;
+        }
+        long startTs = timestampProvider.getTimestamp(0);
+        long endTs = timestampProvider.getTimestamp(count - 1);
+        return Math.max(0L, endTs - startTs) / 1000.0;
+    }
+
+    private static final class UploadAttempt {
+        private final String campaign;
+        private final byte[] payload;
+        private final String label;
+
+        private UploadAttempt(String campaign, byte[] payload, String label) {
+            this.campaign = campaign;
+            this.payload = payload;
+            this.label = label;
+        }
+    }
+
+    private interface TimestampProvider {
+        long getTimestamp(int index);
     }
 
     /**
@@ -568,7 +633,7 @@ public class ServerCommunications implements Observable {
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+                Log.e(TAG, "sendInfoRequest failed", e);
             }
 
             @Override
@@ -582,26 +647,13 @@ public class ServerCommunications implements Observable {
         });
     }
 
-    private void checkNetworkStatus() {
-        NetworkInfo activeInfo = connMgr.getActiveNetworkInfo();
-        if (activeInfo != null && activeInfo.isConnected()) {
-            isWifiConn = activeInfo.getType() == ConnectivityManager.TYPE_WIFI;
-            isMobileConn = activeInfo.getType() == ConnectivityManager.TYPE_MOBILE;
-        } else {
-            isWifiConn = false;
-            isMobileConn = false;
-        }
-    }
-
     private void logDataSize(Traj.Trajectory trajectory) {
-        Log.i(TAG, "IMU: " + trajectory.getImuDataCount());
-        Log.i(TAG, "Mag: " + trajectory.getMagnetometerDataCount());
-        Log.i(TAG, "Pressure: " + trajectory.getPressureDataCount());
-        Log.i(TAG, "Light: " + trajectory.getLightDataCount());
-        Log.i(TAG, "GNSS: " + trajectory.getGnssDataCount());
-        Log.i(TAG, "WiFi: " + trajectory.getWifiFingerprintsCount());
-        Log.i(TAG, "APS: " + trajectory.getApsDataCount());
-        Log.i(TAG, "PDR: " + trajectory.getPdrDataCount());
+        Log.d(TAG, "Trajectory summary:"
+                + " imu=" + trajectory.getImuDataCount()
+                + " wifi=" + trajectory.getWifiFingerprintsCount()
+                + " gnss=" + trajectory.getGnssDataCount()
+                + " pdr=" + trajectory.getPdrDataCount()
+                + " test_points=" + trajectory.getTestPointsCount());
     }
 
     @Override
@@ -641,7 +693,7 @@ public class ServerCommunications implements Observable {
             jsonBody.put("lon", lng);
             jsonBody.put("macs", new JSONArray());
         } catch (JSONException e) {
-            e.printStackTrace();
+            Log.e(TAG, "Failed to build nearby building request", e);
             return;
         }
 
@@ -709,6 +761,7 @@ public class ServerCommunications implements Observable {
     /**
      * Parses building JSON data including outline and floor plans.
      */
+    // Parses the API building payload into app-side models with ordered floor plans.
     private List<Building> parseBuildingsJson(String jsonString) throws JSONException {
         List<Building> buildingList = new ArrayList<>();
         JSONArray jsonArray = new JSONArray(jsonString);
@@ -729,9 +782,17 @@ public class ServerCommunications implements Observable {
                 Iterator<String> keys = mapShapes.keys();
                 while (keys.hasNext()) {
                     String floorCode = keys.next();
+
+
                     List<List<List<Double>>> walls = new ArrayList<>();
-                    extractWallsFromGeoJson(mapShapes.get(floorCode).toString(), walls);
-                    floors.add(new FloorPlan(floorCode, 0, null, new double[]{0, 0, 0, 0}, walls));
+                    List<List<List<Double>>> stairs = new ArrayList<>();
+                    List<List<List<Double>>> lifts = new ArrayList<>();
+
+
+                    extractFeaturesFromGeoJson(mapShapes.get(floorCode).toString(), walls, stairs, lifts);
+
+
+                    floors.add(new FloorPlan(floorCode, 0, null, new double[]{0, 0, 0, 0}, walls, stairs, lifts));
                 }
             }
 
@@ -766,29 +827,58 @@ public class ServerCommunications implements Observable {
                     outList.add(latLng);
                 }
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) { Log.e(TAG, "Failed to parse building outline GeoJSON", e); }
     }
-
-    private void extractWallsFromGeoJson(String geoJsonStr, List<List<List<Double>>> wallsList) {
+    // Extracts wall, stair, and lift geometry from one floor-plan feature collection.
+    private void extractFeaturesFromGeoJson(String geoJsonStr,
+                                            List<List<List<Double>>> wallsList,
+                                            List<List<List<Double>>> stairsList,
+                                            List<List<List<Double>>> liftsList) {
         try {
             JSONObject featureCollection = new JSONObject(geoJsonStr);
             JSONArray features = featureCollection.getJSONArray("features");
             for (int i = 0; i < features.length(); i++) {
-                JSONObject geometry = features.getJSONObject(i).getJSONObject("geometry");
+                JSONObject feature = features.getJSONObject(i);
+                JSONObject geometry = feature.getJSONObject("geometry");
                 String type = geometry.getString("type");
                 JSONArray coords = geometry.getJSONArray("coordinates");
 
+                String indoorType = "wall"; // default fallback
+
+                // Try reading feature properties.
+                if (feature.has("properties") && !feature.isNull("properties")) {
+                    JSONObject properties = feature.getJSONObject("properties");
+
+                    // Prefer the explicit indoor classification before falling back to generic fields.
+                    if (properties.has("indoor_type")) {
+                        indoorType = properties.getString("indoor_type").toLowerCase();
+                    } else if (properties.has("type")) {
+                        indoorType = properties.getString("type").toLowerCase();
+                    } else if (properties.has("name")) {
+                        indoorType = properties.getString("name").toLowerCase();
+                    }
+                }
+
+                List<List<List<Double>>> targetList = wallsList;
+                if (indoorType.contains("stairs") || indoorType.contains("stair")) {
+                    targetList = stairsList;
+                } else if (indoorType.contains("lift") || indoorType.contains("elevator")) {
+                    targetList = liftsList;
+                }
+
+                // Normalize each supported GeoJSON geometry into a polyline-style path list.
                 if (type.equalsIgnoreCase("MultiLineString")) {
-                    for (int k = 0; k < coords.length(); k++) parseLineString(coords.getJSONArray(k), wallsList);
+                    for (int k = 0; k < coords.length(); k++) parseLineString(coords.getJSONArray(k), targetList);
                 } else if (type.equalsIgnoreCase("LineString") || type.equalsIgnoreCase("Polygon")) {
-                    parseLineString(type.equalsIgnoreCase("LineString") ? coords : coords.getJSONArray(0), wallsList);
+                    parseLineString(type.equalsIgnoreCase("LineString") ? coords : coords.getJSONArray(0), targetList);
                 } else if (type.equalsIgnoreCase("MultiPolygon")) {
-                    for (int k = 0; k < coords.length(); k++) parseLineString(coords.getJSONArray(k).getJSONArray(0), wallsList);
+                    for (int k = 0; k < coords.length(); k++) parseLineString(coords.getJSONArray(k).getJSONArray(0), targetList);
                 }
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            Log.e(TAG, "GeoJSON parse failed", e);
+        }
     }
-
     private void parseLineString(JSONArray lineArray, List<List<List<Double>>> wallsList) throws JSONException {
         List<List<Double>> path = new ArrayList<>();
         for (int p = 0; p < lineArray.length(); p++) {

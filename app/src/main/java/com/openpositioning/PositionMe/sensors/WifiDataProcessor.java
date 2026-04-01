@@ -11,9 +11,11 @@ import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
+import androidx.preference.PreferenceManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,8 +46,11 @@ import java.util.UUID;
  */
 public class WifiDataProcessor implements Observable {
 
-    //Time over which a new scan will be initiated
-    private static final long scanInterval = 5000;
+    private static final long DEFAULT_SCAN_INTERVAL_MS = 5000L;
+    private static final long MIN_SCAN_INTERVAL_MS = 2500L;
+    private static final long MAX_SCAN_INTERVAL_MS = 30000L;
+    private static final long DUPLICATE_SCAN_SUPPRESSION_MS = 2000L;
+    private static final String TAG = "WifiDataProcessor";
 
     // Application context for handling permissions and WifiManager instances
     private final Context context;
@@ -60,6 +65,11 @@ public class WifiDataProcessor implements Observable {
 
     // Timer object
     private Timer scanWifiDataTimer;
+    private boolean receiverRegistered = false;
+    private final Object receiverLock = new Object();
+    private long configuredScanIntervalMs = DEFAULT_SCAN_INTERVAL_MS;
+    private String lastPublishedScanSignature = "";
+    private long lastPublishedScanTimeMs = 0L;
 
     /**
      * Public default constructor of the WifiDataProcessor class.
@@ -83,6 +93,7 @@ public class WifiDataProcessor implements Observable {
         this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
+        this.configuredScanIntervalMs = resolveScanIntervalMs();
 
         // Decreapted method after API 29
         // Turn on wifi if it is currently disabled
@@ -93,7 +104,12 @@ public class WifiDataProcessor implements Observable {
 
         // Start wifi scan and return results via broadcast
         if(permissionsGranted) {
-            this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
+            registerReceiverIfNeeded();
+            this.scanWifiDataTimer.scheduleAtFixedRate(
+                    new scheduledWifiScan(),
+                    0,
+                    configuredScanIntervalMs
+            );
         }
 
         //Inform the user if wifi throttling is enabled on their device
@@ -115,55 +131,10 @@ public class WifiDataProcessor implements Observable {
             }
 
             boolean success = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
-            if (success) {
-                List<ScanResult> wifiScanList = wifiManager.getScanResults();
-
-                Map<Long, Wifi> uniqueWifiMap = new HashMap<>();
-
-                for (ScanResult result : wifiScanList) {
-                    long bssidLong = convertBssidToLong(result.BSSID);
-
-                    if (!uniqueWifiMap.containsKey(bssidLong)) {
-                        Wifi wifi = new Wifi();
-                        wifi.setSsid(result.SSID);
-                        wifi.setBssid(bssidLong);
-                        wifi.setLevel(result.level);
-                        wifi.setFrequency(result.frequency);
-
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                            wifi.setRttFlag(result.is80211mcResponder());
-                        } else {
-                            wifi.setRttFlag(false);
-                        }
-                        wifi.setUuid(UUID.randomUUID().toString());
-
-                        uniqueWifiMap.put(bssidLong, wifi);
-                    }
-                }
-
-                Wifi currentConnectedWifi = getCurrentWifiData();
-                if (currentConnectedWifi.getBssid() != 0) {
-                    long currentBssid = currentConnectedWifi.getBssid();
-
-                    if (!uniqueWifiMap.containsKey(currentBssid)) {
-                        if (currentConnectedWifi.getUuid() == null) {
-                            currentConnectedWifi.setUuid(UUID.randomUUID().toString());
-                        }
-
-                        uniqueWifiMap.put(currentBssid, currentConnectedWifi);
-                    }
-                }
-
-
-                wifiData = uniqueWifiMap.values().toArray(new Wifi[0]);
-                notifyObservers(0);
+            if (!success) {
+                Log.d(TAG, "SCAN_RESULTS_AVAILABLE received without updated flag; publishing latest cached scan.");
             }
-
-            try {
-                context.unregisterReceiver(this);
-            } catch (IllegalArgumentException e) {
-                // Ignore
-            }
+            publishLatestScanResults();
         }
     };
     /**
@@ -183,6 +154,119 @@ public class WifiDataProcessor implements Observable {
         } catch (NumberFormatException e) {
             return 0;
         }
+    }
+
+    private void publishLatestScanResults() {
+        if (!checkWifiPermissions()) {
+            return;
+        }
+
+        List<ScanResult> wifiScanList;
+        try {
+            wifiScanList = wifiManager.getScanResults();
+        } catch (SecurityException e) {
+            Log.w(TAG, "No permission to access scan results.", e);
+            return;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Failed to read Wi-Fi scan results.", e);
+            return;
+        }
+
+        Map<Long, Wifi> uniqueWifiMap = new HashMap<>();
+        if (wifiScanList != null) {
+            for (ScanResult result : wifiScanList) {
+                if (result == null) {
+                    continue;
+                }
+                long bssidLong = convertBssidToLong(result.BSSID);
+                if (!uniqueWifiMap.containsKey(bssidLong)) {
+                    Wifi wifi = new Wifi();
+                    wifi.setSsid(result.SSID);
+                    wifi.setBssid(bssidLong);
+                    wifi.setLevel(result.level);
+                    wifi.setFrequency(result.frequency);
+
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        wifi.setRttFlag(result.is80211mcResponder());
+                    } else {
+                        wifi.setRttFlag(false);
+                    }
+                    wifi.setUuid(UUID.randomUUID().toString());
+                    uniqueWifiMap.put(bssidLong, wifi);
+                }
+            }
+        }
+
+        Wifi currentConnectedWifi = getCurrentWifiData();
+        if (currentConnectedWifi.getBssid() != 0) {
+            long currentBssid = currentConnectedWifi.getBssid();
+            if (!uniqueWifiMap.containsKey(currentBssid)) {
+                if (currentConnectedWifi.getUuid() == null) {
+                    currentConnectedWifi.setUuid(UUID.randomUUID().toString());
+                }
+                uniqueWifiMap.put(currentBssid, currentConnectedWifi);
+            }
+        }
+
+        List<Wifi> orderedWifi = new ArrayList<>(uniqueWifiMap.values());
+        orderedWifi.sort((left, right) -> {
+            int levelCompare = Integer.compare(right.getLevel(), left.getLevel());
+            if (levelCompare != 0) {
+                return levelCompare;
+            }
+            return Long.compare(right.getFrequency(), left.getFrequency());
+        });
+        long nowMs = System.currentTimeMillis();
+        String scanSignature = buildScanSignature(orderedWifi);
+        if (!scanSignature.isEmpty()
+                && scanSignature.equals(lastPublishedScanSignature)
+                && (nowMs - lastPublishedScanTimeMs) < DUPLICATE_SCAN_SUPPRESSION_MS) {
+            return;
+        }
+
+        lastPublishedScanSignature = scanSignature;
+        lastPublishedScanTimeMs = nowMs;
+        wifiData = orderedWifi.toArray(new Wifi[0]);
+        notifyObservers(0);
+    }
+
+    private String buildScanSignature(List<Wifi> orderedWifi) {
+        if (orderedWifi == null || orderedWifi.isEmpty()) {
+            return "";
+        }
+        StringBuilder signature = new StringBuilder(orderedWifi.size() * 24);
+        for (Wifi wifi : orderedWifi) {
+            if (wifi == null) {
+                continue;
+            }
+            signature.append(wifi.getBssid())
+                    .append(':')
+                    .append(wifi.getLevel())
+                    .append(':')
+                    .append(wifi.getFrequency())
+                    .append(';');
+        }
+        return signature.toString();
+    }
+
+    private long resolveScanIntervalMs() {
+        long intervalMs = DEFAULT_SCAN_INTERVAL_MS;
+        try {
+            boolean overwriteConstants = PreferenceManager
+                    .getDefaultSharedPreferences(context)
+                    .getBoolean("overwrite_constants", false);
+            if (overwriteConstants) {
+                String value = PreferenceManager
+                        .getDefaultSharedPreferences(context)
+                        .getString("wifi_interval", "5");
+                long seconds = Long.parseLong(value);
+                intervalMs = seconds * 1000L;
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Invalid Wi-Fi scan interval preference. Falling back to default.", e);
+            intervalMs = DEFAULT_SCAN_INTERVAL_MS;
+        }
+        return Math.max(MIN_SCAN_INTERVAL_MS, Math.min(MAX_SCAN_INTERVAL_MS, intervalMs));
     }
 
     /**
@@ -217,12 +301,18 @@ public class WifiDataProcessor implements Observable {
     private void startWifiScan() {
         //Check settings for wifi permissions
         if(checkWifiPermissions()) {
-            //if(sharedPreferences.getBoolean("wifi", false)) {
-            //Register broadcast receiver for wifi scans
-            context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
-            wifiManager.startScan();
-
-            //}
+            try {
+                boolean started = wifiManager.startScan();
+                if (!started) {
+                    // startScan can be throttled; still publish the latest known scan list.
+                    Log.d(TAG, "Wi-Fi scan request throttled; using latest cached scan results.");
+                    publishLatestScanResults();
+                }
+            } catch (SecurityException e) {
+                Log.w(TAG, "Wi-Fi scan start failed due to permission.", e);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Wi-Fi scan start failed.", e);
+            }
         }
     }
 
@@ -231,8 +321,21 @@ public class WifiDataProcessor implements Observable {
      * The method declares a new timer instance to schedule a scan for nearby wifis every 5 seconds.
      */
     public void startListening() {
+        if (!checkWifiPermissions()) {
+            return;
+        }
+        configuredScanIntervalMs = resolveScanIntervalMs();
+        registerReceiverIfNeeded();
+        if (this.scanWifiDataTimer != null) {
+            this.scanWifiDataTimer.cancel();
+        }
         this.scanWifiDataTimer = new Timer();
-        this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
+        this.scanWifiDataTimer.scheduleAtFixedRate(
+                new scheduledWifiScan(),
+                0,
+                configuredScanIntervalMs
+        );
+        publishLatestScanResults();
     }
 
     /**
@@ -241,8 +344,43 @@ public class WifiDataProcessor implements Observable {
      * timer so that new scans are not initiated.
      */
     public void stopListening() {
-        context.unregisterReceiver(wifiScanReceiver);
-        this.scanWifiDataTimer.cancel();
+        unregisterReceiverIfNeeded();
+        if (this.scanWifiDataTimer != null) {
+            this.scanWifiDataTimer.cancel();
+            this.scanWifiDataTimer = null;
+        }
+    }
+
+    private void registerReceiverIfNeeded() {
+        synchronized (receiverLock) {
+            if (receiverRegistered) {
+                return;
+            }
+            try {
+                context.registerReceiver(
+                        wifiScanReceiver,
+                        new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+                );
+                receiverRegistered = true;
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Failed to register Wi-Fi scan receiver.", e);
+            }
+        }
+    }
+
+    private void unregisterReceiverIfNeeded() {
+        synchronized (receiverLock) {
+            if (!receiverRegistered) {
+                return;
+            }
+            try {
+                context.unregisterReceiver(wifiScanReceiver);
+            } catch (IllegalArgumentException e) {
+                // Ignore stale unregister requests.
+            } finally {
+                receiverRegistered = false;
+            }
+        }
     }
 
     /**
@@ -328,6 +466,7 @@ public class WifiDataProcessor implements Observable {
 
             currentWifi.setBssid(intMacAddress);
             currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
+            currentWifi.setLevel(wifiManager.getConnectionInfo().getRssi());
 
         }
         else{

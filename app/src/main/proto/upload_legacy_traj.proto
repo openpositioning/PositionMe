@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package upload_legacy;
+
+option java_package = "com.openpositioning.PositionMe";
+option java_outer_classname = "UploadTraj";
+
+message Trajectory {
+  string android_version = 1;
+  repeated MotionSample imu_data = 2;
+  repeated PdrSample pdr_data = 3;
+  repeated PositionSample position_data = 4;
+  repeated PressureSample pressure_data = 5;
+  repeated LightSample light_data = 6;
+  repeated GnssSample gnss_data = 7;
+  repeated WifiSample wifi_data = 8;
+  repeated ApData aps_data = 9;
+  int64 start_timestamp = 10;
+  string data_identifier = 11;
+  SensorInfo accelerometer_info = 12;
+  SensorInfo gyroscope_info = 13;
+  SensorInfo rotation_vector_info = 14;
+  SensorInfo magnetometer_info = 15;
+  SensorInfo barometer_info = 16;
+  SensorInfo light_sensor_info = 17;
+}
+
+message PdrSample {
+  int64 relative_timestamp = 1;
+  float x = 2;
+  float y = 3;
+}
+
+message MotionSample {
+  int64 relative_timestamp = 1;
+  float acc_x = 2;
+  float acc_y = 3;
+  float acc_z = 4;
+  float gyr_x = 5;
+  float gyr_y = 6;
+  float gyr_z = 7;
+  float rotation_vector_x = 8;
+  float rotation_vector_y = 9;
+  float rotation_vector_z = 10;
+  float rotation_vector_w = 11;
+  int32 step_count = 12;
+}
+
+message PositionSample {
+  int64 relative_timestamp = 1;
+  float mag_x = 2;
+  float mag_y = 3;
+  float mag_z = 4;
+}
+
+message PressureSample {
+  int64 relative_timestamp = 1;
+  float pressure = 2;
+}
+
+message LightSample {
+  int64 relative_timestamp = 1;
+  float light = 2;
+}
+
+message GnssSample {
+  int64 relative_timestamp = 1;
+  float latitude = 2;
+  float longitude = 3;
+  float altitude = 4;
+  float accuracy = 5;
+  float speed = 6;
+  string provider = 7;
+}
+
+message WifiSample {
+  int64 relative_timestamp = 1;
+  repeated MacScan mac_scans = 2;
+}
+
+message MacScan {
+  int64 relative_timestamp = 1;
+  int64 mac = 2;
+  int32 rssi = 3;
+}
+
+message ApData {
+  int64 mac = 1;
+  string ssid = 2;
+  int64 frequency = 3;
+}
+
+message SensorInfo {
+  string name = 1;
+  string vendor = 2;
+  float resolution = 3;
+  float power = 4;
+  int32 version = 5;
+  int32 type = 6;
+}

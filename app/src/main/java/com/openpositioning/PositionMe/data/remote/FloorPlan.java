@@ -4,24 +4,33 @@ import java.util.List;
 
 /**
  * Data model representing a single floor plan.
- * Updated to support Vector Data (Walls) from API.
  */
 public class FloorPlan {
     private String floorCode; // e.g., "1", "G", "B1"
     private int order;
-    private String imageUrl;  // Keep this for compatibility, though API might not send it
+    private String imageUrl;  // Kept for compatibility with older APIs.
     private double[] bounds;
 
-
-    // List of Lines, each Line is a List of Points [Lat, Lon]
     private List<List<List<Double>>> walls;
+    // Indoor stair geometry.
+    private List<List<List<Double>>> stairs;
+    // Indoor lift geometry.
+    private List<List<List<Double>>> lifts;
 
-    public FloorPlan(String floorCode, int order, String imageUrl, double[] bounds, List<List<List<Double>>> walls) {
+    public FloorPlan(String floorCode,
+                     int order,
+                     String imageUrl,
+                     double[] bounds,
+                     List<List<List<Double>>> walls,
+                     List<List<List<Double>>> stairs,
+                     List<List<List<Double>>> lifts) {
         this.floorCode = floorCode;
         this.order = order;
         this.imageUrl = imageUrl;
         this.bounds = bounds;
         this.walls = walls;
+        this.stairs = stairs;
+        this.lifts = lifts;
     }
 
     public String getFloorCode() { return floorCode; }
@@ -29,4 +38,8 @@ public class FloorPlan {
     public String getImageUrl() { return imageUrl; }
     public double[] getBounds() { return bounds; }
     public List<List<List<Double>>> getWalls() { return walls; }
+    // Returns stair geometry for the floor.
+    public List<List<List<Double>>> getStairs() { return stairs; }
+    // Returns lift geometry for the floor.
+    public List<List<List<Double>>> getLifts() { return lifts; }
 }

@@ -5,8 +5,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import android.os.Environment;
-import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -63,26 +61,33 @@ public class UploadFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Get communication class
         serverCommunications = new ServerCommunications(getActivity());
+        localTrajectories = new java.util.ArrayList<>();
+    }
 
-        // Determine the directory to load trajectory files from.
-        File trajectoriesDir = null;
-
-        // for android 13 or higher use dedicated external storage
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            trajectoriesDir = getActivity().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            if (trajectoriesDir == null) {
-                trajectoriesDir = getActivity().getFilesDir();
-            }
-        } else { // for android 12 or lower use internal storage
-            trajectoriesDir = getActivity().getFilesDir();
+    /**
+     * Rescans local storage each time the fragment becomes visible, so newly saved recordings
+     * are found without requiring the user to restart the app.
+     */
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Use the same directory and extension as SensorFusion.stopRecording():
+        // getExternalFilesDir(null) with "term_project_trajectory_*.proto"
+        File trajectoriesDir = requireActivity().getExternalFilesDir(null);
+        if (trajectoriesDir == null) {
+            trajectoriesDir = requireActivity().getFilesDir();
         }
+        File[] files = trajectoriesDir.listFiles((file, name) ->
+                name.contains("trajectory_") && name.endsWith(".proto"));
+        localTrajectories = files != null
+                ? Stream.of(files).filter(file -> !file.isDirectory()).collect(Collectors.toList())
+                : new java.util.ArrayList<>();
 
-        localTrajectories = Stream.of(trajectoriesDir.listFiles((file, name) ->
-                        name.contains("trajectory_") && name.endsWith(".txt")))
-                .filter(file -> !file.isDirectory())
-                .collect(Collectors.toList());
+        // Refresh UI if the view is already created
+        if (emptyNotice != null && uploadList != null) {
+            refreshListUI();
+        }
     }
 
     /**
@@ -113,34 +118,31 @@ public class UploadFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-
         this.emptyNotice = view.findViewById(R.id.emptyUpload);
         this.uploadList = view.findViewById(R.id.uploadTrajectories);
-        // Check if there are locally saved trajectories
-        if(localTrajectories.isEmpty()) {
+        LinearLayoutManager manager = new LinearLayoutManager(getActivity());
+        uploadList.setLayoutManager(manager);
+        uploadList.setHasFixedSize(true);
+        refreshListUI();
+    }
+
+    private void refreshListUI() {
+        if (localTrajectories.isEmpty()) {
             uploadList.setVisibility(View.GONE);
             emptyNotice.setVisibility(View.VISIBLE);
-        }
-        else {
+        } else {
             uploadList.setVisibility(View.VISIBLE);
             emptyNotice.setVisibility(View.GONE);
-
-            // Set up RecyclerView
-            LinearLayoutManager manager = new LinearLayoutManager(getActivity());
-            uploadList.setLayoutManager(manager);
-            uploadList.setHasFixedSize(true);
-            listAdapter = new UploadListAdapter(getActivity(), localTrajectories, new DownloadClickListener() {
-                /**
-                 * {@inheritDoc}
-                 * Upload the trajectory at the clicked position, remove it from the recycler view
-                 * and the local list.
-                 */
-                @Override
-                public void onPositionClicked(int position) {
-                    serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
-//                    localTrajectories.remove(position);
-//                    listAdapter.notifyItemRemoved(position);
-                }
+            listAdapter = new UploadListAdapter(getActivity(), localTrajectories, position -> {
+                File file = localTrajectories.get(position);
+                serverCommunications.uploadLocalTrajectory(file, () -> {
+                    // Delete the local file and remove from list after successful upload
+                    file.delete();
+                    if (localTrajectories.remove(file)) {
+                        listAdapter.notifyDataSetChanged();
+                        if (localTrajectories.isEmpty()) refreshListUI();
+                    }
+                });
             });
             uploadList.setAdapter(listAdapter);
         }

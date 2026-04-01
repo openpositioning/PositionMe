@@ -4,6 +4,7 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.widget.Toast;
@@ -100,18 +101,90 @@ public class GNSSDataProcessor {
     public void startLocationUpdates() {
         //if (sharedPreferences.getBoolean("location", true)) {
         boolean permissionGranted = checkLocationPermissions();
-        if (permissionGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
-
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+        if (!permissionGranted) {
+            return;
         }
-        else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
+
+        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        boolean requestedAnyProvider = false;
+
+        if (gpsEnabled) {
+            locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    0,
+                    0,
+                    locationListener
+            );
+            requestedAnyProvider = true;
+        }
+        if (networkEnabled) {
+            locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    0,
+                    0,
+                    locationListener
+            );
+            requestedAnyProvider = true;
+        }
+
+        if (requestedAnyProvider) {
+            dispatchBestLastKnownLocation(gpsEnabled, networkEnabled);
+        }
+
+        if (!gpsEnabled) {
             Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
         }
-        else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
-            Toast.makeText(context, "Turn on WiFi", Toast.LENGTH_LONG).show();
+        if (!networkEnabled) {
+            Toast.makeText(context, "Enable network location/WiFi", Toast.LENGTH_LONG).show();
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private void dispatchBestLastKnownLocation(boolean gpsEnabled, boolean networkEnabled) {
+        Location bestLocation = null;
+
+        if (gpsEnabled) {
+            bestLocation = chooseBetterLocation(
+                    bestLocation,
+                    locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            );
+        }
+        if (networkEnabled) {
+            bestLocation = chooseBetterLocation(
+                    bestLocation,
+                    locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            );
+        }
+
+        if (bestLocation != null) {
+            locationListener.onLocationChanged(bestLocation);
+        }
+    }
+
+    private Location chooseBetterLocation(Location currentBest, Location candidate) {
+        if (candidate == null) {
+            return currentBest;
+        }
+        if (currentBest == null) {
+            return candidate;
+        }
+
+        long timeDeltaMs = candidate.getTime() - currentBest.getTime();
+        if (timeDeltaMs > 15_000L) {
+            return candidate;
+        }
+        if (candidate.hasAccuracy() && currentBest.hasAccuracy()) {
+            if (candidate.getAccuracy() + 2f < currentBest.getAccuracy()) {
+                return candidate;
+            }
+            if (timeDeltaMs >= 0 && candidate.getAccuracy() <= currentBest.getAccuracy() + 4f) {
+                return candidate;
+            }
+        } else if (timeDeltaMs >= 0) {
+            return candidate;
+        }
+        return currentBest;
     }
 
     /**

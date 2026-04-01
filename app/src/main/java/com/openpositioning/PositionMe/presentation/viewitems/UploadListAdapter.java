@@ -65,16 +65,24 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
      */
     @Override
     public void onBindViewHolder(@NonNull UploadViewHolder holder, int position) {
-        holder.trajId.setText(String.valueOf(position));
-        Pattern datePattern = Pattern.compile("_(.*?)\\.txt");
+        holder.trajId.setText(String.valueOf(position + 1));
+        Pattern datePattern = Pattern.compile("_(\\d+)\\.proto");
         Matcher dateMatcher = datePattern.matcher(uploadItems.get(position).getName());
-        String dateString = dateMatcher.find() ? dateMatcher.group(1) : "N/A";
-        System.err.println("UPLOAD - Date string: " + dateString);
+        String dateString = "N/A";
+        if (dateMatcher.find()) {
+            try {
+                long epochMs = Long.parseLong(dateMatcher.group(1));
+                dateString = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
+                        java.util.Locale.getDefault()).format(new java.util.Date(epochMs));
+            } catch (NumberFormatException e) {
+                dateString = dateMatcher.group(1);
+            }
+        }
         holder.trajDate.setText(dateString);
 
-        // Set click listener for the delete button
+        // Bind both buttons directly with position to avoid getAdapterPosition() returning NO_ID
+        holder.uploadButton.setOnClickListener(v -> listener.onPositionClicked(position));
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));
-
     }
 
     /**

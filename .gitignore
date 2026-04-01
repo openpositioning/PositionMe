@@ -14,3 +14,13 @@
 .cxx
 local.properties
 /.idea/
+secrets.properties
+app/google-services.json
+*.jks
+*.keystore
+keystore.properties
+/.android-local/
+/.gradle-local/
+/app/build/
+/tmp_pdf/
+/_zip_ref/
