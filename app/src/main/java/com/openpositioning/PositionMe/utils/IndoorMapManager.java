@@ -88,7 +88,7 @@ public class IndoorMapManager {
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
 
-    // Active trajectory color — set by the user via the color toggle button.
+    // Active trajectory color set by the user via the color toggle button.
     // Floor plan shapes are drawn in this color so they stay visually consistent.
     private int floorPlanColor = Color.RED; // default matches the default polyline color
 
@@ -507,10 +507,7 @@ public class IndoorMapManager {
     /**
      * Returns the stroke colour for a given indoor feature type.
      * Feature colours are fixed regardless of the user's trajectory colour choice:
-     *   wall   → red   (impassable boundary)
-     *   stairs → yellow (cross-floor via stairs)
-     *   lift   → green  (cross-floor via lift)
-     *   room   → current trajectory colour (neutral room outline)
+
      *
      * @param indoorType the indoor_type property value
      * @return ARGB colour value
@@ -519,7 +516,7 @@ public class IndoorMapManager {
         if ("wall".equals(indoorType))   return Color.argb(220, 220,  30,  30); // red
         if ("stairs".equals(indoorType)) return Color.argb(220, 220, 180,   0); // yellow
         if ("lift".equals(indoorType))   return Color.argb(220,  30, 180,  30); // green
-        // room / other — use the user-chosen trajectory colour
+        // room / other use the user-chosen trajectory colour
         int r = Color.red(floorPlanColor);
         int g = Color.green(floorPlanColor);
         int b = Color.blue(floorPlanColor);

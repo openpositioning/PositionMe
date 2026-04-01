@@ -312,7 +312,7 @@ public class SensorFusion implements SensorEventListener {
             for (float h : headingCalibSamples) sum += h;
             headingBias = sum / headingCalibSamples.size();
             headingCalibDone = true;
-            Log.d("SensorFusion", "Heading bias calibrated: " + (float) Math.toDegrees(headingBias) + "°");
+            Log.d("SensorFusion", "Heading bias calibrated: " + (float) Math.toDegrees(headingBias) + "degrees");
         }
     }
 
@@ -408,12 +408,10 @@ public class SensorFusion implements SensorEventListener {
             if (Math.abs(diff - targetElev) > LIFT_SNAP_TOLERANCE_M) return;
             pdrProcessing.setCurrentFloor(targetFloor);
             String TAG = "FLOOR CHANGE LIFT";
-            Log.d(TAG, "Floor change (lift) → " + targetFloor + " diff=" + diff);
         } else if ("stairs".equals(type) && !isLift) {
             //pdrProcessing.setCurrentFloor(targetFloor);
             String TAG = "FLOOR CHANGE STAIRS";
 
-            Log.d(TAG, "Floor change (stairs) → " + targetFloor + " diff=" + diff);
         }
     }
 
@@ -967,11 +965,11 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Returns the magnitude of horizontal filtered acceleration (m/s²).
+     * Returns the magnitude of horizontal filtered acceleration (m/s squared).
      * Used by CrossFloorClassifier to distinguish lift (low horizontal movement)
      * from stairs (higher horizontal movement) during floor transitions.
      *
-     * @return horizontal acceleration magnitude in m/s²
+     * @return horizontal acceleration magnitude in m/ss quared
      */
     public float getHorizontalAccelMagnitude() {
         return (float) Math.sqrt(
@@ -1101,7 +1099,7 @@ public class SensorFusion implements SensorEventListener {
                         } else if (uncertainty < 30f && offset > Math.max(accuracy * 2.5f, 20f)) {
                             outlier = true;
                             Log.d("SensorFusion", "GNSS outlier: " + (int) offset
-                                    + "m offset, σ=" + (int) uncertainty + "m");
+                                    + "m offset, sigma=" + (int) uncertainty + "m");
                         }
                     }
                     if (!outlier) {

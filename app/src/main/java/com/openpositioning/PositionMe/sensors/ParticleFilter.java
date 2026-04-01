@@ -19,7 +19,7 @@ import java.util.Random;
  *       with per-particle heading-bias correction and Gaussian noise, then slides any
  *       particle that would cross a wall along the wall tangent so it remains inside
  *       the building.</li>
- *   <li>GNSS weights particles with a Student-t likelihood (ν=4) that is robust to
+ *   <li>GNSS weights particles with a Student-t likelihood (v=4) that is robust to
  *       the multipath outliers common indoors. Accuracy is inflated 10× when wall
  *       segments are loaded to prevent bad GPS fixes from dragging the cloud outside
  *       the building.</li>
@@ -324,7 +324,7 @@ public class ParticleFilter {
 
     /**
      * Updates particle weights from a GNSS observation using a Student-t likelihood function.
-     * The Student-t distribution (ν=4) has heavier tails than a Gaussian, making it robust to
+     * The Student-t distribution (v=4) has heavier tails than a Gaussian, making it robust to
      * the multipath and NLOS outlier fixes common indoors.  When wall segments are loaded the
      * effective accuracy is inflated to {@code max(10 × gnssAccuracy, 50 m)} to prevent indoor
      * GPS noise from dragging particles through walls.  Systematic resampling is triggered when
@@ -349,9 +349,9 @@ public class ParticleFilter {
         float variance = effectiveAccuracy * effectiveAccuracy; // Convert accuracy to variance sigma^2
 
 
-        // Student-t likelihood (ν=4) — heavier tails than Gaussian, robust to outlier GNSS fixes.
+        // Student-t likelihood (v=4) — heavier tails than Gaussian, robust to outlier GNSS fixes.
         // Based on: Nurminen, H. et al. (2013). "Particle Filter and Smoother for Indoor
-        // Localization." IPIN 2013. w_i isproportional to (1 + d²/(ν·sigma²))^(-(ν+2)/2), ν=4 → exponent=-3.
+        // Localization." IPIN 2013. w_i isproportional to (1 + d²/(v·sigma²))^(-(v+2)/2), v=4 leasd to exponent=-3.
         final float nu = 4.0f;
         float weightSum = 0f;
         for (int i = 0; i < NUM_PARTICLES; i++) {
@@ -402,7 +402,7 @@ public class ParticleFilter {
         float variance = wifiAccuracy * wifiAccuracy; // Convert accuracy to variance sigma^2
 
 
-        // Student-t likelihood (ν=4) — same robust formulation as updateGNSS().
+        // Student-t likelihood (v=4) — same robust formulation as updateGNSS().
         final float nu = 4.0f;
         float weightSum = 0f;
         for (int i = 0; i < NUM_PARTICLES; i++) {

@@ -106,15 +106,13 @@ public class RecordingFragment extends Fragment {
     private float lastAcceptedPdrX = 0f;
     private float lastAcceptedPdrY = 0f;
 
-    // Last WiFi location sent to the map — avoids flooding wifiHistory with the same point
     private LatLng lastSentWifiPosition = null;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
             updateUIandPosition();
-            // Loop again — 16 ms ≈ 60 fps for smooth marker and camera animation
-            refreshDataHandler.postDelayed(refreshDataTask, 16);
+            refreshDataHandler.postDelayed(refreshDataTask, 16); //loop faster
         }
     };
 
@@ -274,7 +272,7 @@ public class RecordingFragment extends Fragment {
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
      */
     private void updateUIandPosition() {
-        // Elevation comes from the barometer — available immediately, no PDR needed.
+        // Elevation comes from the barometer so is  available immediately, no PDR needed should work FINE
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
@@ -312,6 +310,8 @@ public class RecordingFragment extends Fragment {
 
             boolean isFirstPoint = (lastSentFusedPosition == null);
             double movedDistance = 0.0;
+
+            // Determine if the fused position has moved enough to warrant a map update.
             boolean movementDetected = false;
 
             if (lastSentFusedPosition != null) {
@@ -320,7 +320,7 @@ public class RecordingFragment extends Fragment {
                 movementDetected = movedDistance >= MOVEMENT_THRESHOLD_METERS;
             }
 
-            if (isFirstPoint || movementDetected) {
+            if (isFirstPoint || movementDetected) { // Only update the map if it's the first point or if the fused position has moved enough
                 LatLng positionToRender;
 
                 if (!isFirstPoint && movedDistance > MAX_JUMP_METERS) {
@@ -328,7 +328,8 @@ public class RecordingFragment extends Fragment {
                     // The fused estimate jumped implausibly (bad GNSS/filter divergence).
                     // Fall back to PDR dead-reckoning: apply the PDR step delta to the
                     // last confirmed anchor so the trajectory stays physically continuous.
-                    float pdrDeltaX = pdrValues[0] - lastAcceptedPdrX;
+                    //i think this should work
+                    float pdrDeltaX = pdrValues[0] - lastAcceptedPdrX; // Compute PDR step delta since last accepted point
                     float pdrDeltaY = pdrValues[1] - lastAcceptedPdrY;
                     double pdrStep = Math.sqrt(pdrDeltaX * pdrDeltaX + pdrDeltaY * pdrDeltaY);
 
@@ -336,16 +337,15 @@ public class RecordingFragment extends Fragment {
                         positionToRender = UtilFunctions.convertENUToWGS84(
                                 lastSentFusedPosition,
                                 new float[]{pdrDeltaX, pdrDeltaY, 0f});
-                        Log.d("FUSED_TEST", "Teleport " + (int) movedDistance
-                                + "m → PDR fallback " + String.format("%.2f", pdrStep) + "m");
+                        
                     } else {
-                        // PDR also hasn't moved enough — stay put this tick
+                        // PDR also hasn't moved enough so  stay put this tick
                         positionToRender = null;
                         Log.d("FUSED_TEST", "Teleport " + (int) movedDistance
                                 + "m rejected, no PDR movement yet");
                     }
                 } else {
-                    // Normal update — fused estimate is within plausible range
+                    // Normal update hence fused estimate is within plausible range
                     positionToRender = fusedPosition;
                 }
 
@@ -364,7 +364,6 @@ public class RecordingFragment extends Fragment {
 
 
 
-        // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
             // If user toggles showing GNSS in the map, call e.g.
