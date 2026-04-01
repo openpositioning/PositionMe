@@ -60,33 +60,77 @@
                 android:text="@string/auto_floor" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
+                android:id="@+id/settingsButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp"/>
+                android:text="Settings"
+                android:backgroundTint="#FFCDD2"
+                android:textColor="@android:color/black"
+                android:textStyle="bold"
+                app:icon="@android:drawable/ic_menu_manage"
+                app:iconTint="@android:color/black"
+                app:iconPadding="6dp"
+                app:elevation="5dp" />
 
-            <Spinner
-                android:id="@+id/smoothingSpinner"
+            <LinearLayout
+                android:id="@+id/settingsContainer"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown"
-                android:elevation="5dp"/>
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:visibility="gone">
 
-            <Spinner
-                android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/gnssSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/gnssSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/wifiSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/wifiSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/pdrSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/pdrSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/autoFloor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="35dp"
+                    android:text="@string/auto_floor" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/lineColorButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="35dp"
+                    android:backgroundTint="@color/red"
+                    android:text="@string/color"
+                    android:textColor="@color/md_theme_onPrimary"
+                    app:elevation="5dp" />
+
+                <Spinner
+                    android:id="@+id/smoothingSpinner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@color/LightYellow"
+                    android:elevation="5dp"
+                    android:spinnerMode="dropdown" />
+
+                <Spinner
+                    android:id="@+id/mapSwitchSpinner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@color/LightYellow"
+                    android:elevation="5dp"
+                    android:spinnerMode="dropdown" />
+            </LinearLayout>
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

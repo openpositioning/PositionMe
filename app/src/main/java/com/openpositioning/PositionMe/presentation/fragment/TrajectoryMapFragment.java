@@ -155,6 +155,10 @@ public class TrajectoryMapFragment extends Fragment {
     // Exponential smoothing strength
     private static final double ALPHA = 0.25;
 
+    private com.google.android.material.button.MaterialButton settingsButton;
+    private View settingsContainer;
+
+
     /**
      * Adds a new position observation to a rolling history list.
      * Maintains only the most recent MAX_OBSERVATIONS points.
@@ -206,6 +210,9 @@ public class TrajectoryMapFragment extends Fragment {
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
         switchColorButton = view.findViewById(R.id.lineColorButton);
+
+        settingsButton = view.findViewById(R.id.settingsButton);
+        settingsContainer = view.findViewById(R.id.settingsContainer);
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -278,6 +285,17 @@ public class TrajectoryMapFragment extends Fragment {
                     polyline.setColor(Color.RED);
                     isRed = true;
                 }
+            }
+        });
+
+        // Setting Button
+        settingsButton.setOnClickListener(v -> {
+            if (settingsContainer.getVisibility() == View.VISIBLE) {
+                settingsContainer.setVisibility(View.GONE);
+                settingsButton.setText("Settings");
+            } else {
+                settingsContainer.setVisibility(View.VISIBLE);
+                settingsButton.setText("Hide Settings");
             }
         });
 
@@ -435,35 +453,55 @@ public class TrajectoryMapFragment extends Fragment {
      */
     private void initMapTypeSpinner() {
         if (switchMapSpinner == null) return;
+
         String[] maps = new String[]{
-                getString(R.string.hybrid),
-                getString(R.string.normal),
-                getString(R.string.satellite)
+                "Select Map Type",
+                "Hybrid",
+                "Normal",
+                "Satellite"
         };
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
                 requireContext(),
                 android.R.layout.simple_spinner_dropdown_item,
                 maps
-        );
+        ) {
+            @Override
+            public boolean isEnabled(int position) {
+                return position != 0; // disable hint item
+            }
+        };
+
         switchMapSpinner.setAdapter(adapter);
+
+        // Show hint initially
+        switchMapSpinner.setSelection(0);
 
         switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view,
                                        int position, long id) {
+
                 if (gMap == null) return;
-                switch (position){
+
+                switch (position) {
                     case 0:
+                        return; // ignore hint
+
+                    case 1:
                         gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                         break;
-                    case 1:
+
+                    case 2:
                         gMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
                         break;
-                    case 2:
+
+                    case 3:
                         gMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
                         break;
                 }
             }
+
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
         });
@@ -476,6 +514,7 @@ public class TrajectoryMapFragment extends Fragment {
     private void initSmoothingSpinner() {
 
         String[] options = new String[]{
+                "Select Display Smoothing",
                 "Raw",
                 "Moving Average",
                 "Exponential"
@@ -489,19 +528,24 @@ public class TrajectoryMapFragment extends Fragment {
 
         smoothingSpinner.setAdapter(adapter);
 
+        // Show hint item initially
+        smoothingSpinner.setSelection(0);
+
         smoothingSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
 
-                // Update selected smoothing mode
                 switch (position) {
                     case 0:
+                        // Hint row selected, do nothing
+                        return;
+                    case 1:
                         smoothingType = SmoothingType.RAW;
                         break;
-                    case 1:
+                    case 2:
                         smoothingType = SmoothingType.MOVING_AVERAGE;
                         break;
-                    case 2:
+                    case 3:
                         smoothingType = SmoothingType.EXPONENTIAL;
                         break;
                 }
