@@ -11,6 +11,7 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -33,19 +34,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * The SensorFusion class is the main data gathering and processing class of the application.
+ * Main data gathering and processing class for the application. Singleton - all fragments
+ * share the same instance via SensorFusion.getInstance().
  *
- * <p>It follows the singleton design pattern to ensure that every fragment and process has access
- * to the same data and sensor instances. Internally it delegates to specialised modules:</p>
- * <ul>
- *   <li>{@link SensorState} &ndash; shared sensor data holder</li>
- *   <li>{@link SensorEventHandler} &ndash; sensor event dispatch (switch logic)</li>
- *   <li>{@link TrajectoryRecorder} &ndash; recording lifecycle &amp; protobuf construction</li>
- *   <li>{@link WifiPositionManager} &ndash; WiFi scan processing &amp; positioning</li>
- * </ul>
- *
- * <p>The public API is unchanged &ndash; all external callers continue to use
- * {@code SensorFusion.getInstance().method()}.</p>
+ * Delegates to: SensorState (data holder), SensorEventHandler (sensor dispatch),
+ * TrajectoryRecorder (recording and protobuf), WifiPositionManager (WiFi positioning).
  */
 public class SensorFusion implements SensorEventListener {
 
@@ -64,6 +57,7 @@ public class SensorFusion implements SensorEventListener {
     private TrajectoryRecorder recorder;
     private WifiPositionManager wifiPositionManager;
     private ParticleFilter particleFilter;
+    private MapMatcher mapMatcher;
 
     // Movement sensor instances (lifecycle managed here)
     private MovementSensor accelerometerSensor;
@@ -95,6 +89,14 @@ public class SensorFusion implements SensorEventListener {
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
+
+    // Max distances from a staircase / lift for a barometer floor change to be accepted
+    private static final float STAIR_PROXIMITY_THRESHOLD_M = 5.0f;
+    private static final float LIFT_PROXIMITY_THRESHOLD_M  = 50.0f;
+    // Elevation recorded when the current floor was last confirmed; NaN before first barometer reading
+    private float lastFloorElevation = Float.NaN;
+    // WiFi floor number at the last confirmed floor level; MIN_VALUE until first WiFi fix
+    private int lastAcceptedWifiFloor = Integer.MIN_VALUE;
     //endregion
 
     //region Initialisation
@@ -116,17 +118,10 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Initialisation function for the SensorFusion instance.
+     * Sets up all sensors, internal modules, and data processors.
+     * Must be called once with an application context before anything else.
      *
-     * <p>Initialises all movement sensor instances, creates internal modules, and prepares
-     * the system for data collection.</p>
-     *
-     * @param context application context for permissions and device access.
-     *
-     * @see MovementSensor handling all SensorManager based data collection devices.
-     * @see ServerCommunications handling communication with the server.
-     * @see GNSSDataProcessor for location data processing.
-     * @see WifiDataProcessor for network data processing.
+     * @param context application context
      */
     public void setContext(Context context) {
         this.appContext = context.getApplicationContext();
@@ -163,6 +158,11 @@ public class SensorFusion implements SensorEventListener {
 
         // Initialise particle filter
         this.particleFilter = new ParticleFilter();
+
+        // Create the map matcher and give the particle filter a reference to it.
+        // MapMatcher handles floor detection and stair/lift lookups to help determine whether near stairs or lift.
+        this.mapMatcher = new MapMatcher(this);
+        particleFilter.setMapMatcher(mapMatcher);
 
         wiFiPositioning.setParticleFilter(particleFilter);
 
@@ -206,16 +206,19 @@ public class SensorFusion implements SensorEventListener {
     //region SensorEventListener
 
     /**
-     * {@inheritDoc}
-     *
-     * <p>Delegates to {@link SensorEventHandler#handleSensorEvent(SensorEvent)}.</p>
+     * Forwards sensor events to SensorEventHandler for processing.
+     * On each barometer reading while recording, also checks whether enough elevation
+     * change has accumulated to trigger a floor step.
      */
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         eventHandler.handleSensorEvent(sensorEvent);
+        // Check for floor changes on every pressure update
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_PRESSURE && recorder.isRecording()) {
+            checkAndApplyFloorChange(state.elevation);
+        }
     }
 
-    /** {@inheritDoc} */
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {}
 
@@ -224,9 +227,7 @@ public class SensorFusion implements SensorEventListener {
     //region Start/Stop listening
 
     /**
-     * Registers all device listeners and enables updates with the specified sampling rate.
-     *
-     * <p>Should be called from {@link MainActivity} when resuming the application.</p>
+     * Registers all device listeners. Called from MainActivity on resume.
      */
     public void resumeListening() {
         accelerometerSensor.sensorManager.registerListener(this,
@@ -257,9 +258,8 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Un-registers all device listeners and pauses data collection.
-     *
-     * <p>Should be called from {@link MainActivity} when pausing the application.</p>
+     * Unregisters all device listeners. Called from MainActivity on pause.
+     * Does nothing while a recording is in progress.
      */
     public void stopListening() {
         if (!recorder.isRecording()) {
@@ -335,6 +335,12 @@ public class SensorFusion implements SensorEventListener {
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
         particleFilter.tryInitialise();
+        // Reset the floor-change baselines for the new recording session
+        lastFloorElevation = Float.NaN;
+        lastAcceptedWifiFloor = Integer.MIN_VALUE;
+
+        // Attempt to load the building map now that the particle filter is ready
+        tryTriggerMapMatcher(getSelectedBuildingId());
 
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
@@ -429,6 +435,9 @@ public class SensorFusion implements SensorEventListener {
             }
             floorplanBuildingCache.put(building.getName(), building);
         }
+
+        // Cache is now populated - try to load the building map
+        tryTriggerMapMatcher(getSelectedBuildingId());
     }
 
     /**
@@ -451,6 +460,22 @@ public class SensorFusion implements SensorEventListener {
      */
     public List<FloorplanApiClient.BuildingInfo> getFloorplanBuildings() {
         return new ArrayList<>(floorplanBuildingCache.values());
+    }
+
+    /**
+     * Loads the building map into MapMatcher once the particle filter is ready,
+     * the origin is set, and the floorplan cache is populated. Called from both
+     * startRecording() and setFloorplanBuildings() since either can arrive first.
+     *
+     * @param preferredBuildingId building name hint, or null to auto-detect
+     */
+    private void tryTriggerMapMatcher(String preferredBuildingId) {
+        if (mapMatcher == null) return;
+        if (!particleFilter.isInitialised()) return;
+        if (particleFilter.getOrigin() == null) return;
+        if (floorplanBuildingCache.isEmpty()) return;
+        mapMatcher.tryLoadBuilding(preferredBuildingId, particleFilter.getOrigin());
+        Log.d("Debug", "MapMatcher ready: " + mapMatcher.isInitialised());
     }
 
     /**
@@ -664,6 +689,141 @@ public class SensorFusion implements SensorEventListener {
         eventHandler.logSensorFrequencies();
     }
 
+    /**
+     * Returns the current floor as a WiFi-scale integer (0=GF, 1=F1, -1=LG etc.)
+     * for use by the floor switch in TrajectoryMapFragment.
+     *
+     * When MapMatcher is active, getLikelyFloorIndex() returns an API index that
+     * already has the building bias baked in. We subtract it here so the caller's
+     * setCurrentFloor(x, autoFloor=true) can add it back without double-counting.
+     * Falls back to the raw WiFi floor if MapMatcher is not loaded yet.
+     */
+    public int getMapMatcherFloor() {
+        if (mapMatcher != null && mapMatcher.isInitialised()) {
+            return mapMatcher.getLikelyFloorIndex() - mapMatcher.getAutoFloorBias();
+        }
+        return getWifiFloor();
+    }
+
+    //endregion
+
+    //region Floor change gating
+
+    /**
+     * Called on every barometer reading while recording.
+     *
+     * Rule 1: if WiFi reports a new floor since last check, snap the map to match immediately if near stairs or lift.
+     * Rule 2: if accumulated elevation change exceeds one floor height (per building), step
+     *         the floor up or down. Only fires when near a staircase or lift. Uses
+     *         state.elevator to classify the transition as lift or stairs.
+     */
+    private void checkAndApplyFloorChange(float elevation) {
+        if (mapMatcher == null || !mapMatcher.isInitialised()) return;
+
+        // Seed reference on first call
+        if (Float.isNaN(lastFloorElevation)) {
+            lastFloorElevation = elevation;
+            lastAcceptedWifiFloor = getWifiFloor();
+            return;
+        }
+
+        int currentWifiFloor = getWifiFloor();
+
+        // Rule 1: WiFi floor changed - snap the map to match and reset the elevation baseline
+        if (lastAcceptedWifiFloor != Integer.MIN_VALUE
+                && currentWifiFloor != lastAcceptedWifiFloor) {
+            int wifiApiFloor = mapMatcher.physicalFloorToApiIndex(currentWifiFloor);
+            if (wifiApiFloor >= 0) {
+                mapMatcher.setCurrentFloor(wifiApiFloor);
+                Log.i("SensorFusion", "Floor snapped to WiFi floor " + wifiApiFloor
+                        + " (physical=" + currentWifiFloor + ")");
+            } else {
+                mapMatcher.setCurrentFloor(-1); // unknown floor - clear override and let WiFi drive
+            }
+            lastFloorElevation = elevation;
+            lastAcceptedWifiFloor = currentWifiFloor;
+            return;
+        }
+
+        // Bullet 4 (Map Matcher): check accumulated barometer elevation change against the building's
+        // floor height. Only accept a floor change if the user is physically near a
+        // staircase or lift centroid (from the map). Floor changes in the middle of an
+        // open room are ignored.
+        // Rule 2: Barometer - divide elapsed elevation by the building's floor height
+        float floorHeight = mapMatcher.getFloorHeight();
+        float elevationDelta = elevation - lastFloorElevation;
+        int floorsToMove = (int) (Math.abs(elevationDelta) / floorHeight);
+        if (floorsToMove == 0) return;
+
+        // Only proceed if the user is physically near a staircase or lift
+        if (particleFilter == null || !particleFilter.isInitialised()) return;
+        int currentApiFloor = mapMatcher.getLikelyFloorIndex();
+        float[] pos = particleFilter.getEstimatedLocalPosition();
+        boolean nearLift = isNearAny(pos,
+                mapMatcher.getLiftCentersForFloor(currentApiFloor), LIFT_PROXIMITY_THRESHOLD_M);
+        boolean nearStairs = isNearAny(pos,
+                mapMatcher.getStairCentersForFloor(currentApiFloor), STAIR_PROXIMITY_THRESHOLD_M);
+        if (!nearLift && !nearStairs) {
+            Log.d("SensorFusion", "Barometer floor change skipped: not near a lift or stairs");
+            return;
+        }
+        // Bullet 5 (Map Matcher): use state.elevator (the PDR movement model) together with proximity
+        // to decide whether the user is in a lift or on stairs. state.elevator is true
+        // when vertical acceleration dominates and step activity is low - the lift pattern.
+        // state.elevator is true when vertical acceleration dominates and step activity is low.
+        // Use it alongside proximity to decide lift vs stairs.
+        boolean movementModelSaysLift = state.elevator;
+        String transitionType;
+        if (nearLift && movementModelSaysLift) {
+            transitionType = "lift";
+        } else if (nearStairs && !movementModelSaysLift) {
+            transitionType = "stairs";
+        } else {
+            // Fallback: proximity wins when movement model and geometry disagree
+            transitionType = nearLift ? "lift" : "stairs";
+        }
+
+        int direction = elevationDelta > 0 ? 1 : -1;
+        int newApiFloor = currentApiFloor;
+        for (int i = 0; i < floorsToMove; i++) {
+            int next = mapMatcher.getAdjacentFloorIndex(newApiFloor, direction);
+            if (next == newApiFloor) break; // already at the top or bottom - stop
+            newApiFloor = next;
+        }
+
+        if (newApiFloor != currentApiFloor) {
+            mapMatcher.setCurrentFloor(newApiFloor);
+            // Advance reference by the consumed distance, preserving the remainder
+            lastFloorElevation += floorsToMove * floorHeight * direction;
+            Log.i("SensorFusion", "Floor changed to " + newApiFloor
+                    + " via " + transitionType + " (barometer, " + floorsToMove
+                    + " floor(s), delta=" + elevationDelta + "m)");
+        }
+    }
+
+    /**
+     * Returns true if the estimated position is near a staircase or lift on the current floor.
+     * Called by TrajectoryMapFragment before applying an auto floor change.
+     */
+    public boolean isNearTransition() {
+        if (mapMatcher == null || !mapMatcher.isInitialised()) return false;
+        if (particleFilter == null || !particleFilter.isInitialised()) return false;
+        int floor = mapMatcher.getLikelyFloorIndex();
+        float[] pos = particleFilter.getEstimatedLocalPosition();
+        return isNearAny(pos, mapMatcher.getStairCentersForFloor(floor), STAIR_PROXIMITY_THRESHOLD_M)
+                || isNearAny(pos, mapMatcher.getLiftCentersForFloor(floor), LIFT_PROXIMITY_THRESHOLD_M);
+    }
+
+    /** Returns true if pos is within threshold meters of any centre in the list. */
+    private boolean isNearAny(float[] pos, List<float[]> centers, float threshold) {
+        if (centers == null || pos == null) return false;
+        for (float[] c : centers) {
+            float dx = pos[0] - c[0], dy = pos[1] - c[1];
+            if (Math.sqrt(dx * dx + dy * dy) <= threshold) return true;
+        }
+        return false;
+    }
+
     //endregion
 
     //region Location listener
@@ -680,8 +840,8 @@ public class SensorFusion implements SensorEventListener {
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
 
-             // Update particle weights with GNSS measurement
-             if (particleFilter.isInitialised()) {
+            // Update particle weights with GNSS measurement
+            if (particleFilter.isInitialised()) {
                 LatLng gnssLatLng = new LatLng(location.getLatitude(), location.getLongitude());
                 float accuracy = location.getAccuracy();
                 particleFilter.updateWeights(gnssLatLng, accuracy);

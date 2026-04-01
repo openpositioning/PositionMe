@@ -142,7 +142,7 @@ public class PdrProcessing {
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
             return new float[]{this.positionX, this.positionY};  // Return current position without update
-                                                                // - TODO - temporary solution of the empty list issue
+            // - TODO - temporary solution of the empty list issue
         }
 
         // Change angle so zero rad is east
@@ -153,7 +153,7 @@ public class PdrProcessing {
             // return current position, do not update
             return new float[]{this.positionX, this.positionY};
         }
-        
+
         // Calculate step length
         if(!useManualStep) {
             //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
@@ -308,12 +308,12 @@ public class PdrProcessing {
         // get horizontal and vertical acceleration magnitude
         float verticalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * gravity[0]/g),2) +
-                Math.pow((acc[1] * gravity[1]/g), 2) +
-                Math.pow((acc[2] * gravity[2]/g), 2));
+                        Math.pow((acc[1] * gravity[1]/g), 2) +
+                        Math.pow((acc[2] * gravity[2]/g), 2));
         float horizontalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * (1 - gravity[0]/g)), 2) +
-                Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
-                Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
+                        Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
+                        Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
         // Save into buffer to compare with past values
         this.verticalAccel.putNewest(verticalAcc);
         this.horizontalAccel.putNewest(horizontalAcc);

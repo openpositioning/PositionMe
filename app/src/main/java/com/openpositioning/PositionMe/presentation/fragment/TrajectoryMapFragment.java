@@ -765,7 +765,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .add(nkml1, nkml2, nkml3, nkml4, nkml1)
                 .strokeColor(Color.BLUE)    // Blue border
                 .strokeWidth(10f)           // Border width
-               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
+                // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
                 .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
 
         PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
@@ -834,8 +834,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
         int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
+        // Priority: MapMatcher fused floor
+        // Falls back to raw WiFi, then barometric estimate if neither is available. Will work when in lift as it detects it.
+        if (sensorFusion.getLatLngWifiPositioning() != null || sensorFusion.getMapMatcherFloor() >= 0) {
+            candidateFloor = sensorFusion.getMapMatcherFloor();
         } else {
             float elevation = sensorFusion.getElevation();
             float floorHeight = indoorMapManager.getFloorHeight();
@@ -865,7 +867,7 @@ public class TrajectoryMapFragment extends Fragment {
     /**
      * Evaluates the current floor using WiFi positioning (priority) or
      * barometric elevation (fallback). Applies a 3-second debounce window
-     * to prevent jittery floor switching.
+     * to prevent jittery floor switching so it becomes smoother.
      */
     private void evaluateAutoFloor() {
         if (sensorFusion == null || indoorMapManager == null) return;
@@ -873,9 +875,10 @@ public class TrajectoryMapFragment extends Fragment {
 
         int candidateFloor;
 
-        // Priority 1: WiFi-based floor (only if WiFi positioning has returned data)
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
+        // Priority 1: MapMatcher fused floor (barometer override > WiFi > raw barometric).
+        // getMapMatcherFloor() returns WiFi floor as fallback when MapMatcher not yet loaded.
+        if (sensorFusion.getLatLngWifiPositioning() != null || sensorFusion.getMapMatcherFloor() >= 0) {
+            candidateFloor = sensorFusion.getMapMatcherFloor();
         } else {
             // Fallback: barometric elevation estimate
             float elevation = sensorFusion.getElevation();
@@ -893,9 +896,14 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            indoorMapManager.setCurrentFloor(candidateFloor, true);
-            updateFloorLabel();
-            // Reset timer so we don't keep re-applying the same floor
+            // Only apply a floor *change* when near stairs or a lift.
+            // Same-floor confirmations are always allowed (no movement required).
+            int currentFloor = indoorMapManager.getCurrentFloor();
+            if (candidateFloor == currentFloor || sensorFusion.isNearTransition()) {
+                indoorMapManager.setCurrentFloor(candidateFloor, true);
+                updateFloorLabel();
+            }
+            // Reset timer regardless, so we re-evaluate next second
             lastCandidateTime = now;
         }
     }
