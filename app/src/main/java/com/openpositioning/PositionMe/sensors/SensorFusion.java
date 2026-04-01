@@ -12,6 +12,7 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
 // import android.graphics.PointF;
 //import com.openpositioning.PositionMe.utils.WiFiPositioning;
@@ -234,12 +235,30 @@ public class SensorFusion implements SensorEventListener {
                 LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();
                 if (wifiPosition != null) {
                     if (!particleFilter.isInitialized()) {
-                        particleFilter.initialise(wifiPosition, 20f);
+                        // WiFi is the preferred initial anchor indoors — more accurate than GNSS.
+                        particleFilter.initialise(wifiPosition, 15f);
                     } else if (!isStationary) {
-                        // Suppress WiFi-driven particle updates while stationary —
-                        // indoor WiFi fluctuates 5-20 m even with no movement, which
-                        // would drag particles around and make the dot drift on screen.
-                        particleFilter.updateWiFi(wifiPosition, 20f);
+                        // Divergence recovery (Thrun, Burgard & Fox 2005, "Probabilistic Robotics",
+                        // If WiFi contradicts the current estimate by more than 2.5× the particle
+                        // spread, the filter has likely converged to a wrong location (e.g. from a
+                        // bad indoor GNSS fix). Reset at the WiFi anchor so re-convergence can happen.
+                        LatLng fused = particleFilter.getFusedPosition();
+                        float uncertainty = particleFilter.getPositionUncertaintyMeters();
+                        if (fused != null) {
+                            double wifiDist = UtilFunctions.distanceBetweenPoints(fused, wifiPosition);
+                            float divergenceThreshold = Math.max(uncertainty * 2.5f, 20f);
+                            if (wifiDist > divergenceThreshold) {
+                                Log.d("SensorFusion", "WiFi-reset: filter diverged "
+                                        + (int) wifiDist + " m (threshold " + (int) divergenceThreshold + " m)");
+                                particleFilter.reset();
+                                particleFilter.initialise(wifiPosition, 15f);
+                                lastGnssForFilter = wifiPosition; // re-anchor GNSS displacement gating
+                            } else {
+                                particleFilter.updateWiFi(wifiPosition, 20f);
+                            }
+                        } else {
+                            particleFilter.updateWiFi(wifiPosition, 20f);
+                        }
                     }
                 }
             }, 1000);
@@ -355,9 +374,12 @@ public class SensorFusion implements SensorEventListener {
             float targetElev = targetFloor * floorHeight;
             if (Math.abs(diff - targetElev) > LIFT_SNAP_TOLERANCE_M) return;
             pdrProcessing.setCurrentFloor(targetFloor);
+            String TAG = "FLOOR CHANGE LIFT";
             Log.d(TAG, "Floor change (lift) → " + targetFloor + " diff=" + diff);
         } else if ("stairs".equals(type) && !isLift) {
-            pdrProcessing.setCurrentFloor(targetFloor);
+            //pdrProcessing.setCurrentFloor(targetFloor);
+            String TAG = "FLOOR CHANGE STAIRS";
+
             Log.d(TAG, "Floor change (stairs) → " + targetFloor + " diff=" + diff);
         }
     }
@@ -890,7 +912,13 @@ public class SensorFusion implements SensorEventListener {
             float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
 
             if (!particleFilter.isInitialized()) {
-                particleFilter.initialise(gnssPos, accuracy);
+                // Inflate spread aggressively for indoor GNSS initialization.
+                // Reported accuracy is typically 5-15 m, but indoor multipath error is 20-100 m.
+                // A 25 m minimum spread ensures particles cover enough area for WiFi corrections
+                // to work without a full filter reset. Ref: Davidson et al. (2010), "Application
+                // of particle filters to a map-aided indoor positioning system," IEEE/ION PLANS.
+                float initSpread = Math.max(accuracy * 4f, 25f);
+                particleFilter.initialise(gnssPos, initSpread);
                 lastGnssForFilter = gnssPos;
             } else {
                 // Only feed GNSS into the particle filter if the reported position has moved
