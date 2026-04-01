@@ -290,14 +290,10 @@ public class Fusion {
 
     /**
      * Converts GNSS from {@link LatLng} to local EN metres and queues as a particle filter
-     * observation
+     * observation.
      *
-     * <p>accuracyMetres comes from location.getAccuracy()
-     *
-     * <p>TODO - Finish JavaDocs
-     *
-     * @param pos ???
-     * @param accuracyMetres ???
+     * @param pos GNSS position in WGS84 (LatLng)
+     * @param accuracyMetres reported accuracy from location.getAccuracy()
      */
     public void onGnssUpdate(LatLng pos, float accuracyMetres) {
         // First acceptable GNSS fix — seed particles around it and start
@@ -317,15 +313,11 @@ public class Fusion {
 
     /**
      * Converts WiFi position from WGS84 to local EN metres and queues as a particle filter
-     * observation
+     * observation.
      *
-     * <p>sigma is fixed at 10.0 m - arbitrary for now
-     *
-     * <p>TODO - Finish JavaDocs
-     *
-     * @param pos The {@link LatLng} position of the WI-Fi router
-     * @param sigmaMetres ???
-     * @param floor The floor the router is associated with
+     * @param pos estimated position from WiFi fingerprinting
+     * @param sigmaMetres position uncertainty (metres)
+     * @param floor floor index from WiFi positioning (0 = basement)
      */
     public void onWifiUpdate(LatLng pos, float sigmaMetres, int floor) {
         // WiFi can seed if GNSS hasn't arrived yet
@@ -347,7 +339,6 @@ public class Fusion {
             previousWiFiFloor = lastWiFiFloor;
         }
 
-        // TODO - Is this correct?
         bestEstimate = pos;
 
         double[] posEastNorth = particleFilter.latLngToEN(pos.latitude, pos.longitude);
@@ -513,10 +504,10 @@ public class Fusion {
     }
 
     /**
-     * TODO - Returns a uniquely fused starting position estimate. TODO - Is this ready now?
+     * Returns the best available starting position.
      *
-     * @param initialEstimate ???
-     * @return {@link LatLng} of the best start position estimate.
+     * @param initialEstimate of initial start location
+     * @return start location from GNSS/WiFi, or the fallback
      */
     public LatLng getStartLocation(LatLng initialEstimate) {
         if (startLocation != null) {

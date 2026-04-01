@@ -104,7 +104,13 @@ public class ParticleFilter {
         return estimatedPosition;
     }
 
-    /** TODO - JavaDocs */
+    /**
+     * Queues a position observation to be fused on the next PDR update.
+     *
+     * @param easting observed easting in metres (local EN frame).
+     * @param northing observed northing in metres (local EN frame).
+     * @param sigma observation uncertainty in metres.
+     */
     public void addObservation(double easting, double northing, double sigma) {
         pendingObs.add(new double[] {easting, northing, sigma});
     }
@@ -113,10 +119,8 @@ public class ParticleFilter {
      * Initialises the particle filter with a cloud of equally weighted {@link Particle particles}
      * around the given {@link LatLng} position.
      *
-     * <p>TODO - Finish JavaDocs
-     *
      * @param initialPosition starting position in WGS84 coordinates.
-     * @param sigmaMetres ???
+     * @param sigmaMetres initial position uncertainty in metres.
      */
     public void start(LatLng initialPosition, float sigmaMetres) {
         pendingObs.clear();
@@ -140,7 +144,12 @@ public class ParticleFilter {
                         + maximumNumberOfParticles);
     }
 
-    /** TODO - JavaDocs */
+    /**
+     * Creates a new particle population centred at the given position with Gaussian spread.
+     *
+     * @param easting centre easting in metres.
+     * @param northing centre northing in metres.
+     */
     private void populateParticles(double easting, double northing) {
         ArrayList<Particle> temp_particles = new ArrayList<>(maximumNumberOfParticles);
         for (int i = 0; i < maximumNumberOfParticles; i++) {
@@ -168,12 +177,11 @@ public class ParticleFilter {
      * <p>After propagation, weights are updated and systematic resampling is triggered if weight
      * degeneracy exceeds the threshold. The position estimate is updated each cycle.
      *
-     * <p>TODO - Finish JavaDocs
-     *
-     * @param stepLength ???
-     * @param rawHeading ???
-     * @param dx easting displacement in metres from the PDR step.
-     * @param dy northing displacement in metres from the PDR step.
+     * @param stepLength PDR step length in metres.
+     * @param rawHeading uncorrected heading in radians.
+     * @param dx easting displacement in metres from the PDR step (unused, recalculated internally).
+     * @param dy northing displacement in metres from the PDR step (unused, recalculated
+     *     internally).
      */
     public void updateWithPDR(double stepLength, double rawHeading, double dx, double dy) {
         if (active && particles != null) {
@@ -218,12 +226,9 @@ public class ParticleFilter {
     }
 
     /**
-     * Returns the estimated orientation error in radians — weighted mean across particles. Use this
-     * to correct compass display if needed.
+     * Returns the estimated orientation error as a weighted mean across particles.
      *
-     * <p>TODO - Finish JavaDocs
-     *
-     * @return ???
+     * @return orientation error in radians.
      */
     public double getEstimatedOrientationError() {
         if (particles == null) return 0.0;
@@ -278,7 +283,6 @@ public class ParticleFilter {
         double weightSum = 0.0;
         // Iterates through each particle and calculates difference between PDR data and recorded
         // observation data
-        // TODO - Maybe want to change observation logic to only use most recent reading!
         for (Particle p : particles) {
             for (double[] obs : pendingObs) {
                 // Squared distance between this particle and the observation from sensors
