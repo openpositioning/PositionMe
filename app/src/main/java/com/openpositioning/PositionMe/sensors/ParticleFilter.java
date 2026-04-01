@@ -46,7 +46,7 @@ public class ParticleFilter {
     private final Random random;
     private final SensorFusion sensorFusion;
 
-    // Map matcher for wall-constrained prediction (null-safe: if null, predict runs unchanged)
+    // MapMatcher used to check wall crossings during prediction. Null until set via setMapMatcher().
     private MapMatcher mapMatcher;
 
     // Defines a single hypothesis about the user's position
@@ -132,23 +132,23 @@ public class ParticleFilter {
     }
 
     /**
+     * Sets the MapMatcher used for wall-crossing checks in predict().
+     * Called once from SensorFusion after both objects are created.
+     *
+     * Bullet 1 (Map Matcher): wires the map data into the particle filter so position estimates
+     * are constrained by the building's floor geometry.
+     */
+    public void setMapMatcher(MapMatcher mm) {
+        this.mapMatcher = mm;
+    }
+
+    /**
      * Function to retry initial position estimation if it was deferred at construction
      */
     public void tryInitialise() {
         if (!initialised) {
             initialisePosition();
         }
-    }
-
-    /**
-     * Wires in a MapMatcher for wall-constrained particle prediction.
-     * When set, predict() will reject movements that enter or cross walls.
-     * Safe to call with null to disable map matching.
-     *
-     * @param mm the MapMatcher instance, or null
-     */
-    public void setMapMatcher(MapMatcher mm) {
-        this.mapMatcher = mm;
     }
 
     /**
@@ -180,6 +180,16 @@ public class ParticleFilter {
             return;
         }
 
+        // Bullet 3 (Map Matcher): save each particle's position before it is displaced so we have
+        // a valid rollback point if the move crosses a wall.
+        // Save positions before the move so we can snap back any particle that crosses a wall
+        float[] oldX = new float[Num_Particles];
+        float[] oldY = new float[Num_Particles];
+        for (int i = 0; i < Num_Particles; i++) {
+            oldX[i] = particles[i].x;
+            oldY[i] = particles[i].y;
+        }
+
         // Shift each particle with Gaussian noise considered
         for (int i = 0; i < Num_Particles; i++) {
             float noiseX = (float) (random.nextGaussian() * PDRstd);
@@ -188,51 +198,29 @@ public class ParticleFilter {
             particles[i].y += deltaNorth + noiseY;
         }
 
-        // Wall rejection: zero weights of particles that land inside a wall polygon
-        Log.d("ParticleFilter", "predict() reached wall check — mapMatcher="
-                + (mapMatcher == null ? "null" : (mapMatcher.isInitialised() ? "ready" : "not initialised")));
-        if (mapMatcher == null) {
-            Log.w("ParticleFilter", "Wall rejection skipped: mapMatcher is null");
-        } else if (!mapMatcher.isInitialised()) {
-            Log.w("ParticleFilter", "Wall rejection skipped: mapMatcher not initialised"
-                    + " (building=" + mapMatcher.getLoadedBuildingId() + ")");
-        } else {
+        // Bullet 3 (Map Matcher): use the movement (PDR displacement) and the wall geometry from the map
+        // to reject any particle whose move segment crossed a wall. That particle is snapped
+        // back to its pre-move position, keeping the estimate inside walkable space.
+        // If MapMatcher is loaded, check each particle's move segment against walls on the
+        // current floor. Any particle that crossed a wall is snapped back to its old position.
+        if (mapMatcher != null && mapMatcher.isInitialised()) {
             int floorIndex = mapMatcher.getLikelyFloorIndex();
             List<MapMatcher.WallFeature> walls = mapMatcher.getWallsForFloor(floorIndex);
-            int zeroed = 0;
+            int snapped = 0;
             for (int i = 0; i < Num_Particles; i++) {
                 for (MapMatcher.WallFeature wall : walls) {
-                    if (!wall.isPolygon) continue;
-                    if (MapGeometry.isPointInsidePolygon(
-                            particles[i].x, particles[i].y, wall.localPoints)) {
-                        particles[i].weight = 0f;
-                        zeroed++;
+                    if (MapGeometry.doesSegmentCrossPolygon(
+                            oldX[i], oldY[i], particles[i].x, particles[i].y,
+                            wall.localPoints)) {
+                        particles[i].x = oldX[i];
+                        particles[i].y = oldY[i];
+                        snapped++;
                         break;
                     }
                 }
             }
             Log.d("ParticleFilter", "Wall rejection (floor " + floorIndex + "): "
-                    + zeroed + "/" + Num_Particles + " particles zeroed this step");
-
-            // Renormalise remaining weights
-            float weightSum = 0f;
-            for (int i = 0; i < Num_Particles; i++) {
-                weightSum += particles[i].weight;
-            }
-            if (weightSum == 0f) {
-                Log.w("ParticleFilter", "All particles rejected — recovering with uniform respread around estimate");
-                float spread = 2.0f;
-                float uniform = 1.0f / Num_Particles;
-                for (int i = 0; i < Num_Particles; i++) {
-                    particles[i].x = estimatedX + (float) (random.nextGaussian() * spread);
-                    particles[i].y = estimatedY + (float) (random.nextGaussian() * spread);
-                    particles[i].weight = uniform;
-                }
-            } else {
-                for (int i = 0; i < Num_Particles; i++) {
-                    particles[i].weight /= weightSum;
-                }
-            }
+                    + snapped + "/" + Num_Particles + " particles snapped this step");
         }
 
         // Update weighted mean estimate
