@@ -35,6 +35,17 @@ public class SensorEventHandler {
         this.stepListener = listener; // Set the step listener for particle filter updates
     }
 
+    /**
+     * Resets the PDR step-delta baseline to the current PDR origin (zero).
+     * Must be called after {@link PdrProcessing#resetPDR()} so that the first step of a new
+     * recording session does not produce a huge spurious delta against the previous session's
+     * accumulated position.
+     */
+    public void resetStepOrigin() {
+        lastEasting  = 0f;
+        lastNorthing = 0f;
+    }
+
     // END OF PARTICLE FILTER
 
 

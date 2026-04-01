@@ -239,7 +239,7 @@ public class SensorFusion implements SensorEventListener {
                         particleFilter.initialise(wifiPosition, 15f);
                     } else if (!isStationary) {
                         // Divergence recovery (Thrun, Burgard & Fox 2005, "Probabilistic Robotics",
-                        // If WiFi contradicts the current estimate by more than 2.5× the particle
+                        // If WiFi contradicts the current estimate by   more than 2.5× the particle
                         // spread, the filter has likely converged to a wrong location (e.g. from a
                         // bad indoor GNSS fix). Reset at the WiFi anchor so re-convergence can happen.
                         LatLng fused = particleFilter.getFusedPosition();
@@ -501,8 +501,11 @@ public class SensorFusion implements SensorEventListener {
      * @see SensorCollectionService
      */
     public void startRecording() {
-        recorder.startRecording(pdrProcessing);
+        recorder.startRecording(pdrProcessing); // calls pdrProcessing.resetPDR() internally
         eventHandler.resetBootTime(recorder.getBootTime());
+        // Sync step-delta baseline with the freshly-zeroed PDR so the first step of this
+        // session doesn't fire a massive spurious delta from the previous session's position.
+        eventHandler.resetStepOrigin();
 
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
@@ -930,8 +933,25 @@ public class SensorFusion implements SensorEventListener {
                         || (UtilFunctions.distanceBetweenPoints(lastGnssForFilter, gnssPos)
                             >= minDisplacement);
                 if (shouldUpdate) {
-                    particleFilter.updateGNSS(gnssPos, accuracy);
-                    lastGnssForFilter = gnssPos;
+                    // Outlier gate: if the filter has converged (low uncertainty) and the GNSS
+                    // fix is implausibly far from the current estimate, reject it as indoor
+                    // multipath. This protects a good WiFi-anchored position from being
+                    // overridden by a bad GPS reflection.
+                    float uncertainty = particleFilter.getPositionUncertaintyMeters();
+                    LatLng fused = particleFilter.getFusedPosition();
+                    boolean outlier = false;
+                    if (fused != null && uncertainty < 12f) {
+                        double offset = UtilFunctions.distanceBetweenPoints(fused, gnssPos);
+                        if (offset > Math.max(accuracy * 2.5f, 20f)) {
+                            outlier = true;
+                            Log.d("SensorFusion", "GNSS outlier rejected: " + (int) offset
+                                    + "m offset, uncertainty=" + (int) uncertainty + "m");
+                        }
+                    }
+                    if (!outlier) {
+                        particleFilter.updateGNSS(gnssPos, accuracy);
+                        lastGnssForFilter = gnssPos;
+                    }
                 }
             }
         }

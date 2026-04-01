@@ -1299,15 +1299,24 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng current = indoorMapManager.getLastLocation();
         if (current == null) return;
 
-        if (wallOrigin == null) {
+        // CRITICAL: build wall geometry in the SAME ENU frame as the particle positions.
+        // The particle filter's origin is the anchor for all (easting, northing) coordinates.
+        // If wallOrigin differs from particleFilter.origin, wall segments are offset and
+        // particles appear to phase through them even though the intersection check is correct.
+        LatLng pfOrigin = sensorFusion.getParticleFilter().getOrigin();
+        if (pfOrigin != null) {
+            // Particle filter is initialized — use its origin so both frames are aligned.
+            wallOrigin = pfOrigin;
+        } else if (wallOrigin == null) {
+            // Filter not yet initialized; use current location as a temporary origin.
+            // It will be recomputed once the filter has an origin.
             wallOrigin = current;
         }
 
         FloorplanApiClient.FloorShapes floor = indoorMapManager.getCurrentFloorShape();
         if (floor == null) return;
 
-        List<List<PointF>> walls = WallGeometryBuilder.buildWalls(
-                floor, wallOrigin);
+        List<List<PointF>> walls = WallGeometryBuilder.buildWalls(floor, wallOrigin);
         sensorFusion.setPdrWalls(walls);
     }
 }
