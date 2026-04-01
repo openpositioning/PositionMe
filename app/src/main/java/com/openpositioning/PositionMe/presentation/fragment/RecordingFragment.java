@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -87,12 +88,31 @@ public class RecordingFragment extends Fragment {
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
+    // Minimum displacement before the displayed point is moved.
+    // Keeps the marker locked while stationary; particle-filter noise is ~0.1-0.15 m
+    // per resample so 0.5 m gives comfortable headroom above the noise floor.
+    private static final double MOVEMENT_THRESHOLD_METERS = 0.5;
+
+    // Maximum single-tick displacement accepted from the fused estimate.
+    // Jumps larger than this are treated as filter teleports: the PDR dead-reckoning
+    // fallback is used instead so the trajectory stays physically continuous.
+    private static final double MAX_JUMP_METERS = 8.0;
+
+    // Last fused point that was actually rendered
+    private LatLng lastSentFusedPosition = null;
+
+    // PDR {x, y} coordinates (meters from recording origin) at the last accepted render.
+    // Used to compute the PDR delta when the fused estimate teleports.
+    private float lastAcceptedPdrX = 0f;
+    private float lastAcceptedPdrY = 0f;
+
+    private LatLng lastSentWifiPosition = null;
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
             updateUIandPosition();
-            // Loop again
-            refreshDataHandler.postDelayed(refreshDataTask, 200);
+            refreshDataHandler.postDelayed(refreshDataTask, 16); //loop faster
         }
     };
 
@@ -228,7 +248,7 @@ public class RecordingFragment extends Fragment {
         LatLng cur = trajectoryMapFragment.getCurrentLocation();
         if (cur == null) {
             Toast.makeText(requireContext(), "" +
-                    "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
+                            "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
                     Toast.LENGTH_SHORT).show();
             return;
         }
@@ -252,6 +272,10 @@ public class RecordingFragment extends Fragment {
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
      */
     private void updateUIandPosition() {
+        // Elevation comes from the barometer so is  available immediately, no PDR needed should work FINE
+        float elevationVal = sensorFusion.getElevation();
+        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
@@ -260,30 +284,86 @@ public class RecordingFragment extends Fragment {
                 + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
-        // Elevation
-        float elevationVal = sensorFusion.getElevation();
-        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+        // // Current location
+        // // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
+        // // Or simply pass relative data for the TrajectoryMapFragment to handle
+        // // For example:
+        // float[] latLngArray = sensorFusion.getGNSSLatitude(true);
+        // if (latLngArray != null) {
+        //     LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+        //     LatLng newLocation = UtilFunctions.calculateNewPos(
+        //             oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
+        //             new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+        //     );
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
+        //     // Pass the location + orientation to the map
+        //     if (trajectoryMapFragment != null) {
+        //         trajectoryMapFragment.updateUserLocation(newLocation,
+        //                 (float) Math.toDegrees(sensorFusion.passOrientation()));
+        //     }
+        // }
 
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+        // Get the latest fused position from SensorFusion (best estimate of user location)
+        LatLng fusedPosition = sensorFusion.getFusedPosition();
+
+        if (fusedPosition != null && trajectoryMapFragment != null) {
+
+            boolean isFirstPoint = (lastSentFusedPosition == null);
+            double movedDistance = 0.0;
+
+            // Determine if the fused position has moved enough to warrant a map update.
+            boolean movementDetected = false;
+
+            if (lastSentFusedPosition != null) {
+                movedDistance = UtilFunctions.distanceBetweenPoints(
+                        lastSentFusedPosition, fusedPosition);
+                movementDetected = movedDistance >= MOVEMENT_THRESHOLD_METERS;
+            }
+
+            if (isFirstPoint || movementDetected) { // Only update the map if it's the first point or if the fused position has moved enough
+                LatLng positionToRender;
+
+                if (!isFirstPoint && movedDistance > MAX_JUMP_METERS) {
+                    // ---- TELEPORT DETECTED ----
+                    // The fused estimate jumped implausibly (bad GNSS/filter divergence).
+                    // Fall back to PDR dead-reckoning: apply the PDR step delta to the
+                    // last confirmed anchor so the trajectory stays physically continuous.
+                    //i think this should work
+                    float pdrDeltaX = pdrValues[0] - lastAcceptedPdrX; // Compute PDR step delta since last accepted point
+                    float pdrDeltaY = pdrValues[1] - lastAcceptedPdrY;
+                    double pdrStep = Math.sqrt(pdrDeltaX * pdrDeltaX + pdrDeltaY * pdrDeltaY);
+
+                    if (pdrStep >= MOVEMENT_THRESHOLD_METERS && pdrStep < MAX_JUMP_METERS) {
+                        positionToRender = UtilFunctions.convertENUToWGS84(
+                                lastSentFusedPosition,
+                                new float[]{pdrDeltaX, pdrDeltaY, 0f});
+                        
+                    } else {
+                        // PDR also hasn't moved enough so  stay put this tick
+                        positionToRender = null;
+                        Log.d("FUSED_TEST", "Teleport " + (int) movedDistance
+                                + "m rejected, no PDR movement yet");
+                    }
+                } else {
+                    // Normal update hence fused estimate is within plausible range
+                    positionToRender = fusedPosition;
+                }
+
+                if (positionToRender != null) {
+                    boolean rendered = trajectoryMapFragment.updateUserLocation(
+                            positionToRender,
+                            (float) Math.toDegrees(sensorFusion.passOrientation()));
+                    if (rendered) {
+                        lastSentFusedPosition = positionToRender;
+                        lastAcceptedPdrX = pdrValues[0];
+                        lastAcceptedPdrY = pdrValues[1];
+                    }
+                }
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
+
+
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
             // If user toggles showing GNSS in the map, call e.g.
@@ -299,6 +379,17 @@ public class RecordingFragment extends Fragment {
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
+            }
+        }
+
+        // WiFi observation logic for colour-coded last N updates
+        if (trajectoryMapFragment != null) {
+            LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+            // Only add to history when the location has actually changed (new API response)
+            if (wifiLocation != null && !wifiLocation.equals(lastSentWifiPosition)) {
+                Log.d("WiFiDebug", "New WiFi fix: " + wifiLocation);
+                trajectoryMapFragment.updateWiFiObservation(wifiLocation);
+                lastSentWifiPosition = wifiLocation;
             }
         }
 

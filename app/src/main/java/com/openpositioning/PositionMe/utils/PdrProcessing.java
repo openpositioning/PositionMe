@@ -17,9 +17,8 @@ import java.util.stream.Collectors;
 
 /**
  * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
- * It calculates the position from the steps and directions detected, using either estimated values
- * (eg. stride length from the Weiberg algorithm) or provided constants, calculates the elevation
- * and attempts to estimate the current floor as well as elevators.
+ *  * Coordinates are relative to the session start, in meters (x east, y north). Elevation is
+ * relative to the initial barometer median. Attempts to estimate current floor and elevator use.
  *
  * @author Mate Stodulka
  * @author Michal Dvorak
@@ -44,6 +43,10 @@ public class PdrProcessing {
     // Settings for accessing shared variables
     private SharedPreferences settings;
 
+
+    // Centralized map-matching thresholds (currently informational only)
+    private final MapMatchingConfig mapMatchingConfig;
+
     // Step length
     private float stepLength;
     // Using manually input constants instead of estimated values
@@ -53,11 +56,16 @@ public class PdrProcessing {
     private float positionX;
     private float positionY;
 
+    // Optional wall geometry in meters (polylines)
+    //private List<List<PointF>> walls;
+
     // Vertical movement calculation
     private Float[] startElevationBuffer;
     private float startElevation;
     private int setupIndex = 0;
     private float elevation;
+
+    // Floor-to-floor height in meters (manual setting)
     private int floorHeight;
     private int currentFloor;
 
@@ -68,9 +76,15 @@ public class PdrProcessing {
     private CircularFloatBuffer verticalAccel;
     private CircularFloatBuffer horizontalAccel;
 
-    // Step sum and length aggregation variables
     private float sumStepLength = 0;
     private int stepCount = 0;
+
+    private float kfStepLength = 0.7f;
+    private float kfVariance = 0.1f;
+    private static final float KF_PROCESS_NOISE = 0.005f;
+    private static final float KF_MEAS_NOISE = 0.04f;
+    private static final float MIN_STEP_LENGTH = 0.2f;
+    private static final float MAX_STEP_LENGTH = 1.5f;
     //endregion
 
     /**
@@ -84,6 +98,10 @@ public class PdrProcessing {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         // Check if estimate or manual values should be used
         this.useManualStep = this.settings.getBoolean("manual_step_values", false);
+        
+        // Initialize map-matching configuration with defaults
+        this.mapMatchingConfig = new MapMatchingConfig();
+
         if(useManualStep) {
             try {
                 // Retrieve manual step  length
@@ -123,11 +141,12 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = settings.getInt("floor_height", 4); 
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+
     }
 
     /**
@@ -154,12 +173,14 @@ public class PdrProcessing {
             return new float[]{this.positionX, this.positionY};
         }
         
-        // Calculate step length
-        if(!useManualStep) {
-            //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
-            // Estimate stride
-            this.stepLength = weibergMinMax(accelMagnitudeOvertime);
-            // System.err.println("Step Length" + stepLength);
+        if (!useManualStep) {
+            float rawStep = weibergMinMax(accelMagnitudeOvertime);
+            rawStep = Math.max(MIN_STEP_LENGTH, Math.min(MAX_STEP_LENGTH, rawStep));
+            kfVariance += KF_PROCESS_NOISE;
+            float gain = kfVariance / (kfVariance + KF_MEAS_NOISE);
+            kfStepLength += gain * (rawStep - kfStepLength);
+            kfVariance = (1f - gain) * kfVariance;
+            this.stepLength = kfStepLength;
         }
 
         // Increment aggregate variables
@@ -205,20 +226,6 @@ public class PdrProcessing {
             // Add to buffer
             this.elevationList.putNewest(absoluteElevation);
 
-            // Check if there was floor movement
-            // Check if there is enough data to evaluate
-            if(this.elevationList.isFull()) {
-                // Check average of elevation array
-                List<Float> elevationMemory = this.elevationList.getListCopy();
-                OptionalDouble currentAvg = elevationMemory.stream().mapToDouble(f -> f).average();
-                float finishAvg = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : 0;
-
-                // Check if we moved floor by comparing with start position
-                if(Math.abs(finishAvg - startElevation) > this.floorHeight) {
-                    // Change floors - 'floor' division
-                    this.currentFloor += (finishAvg - startElevation)/this.floorHeight;
-                }
-            }
             // Return current elevation
             return elevation;
         }
@@ -250,8 +257,7 @@ public class PdrProcessing {
         double maxAccel = Collections.max(validAccel);
         double minAccel = Collections.min(validAccel);
 
-        // calculate bounce
-        float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
+        float bounce = (float) Math.pow(Math.max(0.001, maxAccel - minAccel), 0.25);
 
         // determine which constant to use based on settings
         if (this.settings.getBoolean("overwrite_constants", false)) {
@@ -282,6 +288,14 @@ public class PdrProcessing {
         return this.elevation;
     }
 
+    public float getStartElevation() {
+        return this.startElevation;
+    }
+
+    public CircularFloatBuffer getElevationList() {
+        return this.elevationList;
+    }
+
     /**
      * Get the current floor number as estimated by the PDR class.
      *
@@ -289,6 +303,14 @@ public class PdrProcessing {
      */
     public int getCurrentFloor() {
         return this.currentFloor;
+    }
+
+    public void setCurrentFloor(int floor) {
+        this.currentFloor = floor;
+    }
+
+    public int getFloorHeightValue() {
+        return this.floorHeight;
     }
 
     /**
@@ -395,6 +417,12 @@ public class PdrProcessing {
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+        this.setupIndex = 0;
+        this.startElevation = 0f;
+        this.kfStepLength = 0.7f;
+        this.kfVariance = 0.1f;
+        this.sumStepLength = 0f;
+        this.stepCount = 0;
     }
 
     /**
@@ -403,14 +431,10 @@ public class PdrProcessing {
      * @return  average step length in meters.
      */
     public float getAverageStepLength(){
-        //Calculate average step length
-        float averageStepLength = sumStepLength/(float) stepCount;
-
-        //Reset sum and number of steps
+        if (stepCount == 0) return 0.75f;
+        float averageStepLength = sumStepLength / (float) stepCount;
         stepCount = 0;
         sumStepLength = 0;
-
-        //Return average step length
         return averageStepLength;
     }
 

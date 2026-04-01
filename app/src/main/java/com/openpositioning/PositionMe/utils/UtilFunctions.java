@@ -16,7 +16,43 @@ import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
  */
 public class UtilFunctions {
     // Constant 1degree of latitiude/longitude (in m)
-    private static final int  DEGREE_IN_M=111111;
+    private static final double EARTH_RADIUS = 6371000.0; // in meters
+
+    public static float[] convertWGS84ToENU(LatLng origin, LatLng point){
+        //convert to radians
+
+        double lat1 = Math.toRadians(origin.latitude);
+        double lon1 = Math.toRadians(origin.longitude);
+        double lat2 = Math.toRadians(point.latitude);
+        double lon2 = Math.toRadians(point.longitude);
+
+        //calculate easting
+        double easting = EARTH_RADIUS * (lon2 - lon1) * Math.cos(lat1);
+        //calculate northing
+        double northing = EARTH_RADIUS * (lat2 - lat1);
+        //calculate up
+        double up = 0; // Assuming flat surface
+
+        return new float[]{(float) easting, (float) northing, (float) up};
+    }
+
+    public static LatLng convertENUToWGS84(LatLng origin, float[] enu){
+        //convert to radians
+        double lat1 = Math.toRadians(origin.latitude);
+        double lon1 = Math.toRadians(origin.longitude);
+
+        //calculate latitude
+        double lat2 = lat1 + (enu[1] / EARTH_RADIUS);
+        //calculate longitude
+        double lon2 = lon1 + (enu[0] / (EARTH_RADIUS * Math.cos(lat1)));
+        //calculate up (not used in this case)
+        double up = 0; // Assuming flat surface
+
+        return new LatLng(Math.toDegrees(lat2), Math.toDegrees(lon2));
+    }
+
+
+    private static final int  DEGREE_IN_M=111111; //NOT NEEDED FOR CONVERSION, JUST USED AS A CONSTANT TO CALCULATE NEW COORDINATES
     /**
      * Simple function to calculate the angle between two close points
      * @param pointA Starting point
@@ -61,7 +97,7 @@ public class UtilFunctions {
      * @return double corresponding to the value in meters.
      */
     public static double degreesToMetersLng(double degreeVal, double latitude) {
-        return degreeVal*DEGREE_IN_M/Math.cos(Math.toRadians(latitude));
+        return degreeVal * DEGREE_IN_M * Math.cos(Math.toRadians(latitude));
     }
 
     /**

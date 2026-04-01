@@ -51,6 +51,9 @@ public class FloorplanApiClient {
         private final String indoorType;
         private final String geometryType;
         private final List<List<LatLng>> parts;
+        private final String strokeColor;  // hex string from API, e.g. "#666666", or null
+        private final String fillColor;    // hex string from API, or null
+        private final float strokeWidth;   // 0 means not specified by API
 
         /**
          * Constructs a MapShapeFeature.
@@ -58,12 +61,19 @@ public class FloorplanApiClient {
          * @param indoorType   feature type from properties (e.g. "wall", "room")
          * @param geometryType GeoJSON geometry type (e.g. "MultiLineString", "MultiPolygon")
          * @param parts        coordinate lists: each inner list is a line or polygon ring
+         * @param strokeColor  stroke colour from API properties, or null
+         * @param fillColor    fill colour from API properties, or null
+         * @param strokeWidth  stroke width from API properties, 0 if not set
          */
         public MapShapeFeature(String indoorType, String geometryType,
-                               List<List<LatLng>> parts) {
+                               List<List<LatLng>> parts,
+                               String strokeColor, String fillColor, float strokeWidth) {
             this.indoorType = indoorType;
             this.geometryType = geometryType;
             this.parts = parts;
+            this.strokeColor = strokeColor;
+            this.fillColor = fillColor;
+            this.strokeWidth = strokeWidth;
         }
 
         /** Returns the indoor feature type (e.g. "wall", "room"). */
@@ -74,6 +84,15 @@ public class FloorplanApiClient {
 
         /** Returns coordinate parts: lines for MultiLineString, rings for MultiPolygon. */
         public List<List<LatLng>> getParts() { return parts; }
+
+        /** Returns the API-provided stroke colour string, or null if not set. */
+        public String getStrokeColor() { return strokeColor; }
+
+        /** Returns the API-provided fill colour string, or null if not set. */
+        public String getFillColor() { return fillColor; }
+
+        /** Returns the API-provided stroke width, or 0 if not set. */
+        public float getStrokeWidth() { return strokeWidth; }
     }
 
     /**
@@ -444,7 +463,27 @@ public class FloorplanApiClient {
                 return null;
             }
 
-            return new MapShapeFeature(indoorType, geoType, parts);
+            // Parse visual properties — try the same field names the private repo uses
+            String strokeColor = null;
+            String fillColor   = null;
+            float  strokeWidth = 0f;
+            if (properties != null) {
+                // stroke colour: stroke_color → line_color → color
+                if (properties.has("stroke_color"))   strokeColor = properties.optString("stroke_color", null);
+                else if (properties.has("line_color")) strokeColor = properties.optString("line_color", null);
+                else if (properties.has("color"))      strokeColor = properties.optString("color", null);
+
+                // fill colour: fill_color → fill
+                if (properties.has("fill_color")) fillColor = properties.optString("fill_color", null);
+                else if (properties.has("fill"))   fillColor = properties.optString("fill", null);
+
+                // stroke width: stroke_width → line_width → width
+                if (properties.has("stroke_width"))      strokeWidth = (float) properties.optDouble("stroke_width", 0.0);
+                else if (properties.has("line_width"))    strokeWidth = (float) properties.optDouble("line_width", 0.0);
+                else if (properties.has("width"))         strokeWidth = (float) properties.optDouble("width", 0.0);
+            }
+
+            return new MapShapeFeature(indoorType, geoType, parts, strokeColor, fillColor, strokeWidth);
         } catch (JSONException e) {
             Log.e(TAG, "Failed to parse map_shapes feature", e);
             return null;

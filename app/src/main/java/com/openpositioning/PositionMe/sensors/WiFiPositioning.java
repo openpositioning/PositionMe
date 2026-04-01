@@ -43,6 +43,18 @@ public class WiFiPositioning {
 
     // Store user's location obtained using WiFi positioning
     private LatLng wifiLocation;
+
+    // Timestamp (System.currentTimeMillis) of the most recent successful WiFi fix
+    private long lastWifiFixTimeMs = 0;
+
+    /**
+     * Returns the wall-clock time of the most recent WiFi position fix.
+     * Returns 0 if no fix has been received yet.
+     */
+    public long getWifiLocationTimestampMs() {
+        return lastWifiFixTimeMs;
+    }
+
     /**
      * Getter for the  WiFi positioning floor obtained using openpositioning API
      * @return the user's location based on openpositioning API
@@ -89,6 +101,7 @@ public class WiFiPositioning {
                     try {
                             wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                             floor = response.getInt("floor");
+                            lastWifiFixTimeMs = System.currentTimeMillis();
                     } catch (JSONException e) {
                         // Error log to keep record of errors (for secure programming and maintainability)
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);
@@ -140,6 +153,7 @@ public class WiFiPositioning {
                         Log.d("jsonObject",response.toString());
                         wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                         floor = response.getInt("floor");
+                        lastWifiFixTimeMs = System.currentTimeMillis();
                         callback.onSuccess(wifiLocation,floor);
                     } catch (JSONException e) {
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);

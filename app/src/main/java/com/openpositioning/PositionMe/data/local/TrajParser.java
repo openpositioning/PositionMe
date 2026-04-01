@@ -84,7 +84,6 @@ public class TrajParser {
         }
     }
 
-    /** Represents an IMU (Inertial Measurement Unit) data record used for orientation calculations. */
     private static class ImuRecord {
         public long relativeTimestamp;
         public float accX, accY, accZ; // Accelerometer values
@@ -92,13 +91,11 @@ public class TrajParser {
         public float rotationVectorX, rotationVectorY, rotationVectorZ, rotationVectorW; // Rotation quaternion
     }
 
-    /** Represents a Pedestrian Dead Reckoning (PDR) data record storing position shifts over time. */
     private static class PdrRecord {
         public long relativeTimestamp;
         public float x, y; // Position relative to the starting point
     }
 
-    /** Represents a GNSS (Global Navigation Satellite System) data record with latitude/longitude. */
     private static class GnssRecord {
         public long relativeTimestamp;
         public double latitude, longitude; // GNSS coordinates
@@ -199,7 +196,6 @@ public class TrajParser {
 
         return result;
     }
-/** Parses IMU data from JSON. */
 private static List<ImuRecord> parseImuData(JsonArray imuArray) {
     List<ImuRecord> imuList = new ArrayList<>();
     if (imuArray == null) return imuList;
@@ -209,7 +205,7 @@ private static List<ImuRecord> parseImuData(JsonArray imuArray) {
         imuList.add(record);
     }
     return imuList;
-}/** Parses PDR data from JSON. */
+}
 private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
     List<PdrRecord> pdrList = new ArrayList<>();
     if (pdrArray == null) return pdrList;
@@ -219,7 +215,7 @@ private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
         pdrList.add(record);
     }
     return pdrList;
-}/** Parses GNSS data from JSON. */
+}
 private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
     List<GnssRecord> gnssList = new ArrayList<>();
     if (gnssArray == null) return gnssList;
@@ -229,17 +225,17 @@ private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
         gnssList.add(record);
     }
     return gnssList;
-}/** Finds the closest IMU record to the given timestamp. */
+}
 private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
     return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
             .orElse(null);
 
-}/** Finds the closest GNSS record to the given timestamp. */
+}
 private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
     return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
             .orElse(null);
 
-}/** Computes the orientation from a rotation vector. */
+}
 private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
     float[] rotationVector = new float[]{rx, ry, rz, rw};
     float[] rotationMatrix = new float[9];

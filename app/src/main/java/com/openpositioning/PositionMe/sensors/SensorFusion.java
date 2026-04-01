@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.PointF;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -11,7 +12,11 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
+// import android.graphics.PointF;
+//import com.openpositioning.PositionMe.utils.WiFiPositioning;
+import com.openpositioning.PositionMe.utils.WallGeometryBuilder;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -24,6 +29,8 @@ import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
+import com.openpositioning.PositionMe.utils.BuildingPolygon;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,6 +97,35 @@ public class SensorFusion implements SensorEventListener {
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
+
+    //particle filter
+    private final ParticleFilter particleFilter = new ParticleFilter();
+
+    // Last GNSS position actually sent to the particle filter.
+    // Used to suppress stationary noise: indoors, GPS bounces 10-30 m even when
+    // the device is still, which drags particles out of the building.
+    private LatLng lastGnssForFilter = null;
+
+    private static final int   STATIONARY_WINDOW    = 20;
+    private static final float STATIONARY_THRESHOLD = 0.015f;
+    private final List<Float> linearAccelWindow = new ArrayList<>();
+    private boolean isStationary = false;
+
+    private final List<Float> headingCalibSamples = new ArrayList<>();
+    private float headingBias = 0f;
+    private boolean headingCalibDone = false;
+    private long headingCalibStartMs = 0L;
+    private static final long HEADING_CALIB_DURATION_MS = 10_000L;
+
+    // Timestamp (elapsedRealtime ms) of the last setStartGNSSLatitude() call.
+    // GNSS updates are suppressed for 10 s so a bad indoor GPS fix cannot drag
+    // particles away from the user-confirmed anchor immediately after anchoring.
+    private long filterAnchorTimeMs = 0L;
+
+    // True once the first GNSS fix during this recording session has been used to
+    // anchor startLocation and write initial protobuf metadata (auto-init path).
+    private boolean initialMetadataWritten = false;
+
 
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
@@ -164,6 +200,16 @@ public class SensorFusion implements SensorEventListener {
         this.eventHandler = new SensorEventHandler(
                 state, pdrProcessing, pathView, recorder, bootTime);
 
+
+        //particle filter
+        eventHandler.setStepListener((deltaEasting, deltaNorthing) -> {
+            if (particleFilter.isInitialized() && !isStationary) {
+                particleFilter.predict(deltaEasting, deltaNorthing);
+            }
+        });
+
+    
+
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(wifiPositionManager);
@@ -187,12 +233,49 @@ public class SensorFusion implements SensorEventListener {
         this.bleRttManager = new BleRttManager(recorder);
         bleProcessor.registerObserver(bleRttManager);
 
+    
         if (!rttManager.isRttSupported()) {
             new Handler(Looper.getMainLooper()).post(() ->
                     Toast.makeText(appContext,
                             "WiFi RTT is not supported on this device",
                             Toast.LENGTH_LONG).show());
         }
+
+        wifiProcessor.registerObserver(objects -> {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();
+                if (wifiPosition != null) {
+                    if (!particleFilter.isInitialized()) {
+                        // WiFi is the preferred initial anchor indoors — more accurate than GNSS.
+                        particleFilter.initialise(wifiPosition, 15f);
+                    } else if (!isStationary) {
+                        // Divergence recovery (Thrun, Burgard & Fox 2005, "Probabilistic Robotics",
+                        // If WiFi contradicts the current estimate by   more than 2.5× the particle
+                        // spread, the filter has likely converged to a wrong location (e.g. from a
+                        // bad indoor GNSS fix). Reset at the WiFi anchor so re-convergence can happen.
+                        LatLng fused = particleFilter.getFusedPosition();
+                        float uncertainty = particleFilter.getPositionUncertaintyMeters();
+                        if (fused != null) {
+                            double wifiDist = UtilFunctions.distanceBetweenPoints(fused, wifiPosition);
+                            float divergenceThreshold = Math.max(uncertainty * 2.5f, 20f);
+                            if (wifiDist > divergenceThreshold) {
+                                Log.d("SensorFusion", "WiFi-reset: filter diverged "
+                                        + (int) wifiDist + " m (threshold " + (int) divergenceThreshold + " m)");
+                                particleFilter.reset();
+                                particleFilter.initialise(wifiPosition, 15f);
+                                lastGnssForFilter = wifiPosition;
+                                filterAnchorTimeMs = SystemClock.elapsedRealtime();
+                            } else {
+                                particleFilter.updateWiFi(wifiPosition, 20f);
+                            }
+                        } else {
+                            particleFilter.updateWiFi(wifiPosition, 20f);
+                        }
+                    }
+                }
+                autoSeedStartAndMetadataIfNeeded();
+            }, 1000);
+        });
     }
 
     //endregion
@@ -204,9 +287,132 @@ public class SensorFusion implements SensorEventListener {
      *
      * <p>Delegates to {@link SensorEventHandler#handleSensorEvent(SensorEvent)}.</p>
      */
+
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         eventHandler.handleSensorEvent(sensorEvent);
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+            updateStationaryState(sensorEvent.values[0], sensorEvent.values[1], sensorEvent.values[2]);
+        }
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR && recorder.isRecording()) {
+            updateHeadingCalibration();
+        }
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_PRESSURE && recorder.isRecording()) {
+            updateFloorLogic();
+        }
+    }
+
+    private void updateHeadingCalibration() {
+        if (headingCalibDone || !isStationary) return;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (headingCalibStartMs == 0L) headingCalibStartMs = now;
+        headingCalibSamples.add(state.orientation[0]);
+        if (now - headingCalibStartMs >= HEADING_CALIB_DURATION_MS && headingCalibSamples.size() >= 10) {
+            float sum = 0f;
+            for (float h : headingCalibSamples) sum += h;
+            headingBias = sum / headingCalibSamples.size();
+            headingCalibDone = true;
+            Log.d("SensorFusion", "Heading bias calibrated: " + (float) Math.toDegrees(headingBias) + "degrees");
+        }
+    }
+
+    public float getHeadingBias() {
+        return headingCalibDone ? headingBias : 0f;
+    }
+
+    /**
+     * Maintains a rolling variance of linear-acceleration magnitude.
+     * Sets {@code isStationary = true} when variance drops below the threshold,
+     * meaning the phone has been essentially still for the last STATIONARY_WINDOW samples.
+     */
+    private void updateStationaryState(float x, float y, float z) {
+        float mag = (float) Math.sqrt(x * x + y * y + z * z);
+        linearAccelWindow.add(mag);
+        if (linearAccelWindow.size() > STATIONARY_WINDOW) {
+            linearAccelWindow.remove(0);
+        }
+        if (linearAccelWindow.size() < STATIONARY_WINDOW) return;
+
+        float mean = 0f;
+        for (float v : linearAccelWindow) mean += v;
+        mean /= STATIONARY_WINDOW;
+
+        float variance = 0f;
+        for (float v : linearAccelWindow) variance += (v - mean) * (v - mean);
+        variance /= STATIONARY_WINDOW;
+
+        isStationary = variance < STATIONARY_THRESHOLD;
+    }
+
+    // Nucleus floor-to-floor height in metres (GF=0, F1=5.5, F2=11, F3=16.5).
+    // Used for absolute floor index computation from barometric elevation.
+    private static final float NUCLEUS_FLOOR_HEIGHT_M = 5.5f;
+    // Lift snap tolerance: only commit a lift floor change when the barometer elevation
+    // is within this distance of the exact target level (prevents mid-ascent false triggers).
+    private static final float LIFT_SNAP_TOLERANCE_M = 0.8f;
+
+    private void updateFloorLogic() {
+        if (!pdrProcessing.getElevationList().isFull()) return;
+
+        float finishAvg = (float) pdrProcessing.getElevationList().getListCopy().stream()
+                .mapToDouble(f -> f).average().orElse(0.0);
+        float diff = finishAvg - pdrProcessing.getStartElevation();
+        float floorHeight = NUCLEUS_FLOOR_HEIGHT_M;
+
+        // Require at least 40% of floor height before evaluating a change.
+        if (Math.abs(diff) < floorHeight * 0.4f) return;
+
+        // Absolute floor index from recording origin (not relative to current floor).
+        // Math.round avoids cumulative integer-truncation errors.
+        int targetFloor = Math.round(diff / floorHeight);
+        if (targetFloor == pdrProcessing.getCurrentFloor()) return;
+
+        LatLng pos = getFusedPosition();
+        if (pos == null) return;
+
+        FloorplanApiClient.BuildingInfo building = getFloorplanBuilding(getSelectedBuildingId());
+        if (building == null) return;
+
+        // Use current floor + bias to index into the building's floor list.
+        int currentFloorIdx = pdrProcessing.getCurrentFloor() + 1; // +1 bias for Nucleus/Murchison (GF at index 1)
+        if (currentFloorIdx < 0 || currentFloorIdx >= building.getFloorShapesList().size()) return;
+
+        FloorplanApiClient.FloorShapes floorShapes = building.getFloorShapesList().get(currentFloorIdx);
+        boolean nearTransition = false;
+        String type = "unknown";
+
+        for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
+            String fType = feature.getIndoorType();
+            if ("lift".equals(fType) || "stairs".equals(fType)) {
+                for (List<LatLng> part : feature.getParts()) {
+                    if (BuildingPolygon.pointInPolygon(pos, part)) {
+                        nearTransition = true;
+                        type = fType;
+                        break;
+                    }
+                }
+            }
+            if (nearTransition) break;
+        }
+
+        if (!nearTransition) return;
+
+        float horizontalMovement = (float) Math.sqrt(
+                Math.pow(state.filteredAcc[0], 2) + Math.pow(state.filteredAcc[1], 2));
+        boolean isLift = horizontalMovement < 0.2f;
+
+        if ("lift".equals(type) && isLift) {
+            // Snap-to-floor guard: only commit once the barometer reads within
+            // LIFT_SNAP_TOLERANCE_M of the exact target level (GF=0, F1=5.5, F2=11 …).
+            float targetElev = targetFloor * floorHeight;
+            if (Math.abs(diff - targetElev) > LIFT_SNAP_TOLERANCE_M) return;
+            pdrProcessing.setCurrentFloor(targetFloor);
+            String TAG = "FLOOR CHANGE LIFT";
+        } else if ("stairs".equals(type) && !isLift) {
+            //pdrProcessing.setCurrentFloor(targetFloor);
+            String TAG = "FLOOR CHANGE STAIRS";
+
+        }
     }
 
     /** {@inheritDoc} */
@@ -242,7 +448,7 @@ public class SensorFusion implements SensorEventListener {
         stepDetectionSensor.sensorManager.registerListener(this,
                 stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this,
-                rotationSensor.sensor, (int) 1e6);
+                rotationSensor.sensor, 10000); // 100 Hz — heading must update faster than step rate
         // Foreground service owns WiFi/BLE scanning during recording.
         if (!recorder.isRecording()) {
             startWirelessCollectors();
@@ -326,8 +532,21 @@ public class SensorFusion implements SensorEventListener {
      * @see SensorCollectionService
      */
     public void startRecording() {
-        recorder.startRecording(pdrProcessing);
+        recorder.startRecording(pdrProcessing); // calls pdrProcessing.resetPDR() internally
         eventHandler.resetBootTime(recorder.getBootTime());
+        // Sync step-delta baseline with the freshly-zeroed PDR so the first step of this
+        // session doesn't fire a massive spurious delta from the previous session's position.
+        eventHandler.resetStepOrigin();
+
+        initialMetadataWritten = false;
+        state.startLocation[0] = 0f;
+        state.startLocation[1] = 0f;
+        filterAnchorTimeMs = 0L;
+        lastGnssForFilter = null;
+        particleFilter.reset();
+        headingCalibDone = false;
+        headingCalibSamples.clear();
+        headingCalibStartMs = 0L;
 
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
@@ -336,6 +555,15 @@ public class SensorFusion implements SensorEventListener {
             SensorCollectionService.start(appContext);
         }
     }
+
+    // /**
+    //  * Inject wall polylines (meters) into PDR for collision correction.
+    //  */
+    // public void setPdrWalls(List<List<PointF>> walls) {
+    //     if (pdrProcessing != null) {
+    //         pdrProcessing.setWalls(walls);
+    //     }
+    // }
 
     /**
      * Disables saving sensor values to the trajectory object.
@@ -483,6 +711,32 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns the best available position estimate.
+     * Priority: (1) particle-filter fused estimate; (2) PDR dead-reckoning from
+     * the GNSS-anchored start location when WiFi/GNSS are unavailable (deep indoors).
+     * This keeps the trajectory live and fluid even when external signals fail.
+     *
+     * @return current position estimate, or null if no fix is available yet.
+     */
+    public LatLng getFusedPosition() {
+        LatLng filtered = particleFilter.getFusedPosition();
+        if (filtered != null) return filtered;
+
+        // PDR fallback: startLocation + accumulated step displacement.
+        float startLat = state.startLocation[0];
+        float startLon = state.startLocation[1];
+        if (startLat == 0f && startLon == 0f) {
+            startLat = state.latitude;   // fall back to latest raw GNSS if not anchored yet
+            startLon = state.longitude;
+        }
+        if (startLat == 0f && startLon == 0f) return null;
+        float[] pdr = pdrProcessing.getPDRMovement();
+        LatLng origin = new LatLng(startLat, startLon);
+        if (pdr[0] == 0f && pdr[1] == 0f) return origin;
+        return UtilFunctions.convertENUToWGS84(origin, new float[]{pdr[0], pdr[1], 0f});
+    }
+
+    /**
      * Setter function for core location data.
      *
      * @param startPosition contains the initial location set by the user
@@ -490,6 +744,82 @@ public class SensorFusion implements SensorEventListener {
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];
         state.startLocation[1] = startPosition[1];
+
+        // Reset and re-seed the particle filter at the chosen start location.
+        // The filter may have been initialized earlier from a noisy indoor GPS fix;
+        // re-seeding here ensures the fused position starts at the user-confirmed location.
+        particleFilter.reset();
+        LatLng chosenStart = new LatLng(startPosition[0], startPosition[1]);
+        particleFilter.initialise(chosenStart, 5f); // 5 m spread — user just pinpointed their location
+        filterAnchorTimeMs = SystemClock.elapsedRealtime(); // start 10 s GNSS grace period
+        lastGnssForFilter = chosenStart;
+    }
+
+    private boolean hasValidStartLocation() {
+        return isValidCoordinate(state.startLocation[0], state.startLocation[1]);
+    }
+
+    private boolean isValidCoordinate(double lat, double lon) {
+        if (Double.isNaN(lat) || Double.isNaN(lon)
+                || Double.isInfinite(lat) || Double.isInfinite(lon)) {
+            return false;
+        }
+        if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
+            return false;
+        }
+        // Treat (0,0) as unset in this app.
+        return !(lat == 0.0 && lon == 0.0);
+    }
+
+    /**
+     * Seeds initial position from sensors without user interaction.
+     * Priority: GNSS -> WiFi -> fused particle estimate.
+     *
+     * @return true if a valid initial position is available
+     */
+    public boolean initializeStartPositionAutonomously() {
+        if (hasValidStartLocation()) {
+            return true;
+        }
+
+        if (isValidCoordinate(state.latitude, state.longitude)) {
+            setStartGNSSLatitude(new float[]{state.latitude, state.longitude});
+            return true;
+        }
+
+        LatLng wifiPosition = (wifiPositionManager != null)
+                ? wifiPositionManager.getLatLngWifiPositioning()
+                : null;
+        if (wifiPosition != null
+                && isValidCoordinate(wifiPosition.latitude, wifiPosition.longitude)) {
+            setStartGNSSLatitude(new float[]{
+                    (float) wifiPosition.latitude,
+                    (float) wifiPosition.longitude
+            });
+            return true;
+        }
+
+        LatLng fusedPosition = particleFilter.getFusedPosition();
+        if (fusedPosition != null
+                && isValidCoordinate(fusedPosition.latitude, fusedPosition.longitude)) {
+            setStartGNSSLatitude(new float[]{
+                    (float) fusedPosition.latitude,
+                    (float) fusedPosition.longitude
+            });
+            return true;
+        }
+
+        return false;
+    }
+
+    private void autoSeedStartAndMetadataIfNeeded() {
+        if (!recorder.isRecording() || hasValidStartLocation()) {
+            return;
+        }
+
+        if (initializeStartPositionAutonomously()) {
+            writeInitialMetadata();
+        }
     }
 
     /**
@@ -624,10 +954,71 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns true if the most recent WiFi position fix arrived within the last 30 seconds.
+     * Used by auto-floor logic to avoid permanently bypassing barometric guards once WiFi
+     * has fired even once during a recording session.
+     *
+     * @return true if WiFi position data is fresh enough to trust for floor detection
+     */
+    public boolean isWifiPositionFresh() {
+        return wifiPositionManager.isWifiPositionFresh(30_000L);
+    }
+
+    /**
+     * Returns the magnitude of horizontal filtered acceleration (m/s squared).
+     * Used by CrossFloorClassifier to distinguish lift (low horizontal movement)
+     * from stairs (higher horizontal movement) during floor transitions.
+     *
+     * @return horizontal acceleration magnitude in m/ss quared
+     */
+    public float getHorizontalAccelMagnitude() {
+        return (float) Math.sqrt(
+            Math.pow(state.filteredAcc[0], 2) + Math.pow(state.filteredAcc[1], 2)
+        );
+    }
+
+    /**
      * Utility function to log the event frequency of each sensor.
      */
     public void logSensorFrequencies() {
         eventHandler.logSensorFrequencies();
+    }
+
+    public ParticleFilter getParticleFilter() {
+        return particleFilter;
+    }
+
+    /** Returns true when the device has been stationary for the last sensor window. */
+    public boolean isStationary() {
+        return isStationary;
+    }
+
+    /**
+     * Returns the floor number currently tracked by the PDR/barometric pipeline.
+     * This is the sensor-authoritative floor — updated continuously by barometric
+     * transitions in {@link #updateFloorLogic()}, independent of what the map display shows.
+     */
+    public int getPdrCurrentFloor() {
+        return pdrProcessing.getCurrentFloor();
+    }
+
+    /** Returns the RMS particle-cloud spread in metres (live position uncertainty). */
+    public float getPositionUncertaintyMeters() {
+        return particleFilter.getPositionUncertaintyMeters();
+    }
+
+    // Inject wall polylines (meters) into PDR for collision correction.
+  
+    public void setPdrWalls(List<List<PointF>> wallPolylines) { //JAPJOT -- i have added this function to convert wall polylines into segments and pass to particle
+        List<float[]> segments = new ArrayList<>();
+        for (List<PointF> polyline : wallPolylines) {
+            for (int i = 0; i < polyline.size() - 1; i++) {
+                PointF p1 = polyline.get(i);
+                PointF p2 = polyline.get(i + 1); //convert each pair of consecutive points into a line segment represented as [x1, y1, x2, y2]
+                segments.add(new float[]{p1.x, p1.y, p2.x, p2.y});
+            }
+        }
+        particleFilter.setWalls(segments);
     }
 
     //endregion
@@ -645,6 +1036,80 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+
+            LatLng gnssPos = new LatLng(location.getLatitude(), location.getLongitude());
+            float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
+
+            // Auto-initialise: first GNSS fix during recording anchors start location and
+            // writes initial metadata automatically — no manual StartLocationFragment needed.
+            if (recorder.isRecording() && !initialMetadataWritten) {
+                state.startLocation[0] = state.latitude;
+                state.startLocation[1] = state.longitude;
+                if (!particleFilter.isInitialized()) {
+                    // WiFi hasn't provided a better anchor yet; seed with GNSS + generous spread.
+                    float initSpread = Math.max(accuracy * 4f, 25f);
+                    particleFilter.initialise(gnssPos, initSpread);
+                    lastGnssForFilter = gnssPos;
+                }
+                writeInitialMetadata();
+                initialMetadataWritten = true;
+                Log.d("SensorFusion", "Auto-anchored: " + state.latitude + "," + state.longitude);
+                return;
+            }
+
+            // Grace period: for 10 s after setStartGNSSLatitude() suppress ALL GNSS so a bad
+            // indoor GPS fix cannot drag particles away from the confirmed anchor.
+            if (filterAnchorTimeMs > 0
+                    && SystemClock.elapsedRealtime() - filterAnchorTimeMs < 10_000L) {
+                return;
+            }
+
+            if (!particleFilter.isInitialized()) {
+                // Inflate spread aggressively for indoor GNSS initialization.
+                // Reported accuracy is typically 5-15 m, but indoor multipath error is 20-100 m.
+                // A 25 m minimum spread ensures particles cover enough area for WiFi corrections.
+                // Ref: Davidson et al. (2010), "Application of particle filters to a map-aided
+                // indoor positioning system," IEEE/ION PLANS.
+                float initSpread = Math.max(accuracy * 4f, 25f);
+                particleFilter.initialise(gnssPos, initSpread);
+                lastGnssForFilter = gnssPos;
+            } else {
+                // Displacement gate: only update if the fix has actually moved enough.
+                // Suppresses the 10-30 m stationary bounce GPS produces indoors.
+                float minDisplacement = Math.max(accuracy * 0.5f, 3.0f);
+                boolean shouldUpdate = (lastGnssForFilter == null)
+                        || (UtilFunctions.distanceBetweenPoints(lastGnssForFilter, gnssPos)
+                            >= minDisplacement);
+                if (shouldUpdate) {
+                    // Outlier gate: reject spurious GNSS jumps.
+                    // Hard limit: >50 m is physically impossible from GPS; always reject.
+                    // Soft limit: once filter has partially converged (uncertainty < 30 m),
+                    // reject fixes that are >2.5× accuracy away from the fused estimate.
+                    LatLng fused = particleFilter.getFusedPosition();
+                    boolean outlier = false;
+                    if (fused != null) {
+                        double offset = UtilFunctions.distanceBetweenPoints(fused, gnssPos);
+                        float uncertainty = particleFilter.getPositionUncertaintyMeters();
+                        if (offset > 50f) {
+                            outlier = true;
+                            Log.d("SensorFusion", "GNSS hard-rejected: " + (int) offset + "m");
+                        } else if (particleFilter.hasWalls() && offset > 20f) {
+                            outlier = true;
+                            Log.d("SensorFusion", "GNSS indoor-rejected: " + (int) offset + "m");
+                        } else if (uncertainty < 30f && offset > Math.max(accuracy * 2.5f, 20f)) {
+                            outlier = true;
+                            Log.d("SensorFusion", "GNSS outlier: " + (int) offset
+                                    + "m offset, sigma=" + (int) uncertainty + "m");
+                        }
+                    }
+                    if (!outlier) {
+                        particleFilter.updateGNSS(gnssPos, accuracy);
+                        lastGnssForFilter = gnssPos;
+                    }
+                }
+            }
+
+            autoSeedStartAndMetadataIfNeeded();
         }
     }
 

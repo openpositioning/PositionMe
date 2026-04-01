@@ -102,8 +102,8 @@ public class PathView extends View {
             // Start a new path at the center of the view
             path.moveTo(getWidth()/2, getHeight()/2);
 
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
+            // Draw line between last point and this point (start at 0 to include first step)
+            for (int i = 0; i < xCoords.size(); i++) {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
@@ -134,8 +134,8 @@ public class PathView extends View {
             // Start a new path at the center of the view
             path.moveTo(getWidth()/2, getHeight()/2);
 
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
+            // Draw line between last point and this point (start at 0 to include first step)
+            for (int i = 0; i < xCoords.size(); i++) {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
@@ -153,8 +153,8 @@ public class PathView extends View {
             // Start a new path at the center of the view
             path.moveTo(getWidth()/2, getHeight()/2);
 
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
+            // Draw line between last point and this point (start at 0 to include first step)
+            for (int i = 0; i < xCoords.size(); i++) {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
@@ -174,6 +174,8 @@ public class PathView extends View {
         // Negate the y coordinate and add it to the yCoords list, since screen coordinates
         // start from top to bottom
         yCoords.add(-newCords[1]);
+        // postInvalidate() is thread-safe and schedules a redraw on the UI thread
+        postInvalidate();
     }
 
     /**
@@ -186,20 +188,27 @@ public class PathView extends View {
         int centerX = getWidth() / 2;
         int centerY = getHeight() / 2;
 
-        // Calculate the scaling that would be required in each direction
-        float xRightRange = (getWidth() / 2) / (Math.abs(Collections.max(xCoords)));
-        float xLeftRange = (getWidth() / 2) / (Math.abs(Collections.min(xCoords)));
-        float yTopRange = (getHeight() / 2) / (Math.abs(Collections.max(yCoords)));
-        float yBottomRange = (getHeight() / 2) / (Math.abs(Collections.min(yCoords)));
+        // Compute the maximum absolute extent from the origin in each axis.
+        // Using max(|max|, |min|) avoids division-by-zero when the walk is entirely
+        // on one side of the origin (e.g. all-positive X during the first leg of a square).
+        float xExtent = Math.max(Math.abs(Collections.max(xCoords)),
+                                 Math.abs(Collections.min(xCoords)));
+        float yExtent = Math.max(Math.abs(Collections.max(yCoords)),
+                                 Math.abs(Collections.min(yCoords)));
+
+        // Fallback to 1 if the trajectory has no movement in an axis (prevents /0)
+        if (xExtent == 0) xExtent = 1f;
+        if (yExtent == 0) yExtent = 1f;
 
         // Take the minimum scaling ratio to ensure all points fit within the view
-        float minRatio = Math.min(Math.min(xRightRange, xLeftRange), Math.min(yTopRange, yBottomRange));
+        float minRatio = Math.min((getWidth() / 2f) / xExtent,
+                                  (getHeight() / 2f) / yExtent);
 
         // Add margins to the scaling ratio
         scalingRatio = 0.9f * minRatio;
 
         // Limit scaling ratio to an equivalent of zoom of 21 in google maps
-        if (scalingRatio >= 23.926) {
+        if (scalingRatio >= 23.926f) {
             scalingRatio = 23.926f;
         }
         System.out.println("Adjusted scaling ratio: " + scalingRatio);

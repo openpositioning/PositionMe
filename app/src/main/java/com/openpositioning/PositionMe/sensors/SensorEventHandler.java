@@ -22,6 +22,60 @@ import java.util.List;
  */
 public class SensorEventHandler {
 
+    // FOR PARTICLE FILTER
+    /**
+     * Callback invoked by {@link SensorEventHandler} every time a valid step is detected.
+     * The deltas are in ENU metres relative to the session origin, computed from the
+     * accumulated PDR position at the time of the step event.
+     */
+    public interface StepListener {
+        /**
+         * Called once per accepted step.
+         *
+         * @param deltaEasting  eastward displacement of this step in metres
+         * @param deltaNorthing northward displacement of this step in metres
+         */
+        void onStep(float deltaEasting, float deltaNorthing);
+    }
+
+    private StepListener stepListener;
+    private float lastEasting = 0f;
+    private float lastNorthing = 0f;
+    private boolean orientationInitialized = false;
+
+    private float lastAcceptedHeading = Float.NaN;
+    private static final float MAX_HEADING_JUMP_RAD = (float) (Math.PI / 6.0);
+    private static final long MIN_STEP_INTERVAL_MS = 300;
+
+    /**
+     * Registers a listener to receive per-step ENU displacement notifications.
+     * The listener is invoked from the sensor thread each time a step passes all quality
+     * gates (minimum interval, peak acceleration, heading outlier check).  Pass {@code null}
+     * to remove a previously registered listener.
+     *
+     * @param listener the {@link StepListener} to notify on each accepted step, or {@code null}
+     */
+    public void setStepListener(StepListener listener) {
+        this.stepListener = listener;
+    }
+
+    /**
+     * Resets the PDR step-delta baseline to zero and clears the heading history.
+     * Must be called at the start of each recording session so that the first step of the
+     * new session does not fire a large spurious delta derived from the previous session's
+     * accumulated PDR position.
+     */
+    public void resetStepOrigin() {
+        lastEasting = 0f;
+        lastNorthing = 0f;
+        orientationInitialized = false;
+        lastAcceptedHeading = Float.NaN;
+    }
+
+    // END OF PARTICLE FILTER
+
+
+
     private static final float ALPHA = 0.8f;
     private static final long LARGE_GAP_THRESHOLD_MS = 500;
 
@@ -92,12 +146,11 @@ public class SensorEventHandler {
                 }
                 break;
 
-            // NOTE: intentional fall-through from GYROSCOPE to LINEAR_ACCELERATION
-            // (existing behavior preserved during refactoring)
             case Sensor.TYPE_GYROSCOPE:
                 state.angularVelocity[0] = sensorEvent.values[0];
                 state.angularVelocity[1] = sensorEvent.values[1];
                 state.angularVelocity[2] = sensorEvent.values[2];
+                break;
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 state.filteredAcc[0] = sensorEvent.values[0];
@@ -143,45 +196,62 @@ public class SensorEventHandler {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, state.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, state.orientation);
+                orientationInitialized = true;
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
+                if (!orientationInitialized) break;
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
 
-                if (currentTime - lastStepTime < 20) {
-                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event:"
-                            + (currentTime - lastStepTime) + " ms");
-                    break;
-                } else {
-                    lastStepTime = currentTime;
+                long timeSinceLastStep = currentTime - lastStepTime;
+                if (timeSinceLastStep < MIN_STEP_INTERVAL_MS) break;
+                lastStepTime = currentTime;
 
-                    if (accelMagnitude.isEmpty()) {
-                        Log.e("SensorFusion",
-                                "stepDetection triggered, but accelMagnitude is empty! " +
-                                        "This can cause updatePdr(...) to fail or return bad results.");
+                float rawHeading = state.orientation[0];
+                float headingForStep;
+                if (!Float.isNaN(lastAcceptedHeading)) {
+                    float delta = rawHeading - lastAcceptedHeading;
+                    while (delta > (float) Math.PI) delta -= (float) (2 * Math.PI);
+                    while (delta < -(float) Math.PI) delta += (float) (2 * Math.PI);
+                    if (Math.abs(delta) > MAX_HEADING_JUMP_RAD && timeSinceLastStep >= 2000L) {
+                        headingForStep = lastAcceptedHeading;
                     } else {
-                        Log.d("SensorFusion",
-                                "stepDetection triggered, accelMagnitude size = "
-                                        + accelMagnitude.size());
+                        lastAcceptedHeading = rawHeading;
+                        headingForStep = rawHeading;
                     }
+                } else {
+                    lastAcceptedHeading = rawHeading;
+                    headingForStep = rawHeading;
+                }
 
-                    float[] newCords = this.pdrProcessing.updatePdr(
-                            stepTime,
-                            this.accelMagnitude,
-                            state.orientation[0]
-                    );
-
-                    this.accelMagnitude.clear();
-
-                    if (recorder.isRecording()) {
-                        this.pathView.drawTrajectory(newCords);
-                        state.stepCounter++;
-                        recorder.addPdrData(
-                                SystemClock.uptimeMillis() - bootTime,
-                                newCords[0], newCords[1]);
-                    }
+                if (accelMagnitude.isEmpty()) {
                     break;
                 }
+                double peakAccel = 0.0;
+                for (double v : accelMagnitude) if (v > peakAccel) peakAccel = v;
+                if (peakAccel < 0.5) {
+                    accelMagnitude.clear();
+                    break;
+                }
+
+                float[] newCords = pdrProcessing.updatePdr(stepTime, accelMagnitude, headingForStep);
+                accelMagnitude.clear();
+
+                if (recorder.isRecording()) {
+                    pathView.drawTrajectory(newCords);
+                    state.stepCounter++;
+                    recorder.addPdrData(SystemClock.uptimeMillis() - bootTime, newCords[0], newCords[1]);
+                }
+
+                if (stepListener != null) {
+                    float deltaEasting = newCords[0] - lastEasting;
+                    float deltaNorthing = newCords[1] - lastNorthing;
+                    stepListener.onStep(deltaEasting, deltaNorthing);
+                }
+
+                lastEasting = newCords[0];
+                lastNorthing = newCords[1];
+                break;
         }
     }
 

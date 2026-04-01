@@ -56,8 +56,13 @@ public class WifiPositionManager implements Observer {
 
     /**
      * Creates a request to obtain a WiFi location for the obtained WiFi fingerprint.
+     * Skipped if the scan returned no access points (would cause a 422 from the API).
      */
     private void createWifiPositioningRequest() {
+        if (this.wifiList == null || this.wifiList.isEmpty()) {
+            Log.d("WiFiDebug", "No APs in scan, skipping API call");
+            return;
+        }
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
@@ -65,6 +70,7 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            Log.d("WiFiDebug", "Sending fingerprint with " + this.wifiList.size() + " APs: " + wifiFingerPrint.toString());
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());
@@ -82,6 +88,7 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
@@ -114,6 +121,19 @@ public class WifiPositionManager implements Observer {
      */
     public int getWifiFloor() {
         return this.wiFiPositioning.getFloor();
+    }
+
+    /**
+     * Returns true if the most recent WiFi position fix is newer than {@code maxAgeMs} milliseconds.
+     * Used to prevent stale WiFi fixes from permanently overriding the barometric floor path.
+     *
+     * @param maxAgeMs maximum acceptable age of the WiFi fix in milliseconds
+     * @return true if a fresh fix is available
+     */
+    public boolean isWifiPositionFresh(long maxAgeMs) {
+        long ts = wiFiPositioning.getWifiLocationTimestampMs();
+        if (ts == 0) return false;
+        return (System.currentTimeMillis() - ts) <= maxAgeMs;
     }
 
     /**
