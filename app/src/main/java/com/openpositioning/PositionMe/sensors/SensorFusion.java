@@ -223,6 +223,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] lastGnssEnu = null;
     // Last WiFi position in ENU (metres), cached for stationary soft-update
     private float[] lastWifiEnu = null;
+    // EMA-smoothed WiFi position in ENU, fed to EKF instead of the raw fix
+    private float[] smoothedWifiEnu = null;
+    private static final float WIFI_EMA_ALPHA = 0.4f;
     private final List<TestPoint> testPoints = new ArrayList<>();
     boolean enuBaked = false;
     private IndoorMapManager indoorMapManager;
@@ -1146,6 +1149,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Cache WiFi ENU for stationary soft-update
                         lastWifiEnu = enu;
 
+                        // EMA smoothing: blend raw fix toward the running average.
+                        // Particle filter always receives the raw fix; EKF uses the
+                        // smoothed value so high-frequency fingerprint noise is damped.
+                        if (smoothedWifiEnu == null) {
+                            smoothedWifiEnu = new float[]{enu[0], enu[1]};
+                        } else {
+                            smoothedWifiEnu[0] = WIFI_EMA_ALPHA * enu[0]
+                                    + (1f - WIFI_EMA_ALPHA) * smoothedWifiEnu[0];
+                            smoothedWifiEnu[1] = WIFI_EMA_ALPHA * enu[1]
+                                    + (1f - WIFI_EMA_ALPHA) * smoothedWifiEnu[1];
+                        }
+                        float[] ekfEnu = smoothedWifiEnu;
+
                         // Hard-reject implausibly large jumps (> 80 m).
                         float[] currentEst = particleFilter.getBestEstimate();
                         float jumpDist = (float) Math.hypot(
@@ -1209,8 +1225,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                             float ekfNoiseStd = noiseStd;
                             float[] ekfState = ekfPositioning.getBestEstimate();
 
-                            float corrDx  = enu[0] - ekfState[0];
-                            float corrDy  = enu[1] - ekfState[1];
+                            float corrDx  = ekfEnu[0] - ekfState[0];
+                            float corrDy  = ekfEnu[1] - ekfState[1];
                             float corrMag = (float) Math.sqrt(corrDx * corrDx + corrDy * corrDy);
 
                             // Direction consistency check (moving only):
@@ -1232,10 +1248,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                             // Innovation gating: reject the WiFi fix for EKF if the observation
                             // is statistically inconsistent with the predicted state.
-                            // Chi-squared 2-DOF 99% threshold = 9.21
                             final float GATE_THRESHOLD_SQ = 9.21f;
                             float mahaSq = ekfPositioning.mahalanobisDistanceSq(
-                                    enu[0], enu[1], ekfNoiseStd);
+                                    ekfEnu[0], ekfEnu[1], ekfNoiseStd);
                             if (mahaSq > GATE_THRESHOLD_SQ) {
                                 Log.d("SensorFusion", "EKF WiFi gated out mahaSq=" + mahaSq
                                         + " threshold=" + GATE_THRESHOLD_SQ);
@@ -1263,7 +1278,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     + " apCount=" + apCount + " avgRssi=" + avgRssi
                                     + " jump=" + jumpDist + "m stationary=" + isStationary);
                             particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
-                            ekfPositioning.updateWithWifi(enu[0], enu[1], ekfNoiseStd);
+                            ekfPositioning.updateWithWifi(ekfEnu[0], ekfEnu[1], ekfNoiseStd);
                         }
                     }
                 }
@@ -1813,6 +1828,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGyroTimestampMs = 0;
         lastGnssEnu = null;
         lastWifiEnu = null;
+        smoothedWifiEnu = null;
         fusedTrajectoryPoints.clear();  // Clear old fused trajectory points
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
