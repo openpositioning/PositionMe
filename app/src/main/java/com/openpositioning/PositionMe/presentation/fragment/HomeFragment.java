@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -15,7 +16,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -56,7 +56,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private Button start;
     private Button measurements;
     private Button files;
-    private Button indoorPositioning;
+    private Button repoButton;
     private TextView gnssStatusTextView;
 
     // For the map
@@ -141,12 +141,15 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                     Navigation.findNavController(v).navigate(action);
                 });
 
-        // Indoor Positioning button
-        // TODO - Implement new view and functionality
-        indoorPositioning = view.findViewById(R.id.indoorButton);
-        indoorPositioning.setOnClickListener(
+        // Repository link button
+        repoButton = view.findViewById(R.id.indoorButton);
+        repoButton.setOnClickListener(
                 v -> {
-                    Toast.makeText(getContext(), "Coming soon!", Toast.LENGTH_SHORT).show();
+                    Intent browserIntent =
+                            new Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse(requireContext().getString(R.string.url_repo)));
+                    startActivity(browserIntent);
                 });
 
         // TextView to display GNSS disabled message

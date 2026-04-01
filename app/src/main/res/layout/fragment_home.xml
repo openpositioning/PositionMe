@@ -160,7 +160,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:backgroundTint="@color/primaryBlue"
-            android:text="@string/button_indoorPositioning"
+            android:text="@string/button_repo"
             android:textColor="@color/md_theme_onPrimary"
             android:textSize="14sp"
             app:cornerRadius="14dp"
