@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -352,12 +353,12 @@ public class FloorplanApiClient {
     }
 
     /**
-     * Parses the map_shapes JSON string into a list of FloorShapes, sorted by floor key.
+     * Parses the map_shapes JSON string into a list of FloorShapes, sorted by actual floor order.
      * The top-level JSON is an object with keys like "B1", "B2", etc. Each value is a
      * GeoJSON FeatureCollection containing indoor features (walls, rooms, etc.).
      *
      * @param mapShapesJson the raw map_shapes JSON string from the API
-     * @return list of FloorShapes sorted by key (B1=index 0, B2=index 1, ...)
+     * @return list of FloorShapes sorted by logical floor order (e.g. LG, G, 1, 2, 3)
      */
     private List<FloorShapes> parseMapShapes(String mapShapesJson) {
         List<FloorShapes> result = new ArrayList<>();
@@ -366,13 +367,12 @@ public class FloorplanApiClient {
         try {
             JSONObject root = new JSONObject(mapShapesJson);
 
-            // Collect and sort floor keys (B1, B2, B3...)
+            // Collect floor keys first so we can parse and then sort by real floor order.
             List<String> keys = new ArrayList<>();
             Iterator<String> it = root.keys();
             while (it.hasNext()) {
                 keys.add(it.next());
             }
-            Collections.sort(keys);
 
             for (String key : keys) {
                 JSONObject floorCollection = root.getJSONObject(key);
@@ -391,11 +391,82 @@ public class FloorplanApiClient {
                 }
                 result.add(new FloorShapes(key, displayName, shapeFeatures));
             }
+            result.sort((left, right) -> {
+                int leftOrder = parseFloorOrder(left.getDisplayName(), left.getKey());
+                int rightOrder = parseFloorOrder(right.getDisplayName(), right.getKey());
+                if (leftOrder != rightOrder) {
+                    return Integer.compare(leftOrder, rightOrder);
+                }
+                return left.getDisplayName().compareToIgnoreCase(right.getDisplayName());
+            });
         } catch (JSONException e) {
             Log.e(TAG, "Failed to parse map_shapes", e);
         }
 
         return result;
+    }
+
+    private int parseFloorOrder(String displayName, String fallbackKey) {
+        Integer parsed = parseFloorLabel(displayName);
+        if (parsed != null) {
+            return parsed;
+        }
+        parsed = parseFloorLabel(fallbackKey);
+        return parsed != null ? parsed : Integer.MAX_VALUE / 2;
+    }
+
+    private Integer parseFloorLabel(String rawLabel) {
+        if (rawLabel == null) {
+            return null;
+        }
+
+        String normalized = rawLabel.trim().toUpperCase(Locale.UK);
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        normalized = normalized
+                .replace("FLOOR", "")
+                .replace("LEVEL", "")
+                .replace("STOREY", "")
+                .replace("STORY", "")
+                .replace("_", "")
+                .replace("-", "")
+                .replace(" ", "");
+
+        if ("LG".equals(normalized) || "LOWGROUND".equals(normalized)
+                || "LOWERGROUND".equals(normalized)) {
+            return -1;
+        }
+        if ("G".equals(normalized) || "GF".equals(normalized) || "GROUND".equals(normalized)) {
+            return 0;
+        }
+        if ("UG".equals(normalized) || "UPGROUND".equals(normalized)
+                || "UPPERGROUND".equals(normalized)) {
+            return 1;
+        }
+
+        if (normalized.startsWith("B") && normalized.length() > 1) {
+            try {
+                return -Integer.parseInt(normalized.substring(1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        if (normalized.startsWith("L") && normalized.length() > 1) {
+            try {
+                return Integer.parseInt(normalized.substring(1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        try {
+            return Integer.parseInt(normalized);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     /**
@@ -407,8 +478,7 @@ public class FloorplanApiClient {
     private MapShapeFeature parseMapShapeFeature(JSONObject feature) {
         try {
             JSONObject properties = feature.optJSONObject("properties");
-            String indoorType = (properties != null)
-                    ? properties.optString("indoor_type", "unknown") : "unknown";
+            String indoorType = normalizeIndoorType(properties);
 
             JSONObject geometry = feature.getJSONObject("geometry");
             String geoType = geometry.getString("type");
@@ -449,6 +519,43 @@ public class FloorplanApiClient {
             Log.e(TAG, "Failed to parse map_shapes feature", e);
             return null;
         }
+    }
+
+    private String normalizeIndoorType(JSONObject properties) {
+        if (properties == null) {
+            return "unknown";
+        }
+
+        String rawIndoorType = properties.optString("indoor_type", "");
+        if (rawIndoorType.isEmpty()) {
+            rawIndoorType = properties.optString("indoor", "");
+        }
+        if (rawIndoorType.isEmpty()) {
+            rawIndoorType = properties.optString("feature_type", "");
+        }
+        if (rawIndoorType.isEmpty()) {
+            rawIndoorType = properties.optString("name", "");
+        }
+
+        String normalized = rawIndoorType.trim().toLowerCase(Locale.UK);
+        if (normalized.isEmpty()) {
+            return "unknown";
+        }
+        if (normalized.contains("wall")) {
+            return "wall";
+        }
+        if (normalized.contains("lift") || normalized.contains("elevator")) {
+            return "lift";
+        }
+        if (normalized.contains("stair") || normalized.contains("steps")
+                || normalized.contains("escalator")) {
+            return "stairs";
+        }
+        if (normalized.contains("room") || normalized.contains("corridor")
+                || normalized.contains("hall")) {
+            return "room";
+        }
+        return normalized;
     }
 
     /**

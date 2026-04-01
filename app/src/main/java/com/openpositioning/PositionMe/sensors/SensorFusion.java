@@ -14,16 +14,22 @@ import android.os.SystemClock;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
+import com.openpositioning.PositionMe.utils.BuildingPolygon;
+import com.openpositioning.PositionMe.utils.IndoorFloorController;
+import com.openpositioning.PositionMe.utils.IndoorSpatialConstraintModel;
 import com.openpositioning.PositionMe.utils.PathView;
+import com.openpositioning.PositionMe.utils.ParticleFilterEngine;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,7 +39,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * The SensorFusion class is the main data gathering and processing class of the application.
+ * CW2 integration hub. SensorFusion is the main data gathering and processing class of the
+ * application and ties together sensing, fusion, floor estimation and map-facing outputs.
  *
  * <p>It follows the singleton design pattern to ensure that every fragment and process has access
  * to the same data and sensor instances. Internally it delegates to specialised modules:</p>
@@ -73,6 +80,7 @@ public class SensorFusion implements SensorEventListener {
     private MovementSensor magnetometerSensor;
     private MovementSensor stepDetectionSensor;
     private MovementSensor rotationSensor;
+    private MovementSensor gameRotationSensor;
     private MovementSensor gravitySensor;
     private MovementSensor linearAccelerationSensor;
 
@@ -87,6 +95,9 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
+    private ParticleFilterEngine particleFilterEngine;
+    private IndoorSpatialConstraintModel indoorSpatialConstraintModel;
+    private IndoorFloorController indoorFloorController;
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
@@ -139,6 +150,7 @@ public class SensorFusion implements SensorEventListener {
         this.magnetometerSensor = new MovementSensor(context, Sensor.TYPE_MAGNETIC_FIELD);
         this.stepDetectionSensor = new MovementSensor(context, Sensor.TYPE_STEP_DETECTOR);
         this.rotationSensor = new MovementSensor(context, Sensor.TYPE_ROTATION_VECTOR);
+        this.gameRotationSensor = new MovementSensor(context, Sensor.TYPE_GAME_ROTATION_VECTOR);
         this.gravitySensor = new MovementSensor(context, Sensor.TYPE_GRAVITY);
         this.linearAccelerationSensor = new MovementSensor(context, Sensor.TYPE_LINEAR_ACCELERATION);
 
@@ -150,6 +162,9 @@ public class SensorFusion implements SensorEventListener {
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pdrProcessing = new PdrProcessing(context);
         this.pathView = new PathView(context, null);
+        this.indoorSpatialConstraintModel = new IndoorSpatialConstraintModel();
+        this.indoorFloorController = new IndoorFloorController(indoorSpatialConstraintModel);
+        this.particleFilterEngine = new ParticleFilterEngine(indoorSpatialConstraintModel);
         WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
 
         // Create internal modules
@@ -158,11 +173,32 @@ public class SensorFusion implements SensorEventListener {
                 accelerometerSensor, gyroscopeSensor, magnetometerSensor,
                 barometerSensor, lightSensor, proximitySensor, rotationSensor);
 
-        this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
+        this.wifiPositionManager = new WifiPositionManager(
+                wiFiPositioning,
+                recorder,
+                new WifiPositionManager.PositionUpdateListener() {
+                    @Override
+                    public void onWifiPositionUpdate(LatLng wifiLocation, int floor) {
+                        if (eventHandler != null) {
+                            eventHandler.updateHeadingCalibrationFromWifi(
+                                    wifiLocation,
+                                    System.currentTimeMillis()
+                            );
+                        }
+                        if (particleFilterEngine != null) {
+                            particleFilterEngine.onWifiObservation(
+                                    wifiLocation,
+                                    floor,
+                                    state.orientation[0],
+                                    System.currentTimeMillis()
+                            );
+                        }
+                    }
+                });
 
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pathView, recorder, bootTime, particleFilterEngine);
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -243,6 +279,10 @@ public class SensorFusion implements SensorEventListener {
                 stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this,
                 rotationSensor.sensor, (int) 1e6);
+        if (gameRotationSensor != null && gameRotationSensor.sensor != null) {
+            gameRotationSensor.sensorManager.registerListener(this,
+                    gameRotationSensor.sensor, (int) 1e6);
+        }
         // Foreground service owns WiFi/BLE scanning during recording.
         if (!recorder.isRecording()) {
             startWirelessCollectors();
@@ -265,6 +305,9 @@ public class SensorFusion implements SensorEventListener {
             magnetometerSensor.sensorManager.unregisterListener(this);
             stepDetectionSensor.sensorManager.unregisterListener(this);
             rotationSensor.sensorManager.unregisterListener(this);
+            if (gameRotationSensor != null && gameRotationSensor.sensorManager != null) {
+                gameRotationSensor.sensorManager.unregisterListener(this);
+            }
             linearAccelerationSensor.sensorManager.unregisterListener(this);
             gravitySensor.sensorManager.unregisterListener(this);
             stopWirelessCollectors();
@@ -328,6 +371,9 @@ public class SensorFusion implements SensorEventListener {
     public void startRecording() {
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
+        if (particleFilterEngine != null) {
+            particleFilterEngine.onPdrStreamReset();
+        }
 
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
@@ -455,6 +501,245 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Resets the live localisation state before starting a new recording flow.
+     */
+    public void resetLivePositioningState() {
+        if (pdrProcessing != null) {
+            pdrProcessing.resetPDR();
+        }
+        if (particleFilterEngine != null) {
+            particleFilterEngine.reset();
+        }
+        if (indoorFloorController != null) {
+            indoorFloorController.reset();
+        }
+        state.startLocation[0] = 0f;
+        state.startLocation[1] = 0f;
+        setSelectedBuildingId(null);
+        floorplanBuildingCache.clear();
+    }
+
+    /**
+     * Returns true once the system has auto-initialised from a reliable GNSS/WiFi observation.
+     */
+    public boolean hasAutomaticStartFix() {
+        return getBestAvailableStartPosition() != null;
+    }
+
+    /**
+     * Returns the current fused position used by the recording map.
+     */
+    public LatLng getCurrentFusedPosition() {
+        return particleFilterEngine == null ? null : particleFilterEngine.getCurrentLatLng();
+    }
+
+    public long getCurrentFusedPositionVersion() {
+        return particleFilterEngine == null ? 0L : particleFilterEngine.getCurrentPositionVersion();
+    }
+
+    public List<LatLng> getFusedTrack() {
+        return particleFilterEngine == null
+                ? new ArrayList<>()
+                : particleFilterEngine.getFusedHistory();
+    }
+
+    public long getFusedTrackVersion() {
+        return particleFilterEngine == null ? 0L : particleFilterEngine.getFusedHistoryVersion();
+    }
+
+    public List<LatLng> getRecentGnssTrail() {
+        return particleFilterEngine == null
+                ? new ArrayList<>()
+                : particleFilterEngine.getRecentGnssTail();
+    }
+
+    public List<LatLng> getRecentWifiTrail() {
+        return particleFilterEngine == null
+                ? new ArrayList<>()
+                : particleFilterEngine.getRecentWifiTail();
+    }
+
+    public List<LatLng> getRecentPdrTrail() {
+        return particleFilterEngine == null
+                ? new ArrayList<>()
+                : particleFilterEngine.getRecentPdrTail();
+    }
+
+    public long getObservationTrailsVersion() {
+        return particleFilterEngine == null ? 0L : particleFilterEngine.getObservationTrailsVersion();
+    }
+
+    /**
+     * Applies a post-fusion map correction back into the filter state.
+     *
+     * <p>This is used when the UI or map-matching layer has to clip the displayed position to a
+     * legal indoor point and the particle filter should adopt that correction as its new state.</p>
+     */
+    public void applyMapConstrainedPosition(LatLng correctedPosition) {
+        if (particleFilterEngine != null) {
+            particleFilterEngine.overrideCurrentPosition(
+                    correctedPosition,
+                    System.currentTimeMillis()
+            );
+        }
+    }
+
+    public int getCurrentLogicalFloor() {
+        return particleFilterEngine == null ? 0 : particleFilterEngine.getCurrentLogicalFloor();
+    }
+
+    /**
+     * Forces the current logical floor and re-anchors the floor controller to the current
+     * elevation. This is used after a manual floor switch on the UI.
+     */
+    public void setCurrentLogicalFloor(int logicalFloor) {
+        if (particleFilterEngine != null) {
+            particleFilterEngine.setCurrentLogicalFloor(logicalFloor);
+        }
+        if (indoorFloorController != null) {
+            indoorFloorController.confirmManualFloor(state.elevation, logicalFloor);
+        }
+    }
+
+    public float getCurrentFloorHeight() {
+        return particleFilterEngine == null ? 0f : particleFilterEngine.getCurrentFloorHeight();
+    }
+
+    public String getCurrentFloorDisplayName() {
+        return particleFilterEngine == null ? "0" : particleFilterEngine.getCurrentFloorDisplayName();
+    }
+
+    /**
+     * Returns the floor that should currently be displayed on the map.
+     *
+     * <p>Before the floor controller confirms an elevation anchor, WiFi floor observations are
+     * allowed to drive the displayed floor so the map can show a plausible start floor earlier.
+     * After anchoring, the fused floor becomes authoritative.</p>
+     */
+    public int getPreferredDisplayLogicalFloor() {
+        int fusedFloor = getCurrentLogicalFloor();
+        if (indoorFloorController != null && indoorFloorController.hasConfirmedAnchor()) {
+            return fusedFloor;
+        }
+
+        if (getLatLngWifiPositioning() != null) {
+            return getWifiFloor();
+        }
+        return fusedFloor;
+    }
+
+    public boolean isNearIndoorFeature(LatLng position, String indoorType, double radiusMeters) {
+        return particleFilterEngine != null
+                && particleFilterEngine.isNearIndoorFeature(position, indoorType, radiusMeters);
+    }
+
+    public boolean isIndoorContextActive() {
+        return particleFilterEngine != null && particleFilterEngine.isIndoorContextActive();
+    }
+
+    /**
+     * Runs the indoor floor controller and propagates any accepted floor change back to the
+     * particle filter.
+     */
+    public Integer evaluateIndoorFloorChange(LatLng currentPosition, long timestampMillis) {
+        if (indoorFloorController == null) {
+            return null;
+        }
+        boolean transitionZoneHint = getElevator()
+                || isNearIndoorFeature(currentPosition, "lift", 3.5)
+                || isNearIndoorFeature(currentPosition, "stairs", 3.5);
+        Integer resolvedFloor = indoorFloorController.evaluate(
+                currentPosition,
+                state.elevation,
+                getLatLngWifiPositioning() != null ? getWifiFloor() : null,
+                transitionZoneHint,
+                timestampMillis
+        );
+        if (resolvedFloor != null && particleFilterEngine != null) {
+            particleFilterEngine.setCurrentLogicalFloor(resolvedFloor);
+        }
+        return resolvedFloor;
+    }
+
+    /**
+     * Copies the auto-initialised fused position into trajectory metadata fields.
+     */
+    public boolean prepareAutomaticStart() {
+        LatLng startPosition = getBestAvailableStartPosition();
+        if (startPosition == null) {
+            return false;
+        }
+
+        setStartGNSSLatitude(new float[]{
+                (float) startPosition.latitude,
+                (float) startPosition.longitude
+        });
+
+        if (getSelectedBuildingId() == null || getSelectedBuildingId().isEmpty()) {
+            String inferredBuilding = inferBuildingIdForPosition(startPosition);
+            if (inferredBuilding != null) {
+                setSelectedBuildingId(inferredBuilding);
+            }
+        }
+        return true;
+    }
+
+    @Nullable
+    private LatLng getBestAvailableStartPosition() {
+        LatLng fusedPosition = getCurrentFusedPosition();
+        if (fusedPosition != null) {
+            return fusedPosition;
+        }
+
+        float[] gnssPosition = getGNSSLatitude(false);
+        if (gnssPosition != null && (gnssPosition[0] != 0f || gnssPosition[1] != 0f)) {
+            return new LatLng(gnssPosition[0], gnssPosition[1]);
+        }
+        return null;
+    }
+
+    /**
+     * Chooses the building whose outline contains the given position, or the closest cached
+     * building if the user is just outside the polygon boundary.
+     */
+    public String inferBuildingIdForPosition(LatLng position) {
+        if (indoorSpatialConstraintModel != null) {
+            String inferred = indoorSpatialConstraintModel.inferBuildingId(position);
+            if (inferred != null) {
+                return inferred;
+            }
+        }
+
+        if (position == null) {
+            return null;
+        }
+
+        String nearestBuildingId = null;
+        double nearestDistanceMeters = Double.MAX_VALUE;
+
+        for (FloorplanApiClient.BuildingInfo building : floorplanBuildingCache.values()) {
+            if (building == null || building.getName() == null) {
+                continue;
+            }
+
+            List<LatLng> outline = building.getOutlinePolygon();
+            if (outline != null && outline.size() >= 3
+                    && BuildingPolygon.pointInPolygon(position, outline)) {
+                return building.getName();
+            }
+
+            LatLng center = building.getCenter();
+            double distanceMeters = UtilFunctions.distanceBetweenPoints(position, center);
+            if (distanceMeters < nearestDistanceMeters) {
+                nearestDistanceMeters = distanceMeters;
+                nearestBuildingId = building.getName();
+            }
+        }
+
+        return nearestDistanceMeters <= 80.0 ? nearestBuildingId : null;
+    }
+
+    /**
      * Adds a test point (user ground truth marker) to the trajectory.
      */
     public void addTestPointToProto(long pressTimestampMs, double lat, double lng) {
@@ -511,11 +796,22 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Getter function for device orientation.
+     * Returns the orientation that should be exposed to the map layer.
+     *
+     * <p>When the particle filter has a reliable motion heading, that heading is preferred. When
+     * motion heading is weak, the method falls back to the raw sensor orientation so the UI can
+     * still react while the user rotates in place.</p>
      *
      * @return orientation of device in radians.
      */
     public float passOrientation() {
+        if (particleFilterEngine != null && particleFilterEngine.isInitialized()) {
+            if (!particleFilterEngine.hasReliableMotionHeading()
+                    && !Float.isNaN(state.orientation[0])) {
+                return state.orientation[0];
+            }
+            return (float) particleFilterEngine.getCurrentDisplayHeadingRad();
+        }
         return state.orientation[0];
     }
 
@@ -620,7 +916,24 @@ public class SensorFusion implements SensorEventListener {
      * @return current floor number.
      */
     public int getWifiFloor() {
-        return wifiPositionManager.getWifiFloor();
+        int observedFloor = wifiPositionManager.getWifiFloor();
+        if (indoorSpatialConstraintModel != null) {
+            LatLng contextPosition = getCurrentFusedPosition();
+            if (contextPosition == null) {
+                contextPosition = getLatLngWifiPositioning();
+            }
+            if (contextPosition == null) {
+                float[] gnssPosition = getGNSSLatitude(false);
+                if (gnssPosition != null && (gnssPosition[0] != 0f || gnssPosition[1] != 0f)) {
+                    contextPosition = new LatLng(gnssPosition[0], gnssPosition[1]);
+                }
+            }
+            if (contextPosition != null) {
+                indoorSpatialConstraintModel.updatePosition(contextPosition);
+            }
+            return indoorSpatialConstraintModel.normalizeExternalFloorObservation(observedFloor);
+        }
+        return observedFloor;
     }
 
     /**
@@ -645,6 +958,12 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+            if (eventHandler != null) {
+                eventHandler.updateHeadingCalibrationFromGnss(location);
+            }
+            if (particleFilterEngine != null) {
+                particleFilterEngine.onGnssObservation(location, state.orientation[0]);
+            }
         }
     }
 

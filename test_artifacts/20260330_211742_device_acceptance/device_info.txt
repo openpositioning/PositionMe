@@ -1,0 +1,14 @@
+artifact_dir: /Users/stevesong/AndroidStudioProjects/PositionMe-Private/test_artifacts/20260330_211742_device_acceptance
+adb_path: /Users/stevesong/Library/Android/sdk/platform-tools/adb
+device_serial: 4C211JEKB00536
+authorized: yes
+model: Pixel 8a
+android_version: 16
+android_sdk: 36
+device_code: akita
+package_name: com.openpositioning.PositionMe
+launcher_activity: com.openpositioning.PositionMe/.presentation.activity.MainActivity
+recording_activity: com.openpositioning.PositionMe/.presentation.activity.RecordingActivity
+apk_path: /Users/stevesong/AndroidStudioProjects/PositionMe-Private/app/build/outputs/apk/debug/app-debug.apk
+apk_sha1: ad3cf9a61ada70ce95f2e86066aec3a7b2e20224
+install_note: existing package signature mismatch encountered before reinstall

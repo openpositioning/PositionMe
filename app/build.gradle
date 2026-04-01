@@ -5,8 +5,12 @@ plugins {
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 }
 
-// (Optional) load local secrets file:
+// Load checked-in placeholder values first, then allow local secrets to override them.
 def localProperties = new Properties()
+def defaultsFile = rootProject.file('local.defaults.properties')
+if (defaultsFile.exists()) {
+    localProperties.load(new FileInputStream(defaultsFile))
+}
 def localPropertiesFile = rootProject.file('secrets.properties')
 if (localPropertiesFile.exists()) {
     localProperties.load(new FileInputStream(localPropertiesFile))

@@ -1,55 +1,47 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
-import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
-import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
 
-import com.google.android.material.button.MaterialButton;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.Wifi;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * A simple {@link Fragment} subclass. The home fragment is the start screen of the application.
- * The home fragment acts as a hub for all other fragments, with buttons and icons for navigation.
- * The default screen when opening the application
- *
- * @see RecordingFragment
- * @see FilesFragment
- * @see MeasurementsFragment
- * @see SettingsFragment
- *
- * @author Mate Stodulka
+ * Home screen with live fused-map preview.
  */
-public class HomeFragment extends Fragment implements OnMapReadyCallback {
+public class HomeFragment extends Fragment {
 
-    private static final String TAG = "HomeFragment";
+    private static final long LIVE_PREVIEW_INTERVAL_MS = 1_000L;
+    private static final double FLOORPLAN_REFRESH_DISTANCE_METERS = 15.0;
 
-    // Interactive UI elements to navigate to other fragments
     private MaterialButton goToInfo;
     private Button start;
     private Button measurements;
@@ -57,186 +49,212 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private Button indoorButton;
     private TextView gnssStatusTextView;
 
-    // For the map
-    private GoogleMap mMap;
-    private SupportMapFragment mapFragment;
+    private SensorFusion sensorFusion;
+    private TrajectoryMapFragment trajectoryMapFragment;
+    private final Handler previewHandler = new Handler(Looper.getMainLooper());
+    private LatLng lastFloorplanRequestPosition;
+    private long lastRenderedPositionVersion = -1L;
+    private long lastRenderedFusedTrackVersion = -1L;
+    private long lastRenderedObservationVersion = -1L;
+
+    private final Runnable livePreviewTask = new Runnable() {
+        @Override
+        public void run() {
+            refreshLivePreview();
+            previewHandler.postDelayed(this, LIVE_PREVIEW_INTERVAL_MS);
+        }
+    };
 
     public HomeFragment() {
         // Required empty public constructor
     }
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
-
-    /**
-     * {@inheritDoc}
-     * Ensure the action bar is shown at the top of the screen. Set the title visible to Home.
-     */
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+    public View onCreateView(@NonNull LayoutInflater inflater,
+                             ViewGroup container,
                              Bundle savedInstanceState) {
-        ((AppCompatActivity) getActivity()).getSupportActionBar().show();
+        ((AppCompatActivity) requireActivity()).getSupportActionBar().show();
         View rootView = inflater.inflate(R.layout.fragment_home, container, false);
-        getActivity().setTitle("Home");
+        requireActivity().setTitle("Home");
+        sensorFusion = SensorFusion.getInstance();
         return rootView;
     }
 
-    /**
-     * Initialise UI elements and set onClick actions for the buttons.
-     */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Sensor Info button
         goToInfo = view.findViewById(R.id.sensorInfoButton);
+        start = view.findViewById(R.id.startStopButton);
+        measurements = view.findViewById(R.id.measurementButton);
+        files = view.findViewById(R.id.filesButton);
+        indoorButton = view.findViewById(R.id.indoorButton);
+        gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
+
         goToInfo.setOnClickListener(v -> {
             NavDirections action = HomeFragmentDirections.actionHomeFragmentToInfoFragment();
             Navigation.findNavController(v).navigate(action);
         });
 
-        // Start/Stop Recording button
-        start = view.findViewById(R.id.startStopButton);
         start.setEnabled(!PreferenceManager.getDefaultSharedPreferences(getContext())
                 .getBoolean("permanentDeny", false));
         start.setOnClickListener(v -> {
             Intent intent = new Intent(requireContext(), RecordingActivity.class);
             startActivity(intent);
-            ((AppCompatActivity) getActivity()).getSupportActionBar().hide();
+            ((AppCompatActivity) requireActivity()).getSupportActionBar().hide();
         });
 
-        // Measurements button
-        measurements = view.findViewById(R.id.measurementButton);
         measurements.setOnClickListener(v -> {
             NavDirections action = HomeFragmentDirections.actionHomeFragmentToMeasurementsFragment();
             Navigation.findNavController(v).navigate(action);
         });
 
-        // Files button
-        files = view.findViewById(R.id.filesButton);
         files.setOnClickListener(v -> {
             NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
             Navigation.findNavController(v).navigate(action);
         });
 
-        // Indoor Positioning button
-        indoorButton = view.findViewById(R.id.indoorButton);
-        indoorButton.setOnClickListener(v -> {
-            Toast.makeText(requireContext(), R.string.indoor_mode_hint, Toast.LENGTH_SHORT).show();
-        });
+        indoorButton.setOnClickListener(v ->
+                Toast.makeText(requireContext(), R.string.indoor_mode_hint, Toast.LENGTH_SHORT).show());
 
-        // TextView to display GNSS disabled message
-        gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
-
-        // Locate the MapFragment nested in this fragment
-        mapFragment = (SupportMapFragment)
+        trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.mapFragmentContainer);
-        if (mapFragment != null) {
-            Log.e(TAG, "Map fragment found, calling getMapAsync");
-            // Asynchronously initialize the map
-            mapFragment.getMapAsync(this);
-        } else {
-            Log.e(TAG, "Map fragment is NULL - cannot initialize Google Map");
+        if (trajectoryMapFragment == null) {
+            trajectoryMapFragment = new TrajectoryMapFragment();
+            getChildFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.mapFragmentContainer, trajectoryMapFragment)
+                    .commit();
         }
-    }
-
-    /**
-     * Callback triggered when the Google Map is ready to be used.
-     */
-    @Override
-    public void onMapReady(@NonNull GoogleMap googleMap) {
-        mMap = googleMap;
-        Log.e(TAG, "onMapReady called, GoogleMap instance: " + googleMap);
-        Log.e(TAG, "Map type: " + googleMap.getMapType());
-        try {
-            // Check API key from AndroidManifest meta-data
-            android.content.pm.ApplicationInfo appInfo = requireContext().getPackageManager()
-                    .getApplicationInfo(requireContext().getPackageName(),
-                            android.content.pm.PackageManager.GET_META_DATA);
-            if (appInfo.metaData != null) {
-                String apiKey = appInfo.metaData.getString("com.google.android.geo.API_KEY");
-                Log.e(TAG, "API_KEY from manifest: " + (apiKey != null ? apiKey.substring(0, 10) + "..." : "NULL"));
-            } else {
-                Log.e(TAG, "metaData is NULL - no API_KEY found in manifest");
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to read API_KEY from manifest", e);
-        }
-        checkAndUpdatePermissions();
+        trajectoryMapFragment.setPreviewFloorOnlyMode(true);
+        lastRenderedPositionVersion = -1L;
+        lastRenderedFusedTrackVersion = -1L;
+        lastRenderedObservationVersion = -1L;
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        checkAndUpdatePermissions();
+        previewHandler.post(livePreviewTask);
     }
 
-    /**
-     * Checks if GNSS/Location is enabled on the device.
-     */
-    private boolean isGnssEnabled() {
-        LocationManager locationManager =
-                (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
-        // Checks both GPS and network provider. Adjust as needed.
-        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-        return (gpsEnabled || networkEnabled);
+    @Override
+    public void onPause() {
+        previewHandler.removeCallbacks(livePreviewTask);
+        super.onPause();
     }
 
-    /**
-     * Move the map to the University of Edinburgh and display a message.
-     */
-    private void showEdinburghAndMessage(String message) {
-        gnssStatusTextView.setText(message);
-        gnssStatusTextView.setVisibility(View.VISIBLE);
-
-        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
-        mMap.addMarker(new MarkerOptions()
-                .position(edinburghLatLng)
-                .title("University of Edinburgh"));
-    }
-
-    private void checkAndUpdatePermissions() {
-
-        if (mMap == null) {
-            Log.e(TAG, "checkAndUpdatePermissions: mMap is NULL, map not ready yet");
+    private void refreshLivePreview() {
+        if (!isAdded() || trajectoryMapFragment == null) {
             return;
         }
 
-        // Check if GNSS/Location is enabled
-        boolean gnssEnabled = isGnssEnabled();
-        Log.e(TAG, "checkAndUpdatePermissions: gnssEnabled=" + gnssEnabled);
-
-        if (gnssEnabled) {
-            // Hide the "GNSS Disabled" message
-            gnssStatusTextView.setVisibility(View.GONE);
-
-            // Check runtime permissions for location
-            boolean fineGranted = ActivityCompat.checkSelfPermission(
-                    requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            boolean coarseGranted = ActivityCompat.checkSelfPermission(
-                    requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            Log.e(TAG, "checkAndUpdatePermissions: fineLocation=" + fineGranted
-                    + ", coarseLocation=" + coarseGranted);
-
-            if (fineGranted || coarseGranted) {
-                // Enable the MyLocation layer of Google Map
-                mMap.setMyLocationEnabled(true);
-                Log.e(TAG, "checkAndUpdatePermissions: MyLocation layer enabled");
-            } else {
-                Log.e(TAG, "checkAndUpdatePermissions: location permission NOT granted");
-                // If no permission, simply show a default location or prompt for permissions
-                showEdinburghAndMessage("Permission not granted. Please enable in settings.");
-            }
-        } else {
-            Log.e(TAG, "checkAndUpdatePermissions: GNSS is disabled");
-            // If GNSS is disabled, show University of Edinburgh + message
-            showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
+        if (!isGnssEnabled()) {
+            gnssStatusTextView.setText(R.string.gnss_disabled);
+            gnssStatusTextView.setVisibility(View.VISIBLE);
+            return;
         }
+
+        LatLng fusedPosition = sensorFusion.getCurrentFusedPosition();
+        if (fusedPosition != null) {
+            gnssStatusTextView.setVisibility(View.GONE);
+            requestNearbyFloorplanIfNeeded(fusedPosition);
+            trajectoryMapFragment.updateUserLocation(
+                    fusedPosition,
+                    (float) Math.toDegrees(sensorFusion.passOrientation())
+            );
+            renderMapOverlaysIfChanged();
+            return;
+        }
+
+        float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+        if (gnss != null && (gnss[0] != 0f || gnss[1] != 0f)) {
+            LatLng gnssPosition = new LatLng(gnss[0], gnss[1]);
+            trajectoryMapFragment.updateUserLocation(
+                    gnssPosition,
+                    (float) Math.toDegrees(sensorFusion.passOrientation())
+            );
+            requestNearbyFloorplanIfNeeded(gnssPosition);
+            gnssStatusTextView.setText(R.string.auto_init_waiting);
+            gnssStatusTextView.setVisibility(View.VISIBLE);
+        } else {
+            gnssStatusTextView.setText(R.string.auto_init_waiting);
+            gnssStatusTextView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void renderMapOverlaysIfChanged() {
+        if (trajectoryMapFragment == null || !trajectoryMapFragment.isRenderSurfaceReady()) {
+            return;
+        }
+
+        long positionVersion = sensorFusion.getCurrentFusedPositionVersion();
+        long fusedTrackVersion = sensorFusion.getFusedTrackVersion();
+        if (fusedTrackVersion != lastRenderedFusedTrackVersion
+                || positionVersion != lastRenderedPositionVersion) {
+            trajectoryMapFragment.renderFusedHistory(sensorFusion.getFusedTrack());
+            lastRenderedPositionVersion = positionVersion;
+            lastRenderedFusedTrackVersion = fusedTrackVersion;
+        }
+
+        long observationVersion = sensorFusion.getObservationTrailsVersion();
+        if (observationVersion != lastRenderedObservationVersion) {
+            trajectoryMapFragment.renderObservationTails(
+                    sensorFusion.getRecentGnssTrail(),
+                    sensorFusion.getRecentWifiTrail(),
+                    sensorFusion.getRecentPdrTrail()
+            );
+            lastRenderedObservationVersion = observationVersion;
+        }
+    }
+
+    private void requestNearbyFloorplanIfNeeded(@NonNull LatLng position) {
+        boolean shouldRefresh = lastFloorplanRequestPosition == null
+                || sensorFusion.getFloorplanBuildings().isEmpty()
+                || UtilFunctions.distanceBetweenPoints(lastFloorplanRequestPosition, position)
+                >= FLOORPLAN_REFRESH_DISTANCE_METERS;
+        if (!shouldRefresh) {
+            return;
+        }
+
+        lastFloorplanRequestPosition = position;
+        List<String> observedMacs = new ArrayList<>();
+        List<Wifi> wifiList = sensorFusion.getWifiList();
+        if (wifiList != null) {
+            for (Wifi wifi : wifiList) {
+                String mac = wifi.getBssidString();
+                if (mac != null && !mac.isEmpty()) {
+                    observedMacs.add(mac);
+                }
+            }
+        }
+
+        new FloorplanApiClient().requestFloorplan(
+                position.latitude,
+                position.longitude,
+                observedMacs,
+                new FloorplanApiClient.FloorplanCallback() {
+                    @Override
+                    public void onSuccess(List<FloorplanApiClient.BuildingInfo> buildings) {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        sensorFusion.setFloorplanBuildings(buildings);
+                    }
+
+                    @Override
+                    public void onFailure(String error) {
+                        // Keep the last successful cache; no UI interruption needed.
+                    }
+                }
+        );
+    }
+
+    private boolean isGnssEnabled() {
+        LocationManager locationManager =
+                (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
+        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        return gpsEnabled || networkEnabled;
     }
 }
