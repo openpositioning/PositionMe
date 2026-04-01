@@ -158,6 +158,11 @@ public class TrajectoryMapFragment extends Fragment {
 
                     drawBuildingPolygon();
 
+                    // Draw green outlines around buildings that have indoor map data
+                    if (indoorMapManager != null) {
+                        indoorMapManager.setIndicationOfIndoorMap();
+                    }
+
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
 
 
