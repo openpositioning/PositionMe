@@ -34,11 +34,13 @@ public class PositionFusionEngine {
     private static final double PDR_NOISE_STD_M = 0.55;
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
-    private static final double WIFI_SIGMA_M = 3.5;
+    private static final double WIFI_SIGMA_M = 2.4;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
-    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 10.0;
+    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 20.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
     private static final double MAX_OUTLIER_SIGMA_SCALE = 4.0;
+    private static final double GNSS_INDOOR_SIGMA_MULTIPLIER = 6.0;
+    private static final double GNSS_INDOOR_MIN_SIGMA_M = 18.0;
     private static final double OUTPUT_SMOOTHING_ALPHA = 0.35;
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
@@ -56,7 +58,7 @@ public class PositionFusionEngine {
     private static final double WALL_PENALTY_STRENGTH = 0.35;
     private static final double WALL_PENALTY_SCORE_MAX = 8.0;
     private static final double FIX_WALL_CROSS_PROB_GNSS = 0.35;
-    private static final double FIX_WALL_CROSS_PROB_WIFI = 0.08;
+    private static final double FIX_WALL_CROSS_PROB_WIFI = 0.45;
     private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     private final float floorHeightMeters;
@@ -243,10 +245,13 @@ public class PositionFusionEngine {
         // Match WiFi sigma floor so both sources contribute equally indoors.
         // When GNSS reports better accuracy outdoors it naturally gets a lower sigma.
         double sigma = Math.max(accuracyMeters, 6.0f);
+        if (isIndoors()) {
+            sigma = Math.max(sigma * GNSS_INDOOR_SIGMA_MULTIPLIER, GNSS_INDOOR_MIN_SIGMA_M);
+        }
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f",
-                    latDeg, lonDeg, accuracyMeters, sigma));
+                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f indoors=%s",
+                    latDeg, lonDeg, accuracyMeters, sigma, String.valueOf(isIndoors())));
         }
         applyAbsoluteFix(latDeg, lonDeg, sigma, null);
     }
@@ -1387,5 +1392,16 @@ public class PositionFusionEngine {
                 bestParticle.weight,
                 bestFloor,
                 bestFloorWeight));
+    }
+
+    /**
+     * Returns true when the filter has an active mapped building and floor constraints.
+     *
+     * <p>This is used as a coarse indoor detector for tuning measurement trust.
+     * When indoor map constraints are active, GNSS is usually much less reliable than
+     * WiFi or PDR, so we downweight it aggressively.</p>
+     */
+    private boolean isIndoors() {
+        return activeBuildingName != null && !floorConstraints.isEmpty();
     }
 }
