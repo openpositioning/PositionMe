@@ -70,6 +70,10 @@ public class ParticleFilter {
         this.walls = wallSegments;
     }
 
+    public boolean hasWalls() {
+        return walls != null && !walls.isEmpty();
+    }
+
 
     public static final float HEADING_NOISE_STD = 0.05f;
     public static final float STRIDE_LENGTH_NOISE_STD = 0.05f;
@@ -256,7 +260,7 @@ public class ParticleFilter {
         // Indoors, GPS signals reflect off ceilings and walls, giving fixes several
         // metres off and often on the wrong side of a wall.  Inflate the uncertainty
         // so the GNSS observation cannot drag particles through wall segments.
-        float effectiveAccuracy = walls.isEmpty() ? gnssAccuracy : gnssAccuracy * 3.0f;
+        float effectiveAccuracy = walls.isEmpty() ? gnssAccuracy : Math.max(gnssAccuracy * 10f, 50f);
         float variance = effectiveAccuracy * effectiveAccuracy; // Convert accuracy to variance sigma^2
 
 

@@ -76,9 +76,15 @@ public class PdrProcessing {
     private CircularFloatBuffer verticalAccel;
     private CircularFloatBuffer horizontalAccel;
 
-    // Step sum and length aggregation variables
     private float sumStepLength = 0;
     private int stepCount = 0;
+
+    private float kfStepLength = 0.7f;
+    private float kfVariance = 0.1f;
+    private static final float KF_PROCESS_NOISE = 0.005f;
+    private static final float KF_MEAS_NOISE = 0.04f;
+    private static final float MIN_STEP_LENGTH = 0.2f;
+    private static final float MAX_STEP_LENGTH = 1.5f;
     //endregion
 
     /**
@@ -167,12 +173,14 @@ public class PdrProcessing {
             return new float[]{this.positionX, this.positionY};
         }
         
-        // Calculate step length
-        if(!useManualStep) {
-            //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
-            // Estimate stride
-            this.stepLength = weibergMinMax(accelMagnitudeOvertime);
-            // System.err.println("Step Length" + stepLength);
+        if (!useManualStep) {
+            float rawStep = weibergMinMax(accelMagnitudeOvertime);
+            rawStep = Math.max(MIN_STEP_LENGTH, Math.min(MAX_STEP_LENGTH, rawStep));
+            kfVariance += KF_PROCESS_NOISE;
+            float gain = kfVariance / (kfVariance + KF_MEAS_NOISE);
+            kfStepLength += gain * (rawStep - kfStepLength);
+            kfVariance = (1f - gain) * kfVariance;
+            this.stepLength = kfStepLength;
         }
 
         // Increment aggregate variables
@@ -249,8 +257,7 @@ public class PdrProcessing {
         double maxAccel = Collections.max(validAccel);
         double minAccel = Collections.min(validAccel);
 
-        // calculate bounce
-        float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
+        float bounce = (float) Math.pow(Math.max(0.001, maxAccel - minAccel), 0.25);
 
         // determine which constant to use based on settings
         if (this.settings.getBoolean("overwrite_constants", false)) {
@@ -410,9 +417,12 @@ public class PdrProcessing {
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
-        // Must be reset so the elevation baseline is recalibrated from scratch
         this.setupIndex = 0;
         this.startElevation = 0f;
+        this.kfStepLength = 0.7f;
+        this.kfVariance = 0.1f;
+        this.sumStepLength = 0f;
+        this.stepCount = 0;
     }
 
     /**
@@ -421,14 +431,10 @@ public class PdrProcessing {
      * @return  average step length in meters.
      */
     public float getAverageStepLength(){
-        //Calculate average step length
-        float averageStepLength = sumStepLength/(float) stepCount;
-
-        //Reset sum and number of steps
+        if (stepCount == 0) return 0.75f;
+        float averageStepLength = sumStepLength / (float) stepCount;
         stepCount = 0;
         sumStepLength = 0;
-
-        //Return average step length
         return averageStepLength;
     }
 

@@ -106,13 +106,16 @@ public class SensorFusion implements SensorEventListener {
     // the device is still, which drags particles out of the building.
     private LatLng lastGnssForFilter = null;
 
-    // Stationary detection — rolling variance of linear-acceleration magnitude.
-    // When variance stays below the threshold the phone is considered stationary,
-    // and both step-prediction and WiFi particle updates are suppressed.
     private static final int   STATIONARY_WINDOW    = 20;
-    private static final float STATIONARY_THRESHOLD = 0.015f; // m²/s⁴
+    private static final float STATIONARY_THRESHOLD = 0.015f;
     private final List<Float> linearAccelWindow = new ArrayList<>();
     private boolean isStationary = false;
+
+    private final List<Float> headingCalibSamples = new ArrayList<>();
+    private float headingBias = 0f;
+    private boolean headingCalibDone = false;
+    private long headingCalibStartMs = 0L;
+    private static final long HEADING_CALIB_DURATION_MS = 10_000L;
 
     // Timestamp (elapsedRealtime ms) of the last setStartGNSSLatitude() call.
     // GNSS updates are suppressed for 10 s so a bad indoor GPS fix cannot drag
@@ -260,7 +263,8 @@ public class SensorFusion implements SensorEventListener {
                                         + (int) wifiDist + " m (threshold " + (int) divergenceThreshold + " m)");
                                 particleFilter.reset();
                                 particleFilter.initialise(wifiPosition, 15f);
-                                lastGnssForFilter = wifiPosition; // re-anchor GNSS displacement gating
+                                lastGnssForFilter = wifiPosition;
+                                filterAnchorTimeMs = SystemClock.elapsedRealtime();
                             } else {
                                 particleFilter.updateWiFi(wifiPosition, 20f);
                             }
@@ -283,16 +287,36 @@ public class SensorFusion implements SensorEventListener {
      * <p>Delegates to {@link SensorEventHandler#handleSensorEvent(SensorEvent)}.</p>
      */
 
-    //floor updates particle fusion
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         eventHandler.handleSensorEvent(sensorEvent);
         if (sensorEvent.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
             updateStationaryState(sensorEvent.values[0], sensorEvent.values[1], sensorEvent.values[2]);
         }
+        if (sensorEvent.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR && recorder.isRecording()) {
+            updateHeadingCalibration();
+        }
         if (sensorEvent.sensor.getType() == Sensor.TYPE_PRESSURE && recorder.isRecording()) {
             updateFloorLogic();
         }
+    }
+
+    private void updateHeadingCalibration() {
+        if (headingCalibDone || !isStationary) return;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (headingCalibStartMs == 0L) headingCalibStartMs = now;
+        headingCalibSamples.add(state.orientation[0]);
+        if (now - headingCalibStartMs >= HEADING_CALIB_DURATION_MS && headingCalibSamples.size() >= 10) {
+            float sum = 0f;
+            for (float h : headingCalibSamples) sum += h;
+            headingBias = sum / headingCalibSamples.size();
+            headingCalibDone = true;
+            Log.d("SensorFusion", "Heading bias calibrated: " + (float) Math.toDegrees(headingBias) + "°");
+        }
+    }
+
+    public float getHeadingBias() {
+        return headingCalibDone ? headingBias : 0f;
     }
 
     /**
@@ -515,13 +539,15 @@ public class SensorFusion implements SensorEventListener {
         // session doesn't fire a massive spurious delta from the previous session's position.
         eventHandler.resetStepOrigin();
 
-        // Reset per-session positioning state so each recording starts clean.
         initialMetadataWritten = false;
         state.startLocation[0] = 0f;
         state.startLocation[1] = 0f;
         filterAnchorTimeMs = 0L;
         lastGnssForFilter = null;
         particleFilter.reset();
+        headingCalibDone = false;
+        headingCalibSamples.clear();
+        headingCalibStartMs = 0L;
 
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
@@ -1001,6 +1027,9 @@ public class SensorFusion implements SensorEventListener {
                         if (offset > 50f) {
                             outlier = true;
                             Log.d("SensorFusion", "GNSS hard-rejected: " + (int) offset + "m");
+                        } else if (particleFilter.hasWalls() && offset > 20f) {
+                            outlier = true;
+                            Log.d("SensorFusion", "GNSS indoor-rejected: " + (int) offset + "m");
                         } else if (uncertainty < 30f && offset > Math.max(accuracy * 2.5f, 20f)) {
                             outlier = true;
                             Log.d("SensorFusion", "GNSS outlier: " + (int) offset

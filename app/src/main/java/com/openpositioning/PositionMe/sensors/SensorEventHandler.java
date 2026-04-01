@@ -27,25 +27,24 @@ public class SensorEventHandler {
         void onStep(float deltaEasting, float deltaNorthing);
     }
 
-    private StepListener stepListener; // Listener for step events to update the particle filter
-    private float lastEasting = 0f; // Track last easting for calculating deltas
-    private float lastNorthing = 0f;// Track last northing for calculating deltas
-    private boolean orientationInitialized = false; // True once the first rotation-vector event has arrived
+    private StepListener stepListener;
+    private float lastEasting = 0f;
+    private float lastNorthing = 0f;
+    private boolean orientationInitialized = false;
+
+    private float lastAcceptedHeading = Float.NaN;
+    private static final float MAX_HEADING_JUMP_RAD = (float) (Math.PI / 6.0);
+    private static final long MIN_STEP_INTERVAL_MS = 300;
 
     public void setStepListener(StepListener listener) {
-        this.stepListener = listener; // Set the step listener for particle filter updates
+        this.stepListener = listener;
     }
 
-    /**
-     * Resets the PDR step-delta baseline to the current PDR origin (zero).
-     * Must be called after {@link PdrProcessing#resetPDR()} so that the first step of a new
-     * recording session does not produce a huge spurious delta against the previous session's
-     * accumulated position.
-     */
     public void resetStepOrigin() {
-        lastEasting  = 0f;
+        lastEasting = 0f;
         lastNorthing = 0f;
         orientationInitialized = false;
+        lastAcceptedHeading = Float.NaN;
     }
 
     // END OF PARTICLE FILTER
@@ -176,58 +175,58 @@ public class SensorEventHandler {
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
-                if (!orientationInitialized) {
-                    Log.d("SensorFusion", "Step detected but orientation not yet ready — skipping PDR update");
-                    break;
-                }
+                if (!orientationInitialized) break;
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
 
-                if (currentTime - lastStepTime < 20) {
-                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event:"
-                            + (currentTime - lastStepTime) + " ms");
-                    break;
-                } else {
-                    lastStepTime = currentTime;
+                long timeSinceLastStep = currentTime - lastStepTime;
+                if (timeSinceLastStep < MIN_STEP_INTERVAL_MS) break;
+                lastStepTime = currentTime;
 
-                    if (accelMagnitude.isEmpty()) {
-                        Log.e("SensorFusion",
-                                "stepDetection triggered, but accelMagnitude is empty! " +
-                                        "This can cause updatePdr(...) to fail or return bad results.");
+                float rawHeading = state.orientation[0];
+                float headingForStep;
+                if (!Float.isNaN(lastAcceptedHeading)) {
+                    float delta = rawHeading - lastAcceptedHeading;
+                    while (delta > (float) Math.PI) delta -= (float) (2 * Math.PI);
+                    while (delta < -(float) Math.PI) delta += (float) (2 * Math.PI);
+                    if (Math.abs(delta) > MAX_HEADING_JUMP_RAD && timeSinceLastStep >= 2000L) {
+                        headingForStep = lastAcceptedHeading;
                     } else {
-                        Log.d("SensorFusion",
-                                "stepDetection triggered, accelMagnitude size = "
-                                        + accelMagnitude.size());
+                        lastAcceptedHeading = rawHeading;
+                        headingForStep = rawHeading;
                     }
+                } else {
+                    lastAcceptedHeading = rawHeading;
+                    headingForStep = rawHeading;
+                }
 
-                    float[] newCords = this.pdrProcessing.updatePdr(
-                            stepTime,
-                            this.accelMagnitude,
-                            state.orientation[0]
-                    );
-
-                    this.accelMagnitude.clear();
-
-                    if (recorder.isRecording()) {
-                        this.pathView.drawTrajectory(newCords);
-                        state.stepCounter++;
-                        recorder.addPdrData(
-                                SystemClock.uptimeMillis() - bootTime,
-                                newCords[0], newCords[1]);
-                    }
-
-                    // Update the particle filter with the new step data
-                    if (stepListener != null) {
-                        float deltaEasting = newCords[0] - lastEasting;
-                        float deltaNorthing = newCords[1] - lastNorthing;
-                        stepListener.onStep(deltaEasting, deltaNorthing);
-                    }
-
-                    lastEasting = newCords[0];
-                    lastNorthing = newCords[1];
-
-
+                if (accelMagnitude.isEmpty()) {
                     break;
                 }
+                double peakAccel = 0.0;
+                for (double v : accelMagnitude) if (v > peakAccel) peakAccel = v;
+                if (peakAccel < 0.5) {
+                    accelMagnitude.clear();
+                    break;
+                }
+
+                float[] newCords = pdrProcessing.updatePdr(stepTime, accelMagnitude, headingForStep);
+                accelMagnitude.clear();
+
+                if (recorder.isRecording()) {
+                    pathView.drawTrajectory(newCords);
+                    state.stepCounter++;
+                    recorder.addPdrData(SystemClock.uptimeMillis() - bootTime, newCords[0], newCords[1]);
+                }
+
+                if (stepListener != null) {
+                    float deltaEasting = newCords[0] - lastEasting;
+                    float deltaNorthing = newCords[1] - lastNorthing;
+                    stepListener.onStep(deltaEasting, deltaNorthing);
+                }
+
+                lastEasting = newCords[0];
+                lastNorthing = newCords[1];
+                break;
         }
     }
 

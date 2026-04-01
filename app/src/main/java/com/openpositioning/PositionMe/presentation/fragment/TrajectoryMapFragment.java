@@ -94,6 +94,8 @@ public class TrajectoryMapFragment extends Fragment {
     private static final String TAG = "TrajectoryMapFragment";
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000;
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000;
+    private static final int FLOOR_TRANSITION_ZONE = Integer.MIN_VALUE;
+    private static final double MIN_POLYLINE_DISTANCE_M = 0.5;
     private Handler autoFloorHandler;
     private Runnable autoFloorTask;
     private int lastCandidateFloor = Integer.MIN_VALUE;
@@ -763,22 +765,24 @@ public class TrajectoryMapFragment extends Fragment {
         // valid territory — it never gets permanently stuck.
         if (polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
+            uncertainty = (sensorFusion != null) ? sensorFusion.getPositionUncertaintyMeters() : 2f;
 
             if (lastPolylinePoint == null) {
-                // First drawn point — no wall check needed.
                 points.add(displayLocation);
                 polyline.setPoints(points);
                 lastPolylinePoint = displayLocation;
-            } else if (!lastPolylinePoint.equals(displayLocation)) {
-                boolean crossesWall = sensorFusion != null
-                        && sensorFusion.getParticleFilter()
-                                       .wouldCrossWall(lastPolylinePoint, displayLocation);
-                if (!crossesWall) {
-                    points.add(displayLocation);
-                    polyline.setPoints(points);
-                    lastPolylinePoint = displayLocation;
+            } else {
+                double dist = UtilFunctions.distanceBetweenPoints(lastPolylinePoint, displayLocation);
+                if (dist >= MIN_POLYLINE_DISTANCE_M) {
+                    boolean crossesWall = sensorFusion != null
+                            && sensorFusion.getParticleFilter()
+                                           .wouldCrossWall(lastPolylinePoint, displayLocation);
+                    if (!crossesWall) {
+                        points.add(displayLocation);
+                        polyline.setPoints(points);
+                        lastPolylinePoint = displayLocation;
+                    }
                 }
-                // else: lastPolylinePoint stays at the last good anchor
             }
         }
 
@@ -788,11 +792,9 @@ public class TrajectoryMapFragment extends Fragment {
             boolean nowIndoorMapSet = indoorMapManager.getIsIndoorMapSet();
             setFloorControlsVisibility(nowIndoorMapSet ? View.VISIBLE : View.GONE);
 
-            // When we first enter a building with floor data, center the camera on it
             if (!wasIndoorMapSet && nowIndoorMapSet) {
                 int building = indoorMapManager.getCurrentBuilding();
                 String apiName = buildingConstantToApiName(building);
-                // Auto-set building ID so floor-change logic works without StartLocationFragment
                 if (sensorFusion != null && apiName != null
                         && (sensorFusion.getSelectedBuildingId() == null
                             || sensorFusion.getSelectedBuildingId().isEmpty())) {
@@ -802,6 +804,9 @@ public class TrajectoryMapFragment extends Fragment {
                         ? sensorFusion.getFloorplanBuilding(apiName) : null;
                 if (info != null) {
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(info.getCenter(), 19f));
+                }
+                if (autoFloorSwitch != null && !autoFloorSwitch.isChecked()) {
+                    autoFloorSwitch.setChecked(true);
                 }
             }
             wasIndoorMapSet = nowIndoorMapSet;
@@ -878,7 +883,6 @@ public class TrajectoryMapFragment extends Fragment {
             if (!wasIndoorMapSet && nowIndoorMapSet) {
                 int building = indoorMapManager.getCurrentBuilding();
                 String apiName = buildingConstantToApiName(building);
-                // Auto-set building ID so floor-change logic works without StartLocationFragment
                 if (sensorFusion != null && apiName != null
                         && (sensorFusion.getSelectedBuildingId() == null
                             || sensorFusion.getSelectedBuildingId().isEmpty())) {
@@ -888,6 +892,9 @@ public class TrajectoryMapFragment extends Fragment {
                         ? sensorFusion.getFloorplanBuilding(apiName) : null;
                 if (info != null) {
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(info.getCenter(), 19f));
+                }
+                if (autoFloorSwitch != null && !autoFloorSwitch.isChecked()) {
+                    autoFloorSwitch.setChecked(true);
                 }
                 wasIndoorMapSet = true;
             }
@@ -1153,17 +1160,12 @@ public class TrajectoryMapFragment extends Fragment {
      * @return Floor level (0 = ground, 1 = first floor, -1 = lower ground, etc.)
      */
     private int getFloorFromBarometerHeight(float elevation) {
-        if (elevation >= 9 && elevation <= 11) {
-            return 3;
-        } else if (elevation >= 3 && elevation < 9) {
-            return 2;
-        } else if (elevation >= -1 && elevation < 3) {
-            return 1;
-        } else if (elevation >= -7 && elevation < -1) {
-            return 0; // Ground floor
-        } else { // elevation < -8
-            return -1; // Lower ground
-        }
+        if (elevation >= 9f && elevation <= 11f)   return 3;
+        if (elevation >= 3f && elevation <= 6f)    return 2;
+        if (elevation >= -1f && elevation <= 2f)   return 1;
+        if (elevation >= -7f && elevation <= -4f)  return 0;
+        if (elevation <= -8f)                      return -1;
+        return FLOOR_TRANSITION_ZONE;
     }
 
     private void startAutoFloor() {
@@ -1197,15 +1199,14 @@ public class TrajectoryMapFragment extends Fragment {
 
         updateWallsForPdr();
 
-        // Get barometer elevation and convert to floor
         float elevation = sensorFusion.getElevation();
         int candidateFloor = getFloorFromBarometerHeight(elevation);
+        if (candidateFloor == FLOOR_TRANSITION_ZONE) return;
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
         updateFloorLabel();
         Log.d(TAG, "applyImmediateFloor -> elevation=" + elevation + " floor=" + candidateFloor);
 
-        // Seed the debounce state so the first periodic evaluation doesn't re-trigger immediately
         lastCandidateFloor = candidateFloor;
         lastCandidateTime = SystemClock.elapsedRealtime();
     }
@@ -1232,13 +1233,11 @@ public class TrajectoryMapFragment extends Fragment {
 
         updateWallsForPdr();
 
-        // Get barometer elevation and convert to floor
         float elevation = sensorFusion.getElevation();
         int candidateFloor = getFloorFromBarometerHeight(elevation);
 
-        Log.d(TAG, "Auto-floor evaluation: elevation=" + elevation + " candidateFloor=" + candidateFloor);
+        if (candidateFloor == FLOOR_TRANSITION_ZONE) return;
 
-        // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
         long now = SystemClock.elapsedRealtime();
         if (candidateFloor != lastCandidateFloor) {
             lastCandidateFloor = candidateFloor;
@@ -1249,8 +1248,8 @@ public class TrajectoryMapFragment extends Fragment {
         if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
             indoorMapManager.setCurrentFloor(candidateFloor, true);
             updateFloorLabel();
-            // Reset timer so we don't keep re-applying the same floor
             lastCandidateTime = now;
+            Log.d(TAG, "Auto-floor applied: elevation=" + elevation + " floor=" + candidateFloor);
         }
     }
 

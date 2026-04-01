@@ -262,14 +262,7 @@ public class IndoorMapManager {
      * @return the floor index offset for auto-floor conversion
      */
     public int getAutoFloorBias() {
-        switch (currentBuilding) {
-            case BUILDING_NUCLEUS:
-            case BUILDING_MURCHISON:
-                return 1; // LG at index 0, so G = index 1
-            case BUILDING_LIBRARY:
-            default:
-                return 0; // G at index 0
-        }
+        return 0;
     }
 
     /**
@@ -281,17 +274,18 @@ public class IndoorMapManager {
      * @param autoFloor true if called by auto-floor feature
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
-
         if (autoFloor) {
             newFloor += getAutoFloorBias();
         }
 
-        int maxFloor = currentFloorShapes.size();
-
-        if (newFloor >= 0 && newFloor < maxFloor && newFloor != this.currentFloor) {
+        if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+            int maxFloor = currentFloorShapes.size();
+            if (newFloor >= 0 && newFloor < maxFloor && newFloor != this.currentFloor) {
+                this.currentFloor = newFloor;
+                drawFloorShapes(newFloor);
+            }
+        } else if (newFloor >= 0 && newFloor != this.currentFloor) {
             this.currentFloor = newFloor;
-            drawFloorShapes(newFloor);
         }
     }
 
@@ -338,7 +332,7 @@ public class IndoorMapManager {
                 switch (detected) {
                     case BUILDING_NUCLEUS:
                         apiName = "nucleus_building";
-                        currentFloor = 1;
+                        currentFloor = 0;
                         floorHeight = NUCLEUS_FLOOR_HEIGHT;
                         break;
                     case BUILDING_LIBRARY:
@@ -348,7 +342,7 @@ public class IndoorMapManager {
                         break;
                     case BUILDING_MURCHISON:
                         apiName = "murchison_house";
-                        currentFloor = 1;
+                        currentFloor = 0;
                         floorHeight = MURCHISON_FLOOR_HEIGHT;
                         break;
                     default:

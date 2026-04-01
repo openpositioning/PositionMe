@@ -97,7 +97,7 @@ public class UtilFunctions {
      * @return double corresponding to the value in meters.
      */
     public static double degreesToMetersLng(double degreeVal, double latitude) {
-        return degreeVal*DEGREE_IN_M/Math.cos(Math.toRadians(latitude));
+        return degreeVal * DEGREE_IN_M * Math.cos(Math.toRadians(latitude));
     }
 
     /**
