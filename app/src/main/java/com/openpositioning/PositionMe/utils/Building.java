@@ -455,7 +455,7 @@ public class Building {
         // If point has same latitude as a or b, increase slightly pointLat
         if (pointLat == aLat || pointLat == bLat) pointLat += 0.00000001;
 
-        // If the point is above, below or to the right of the segment,return false
+        // If the point is above, below or to the right of the segment, return false
         if ((pointLat > bLat || pointLat < aLat) || (pointLng > Math.max(aLng, bLng))) {
             return false;
         }

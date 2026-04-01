@@ -377,11 +377,16 @@ public class Fusion {
         LatLng pos = particleFilter.getEstimatedPosition();
         double[] en = particleFilter.latLngToEN(pos.latitude, pos.longitude);
 
-        // Temporary change to allow floor changing anywhere (debug)
+        // Only proceed if able to change floors
         boolean eligible = mapMatching.isEligibleForAltitudeChange(en);
-        // boolean eligible = building != null;
-
-        if (!eligible) return;
+        if (!eligible) {
+            // Bug fix if floor is uninitialised
+            if (estimatedFloor == BUILDING_NO_FLOOR_NUMBER) {
+                estimatedFloor = lastWiFiFloor;
+                mapMatching.setFloor(estimatedFloor);
+            }
+            return;
+        }
 
         // Convert altitude change to floor change
         float floorHeight = building.getFloorHeight();

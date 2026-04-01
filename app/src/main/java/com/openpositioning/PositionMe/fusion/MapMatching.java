@@ -181,24 +181,35 @@ public class MapMatching {
 
         // Check if position is inside any staircase
         if (floorStairs != null) {
-            for (List<double[]> stair : floorStairs) {
-                if (isPointInPolygon(position, stair)) {
-                    Log.d(TAG, "Eligible for floor change: Stairs");
-                    return true;
-                }
+            if (isPointInAnyElement(floorStairs, position)) {
+                Log.d(TAG, "Eligible for floor change: Stairs");
+                return true;
             }
+        } else {
+            Log.w(TAG, "Stairs is null!");
         }
 
         // Check if position is inside any elevator
         if (floorElevators != null) {
-            for (List<double[]> elevator : floorElevators) {
-                if (isPointInPolygon(position, elevator)) {
-                    Log.d(TAG, "Eligible for floor change: Lifts");
-                    return true;
-                }
+            if (isPointInAnyElement(floorElevators, position)) {
+                Log.d(TAG, "Eligible for floor change: Lifts");
+                return true;
+            }
+        } else {
+            Log.w(TAG, "Lifts is null!");
+        }
+
+        Log.d(TAG, "Ineligible for floor change");
+        return false;
+    }
+
+    /** TODO - JavaDocs */
+    private boolean isPointInAnyElement(List<List<double[]>> elements, double[] point) {
+        for (List<double[]> element : elements) {
+            if (isPointInPolygon(point, element)) {
+                return true;
             }
         }
-        Log.d(TAG, "Ineligible for floor change");
         return false;
     }
 
@@ -212,13 +223,13 @@ public class MapMatching {
     private boolean isPointInPolygon(double[] pos, List<double[]> shape) {
         int crossings = 0;
         for (int i = 0; i < shape.size(); i++) {
-            double[] first_point = shape.get(i);
+            double[] firstPoint = shape.get(i);
             int j = i + 1;
             if (j >= shape.size()) {
                 j = 0;
             }
-            double[] second_point = shape.get(j);
-            if (crossingSegment(pos, first_point, second_point)) {
+            double[] secondPoint = shape.get(j);
+            if (crossingSegment(pos, firstPoint, secondPoint)) {
                 crossings++;
             }
         }

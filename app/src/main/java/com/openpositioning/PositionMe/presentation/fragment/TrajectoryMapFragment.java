@@ -549,7 +549,13 @@ public class TrajectoryMapFragment extends Fragment {
             if (lastFusedLocation != null && !lastFusedLocation.equals(fusedLocation)) {
                 List<LatLng> points = new ArrayList<>(fusionPolyline.getPoints());
                 points.add(fusedLocation);
-                fusionPolyline.setPoints(points);
+                try {
+                    fusionPolyline.setPoints(points);
+                } catch (IllegalArgumentException e) {
+                    Log.w(TAG, "Invalid point; ignoring (" + e.getMessage() + ")");
+                    points.remove(fusedLocation);
+                    fusionPolyline.setPoints(points);
+                }
             }
             lastFusedLocation = fusedLocation;
 
