@@ -44,19 +44,19 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Map Controls"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/md_theme_onSurface" />
+                    android:text="@string/mapControls"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/controlCardCollapseIcon"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="▶"
-                    android:textSize="11sp"
-                    android:textColor="@color/md_theme_onSurface" />
+                    android:text="@string/dropdownSymbol"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:textSize="15sp" />
 
             </LinearLayout>
 
@@ -70,79 +70,122 @@
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/gnssSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="26dp"
+                    android:layout_width="200dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_height="25dp"
+                    android:checked="false"
                     android:text="@string/gnssSwitch" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/autoFloor"
-                    android:layout_width="wrap_content"
-                    android:layout_height="23dp"
+                    android:layout_width="200dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_height="25dp"
+                    android:checked="false"
                     android:text="@string/auto_floor" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/smoothingSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="23dp"
-                    android:checked="false"
-                    android:text="Smooth fused path" />
-
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/fusedPdrSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="16dp"
-                    android:checked="true"
-                    android:text="Show PDR path" />
-
-                <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/particleCloudSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="28dp"
+                    android:layout_width="200dp"
+                    android:layout_height="25dp"
                     android:checked="false"
-                    android:text="Particle cloud" />
+                    android:drawableStart="@android:drawable/ic_menu_compass"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/particleCloud" />
 
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:layout_marginTop="6dp"
-                    android:layout_marginBottom="4dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginBottom="2dp"
                     android:background="@color/md_theme_onSurface"
                     android:alpha="0.15" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Show dots"
-                    android:textSize="11sp"
-                    android:textColor="@color/md_theme_onSurface"
-                    android:alpha="0.6"
-                    android:layout_marginBottom="2dp" />
+                <!-- Controls visibility of the blue GNSS path polyline independently of the marker -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/gnssPathSwitch"
+                    android:layout_width="200dp"
+                    android:layout_height="25dp"
+                    android:checked="false"
+                    android:drawableStart="@android:drawable/ic_menu_directions"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/gnssPath" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/smoothingSwitch"
+                    android:layout_width="200dp"
+                    android:layout_height="25dp"
+                    android:checked="false"
+                    android:drawableStart="@android:drawable/ic_menu_directions"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/smoothPath" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/fusedPdrSwitch"
+                    android:layout_width="200dp"
+                    android:layout_height="25dp"
+                    android:checked="false"
+                    android:drawableStart="@android:drawable/ic_menu_directions"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="-5dp"
+                    android:text="@string/pdrPath" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginBottom="2dp"
+                    android:background="@color/md_theme_onSurface"
+                    android:alpha="0.15" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/gnssDotSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
+                    android:layout_width="200dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_height="25dp"
+                    android:checked="false"
                     android:text="🔵 GNSS dots" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/wifiDotSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
+                    android:layout_width="200dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_height="25dp"
+                    android:checked="false"
                     android:text="🟠 WiFi dots" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/pdrDotSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
+                    android:layout_width="200dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_height="25dp"
+                    android:checked="false"
                     android:text="🟢 PDR dots" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/lineColorButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_height="45dp"
                     android:backgroundTint="@color/red"
                     android:text="@string/color"
                     android:textColor="@color/md_theme_onPrimary"
@@ -150,127 +193,20 @@
 
                 <Spinner
                     android:id="@+id/mapSwitchSpinner"
-                    android:layout_width="wrap_content"
+                    android:layout_width="80dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
                     android:layout_height="40dp"
                     android:layout_marginTop="8dp"
                     android:background="@android:color/white"
                     android:elevation="5dp"
                     android:spinnerMode="dropdown" />
 
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
-<!--        <LinearLayout-->
-<!--            android:layout_width="wrap_content"-->
-<!--            android:layout_height="wrap_content"-->
-<!--            android:orientation="vertical"-->
-<!--            android:padding="8dp"-->
-<!--            android:gravity="center">-->
 
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/gnssSwitch"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="26dp"-->
-<!--                android:layout_marginTop="0dp"-->
-<!--                android:layout_marginBottom="0dp"-->
-<!--                android:paddingTop="0dp"-->
-<!--                android:paddingBottom="0dp"-->
-<!--                android:text="@string/gnssSwitch" />-->
 
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/autoFloor"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="23dp"-->
-<!--                android:text="@string/auto_floor" />-->
-
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/smoothingSwitch"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="23dp"-->
-<!--                android:checked="false"-->
-<!--                android:text="Smooth fused path" />-->
-
-<!--            &lt;!&ndash; Toggle arrow marker between fused particle filter position and raw PDR.-->
-<!--     ON = fused (smoother, more accurate). OFF = raw PDR (more responsive). &ndash;&gt;-->
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/fusedPdrSwitch"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="16dp"-->
-<!--                android:checked="true"-->
-<!--                android:text="PDR path" />-->
-
-<!--            &lt;!&ndash; Particle cloud overlay — shows all 300 filter particles as faint grey dots &ndash;&gt;-->
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/particleCloudSwitch"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="28dp"-->
-<!--                android:checked="false"-->
-<!--                android:text="Particle cloud" />-->
-
-<!--            &lt;!&ndash; ── Divider ── &ndash;&gt;-->
-<!--            <View-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="1dp"-->
-<!--                android:layout_marginTop="6dp"-->
-<!--                android:layout_marginBottom="4dp"-->
-<!--                android:background="@color/md_theme_onSurface"-->
-<!--                android:alpha="0.15" />-->
-
-<!--            &lt;!&ndash; ── Observation dot toggles ── &ndash;&gt;-->
-
-<!--            <TextView-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="Show dots"-->
-<!--                android:textSize="11sp"-->
-<!--                android:textColor="@color/md_theme_onSurface"-->
-<!--                android:alpha="0.6"-->
-<!--                android:layout_marginBottom="2dp" />-->
-
-<!--            &lt;!&ndash; GNSS dots — blue circles numbered 1…N &ndash;&gt;-->
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/gnssDotSwitch"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="2dp"-->
-<!--                android:checked="true"-->
-<!--                android:text="🔵 GNSS dots" />-->
-
-<!--            &lt;!&ndash; WiFi dots — amber circles numbered 1…N &ndash;&gt;-->
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/wifiDotSwitch"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="13dp"-->
-<!--                android:checked="true"-->
-<!--                android:text="🟠 WiFi dots" />-->
-
-<!--            &lt;!&ndash; PDR dots — green circles numbered 1…N &ndash;&gt;-->
-<!--            <com.google.android.material.switchmaterial.SwitchMaterial-->
-<!--                android:id="@+id/pdrDotSwitch"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="16dp"-->
-<!--                android:checked="true"-->
-<!--                android:text="🟢 PDR dots" />-->
-
-<!--            <com.google.android.material.button.MaterialButton-->
-<!--                android:id="@+id/lineColorButton"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="48dp"-->
-<!--                android:backgroundTint="@color/red"-->
-<!--                android:text="@string/color"-->
-<!--                android:textColor="@color/md_theme_onPrimary"-->
-<!--                app:elevation="5dp" />-->
-
-<!--            <Spinner-->
-<!--                android:id="@+id/mapSwitchSpinner"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="40dp"-->
-<!--                android:layout_marginStart="0dp"-->
-<!--                android:layout_marginTop="8dp"-->
-<!--                android:background="@android:color/white"-->
-<!--                android:elevation="5dp"-->
-<!--                android:spinnerMode="dropdown"-->
-<!--                app:layout_constraintTop_toTopOf="parent" />-->
-
-<!--        </LinearLayout>-->
     </com.google.android.material.card.MaterialCardView>
 
     <!-- Floating action buttons for floor control, properly spaced -->
@@ -279,10 +215,6 @@
         android:layout_height="match_parent">
 
         <!-- Floor Down Button (Bottom-most) -->
-
-        <!-- Floor Label (Middle) -->
-
-        <!-- Floor Up Button (Top-most) -->
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
@@ -297,6 +229,8 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:tint="@android:color/black" />
+
+        <!-- Floor Label (Middle) -->
 
         <TextView
             android:id="@+id/floorLabel"
@@ -315,6 +249,8 @@
             android:textStyle="bold"
             app:layout_constraintBottom_toTopOf="@id/floorDownButton"
             app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Floor Up Button (Top-most) -->
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"

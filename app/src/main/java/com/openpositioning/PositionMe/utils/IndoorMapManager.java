@@ -416,7 +416,7 @@ public class IndoorMapManager {
                 p[1] >= Math.min(a[1], b[1]) - eps &&
                 p[1] <= Math.max(a[1], b[1]) + eps;
     }
-public void bakeEnuCoordinates(CoordinateConverter converter) {
+    public void bakeEnuCoordinates(CoordinateConverter converter) {
         if (currentVenue == null || currentFloorKey == null) return;
         IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
         if (floor == null) return;
@@ -430,7 +430,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
             floor.wallPolygonsEnu.add(enuPoly);
         }
         Log.d("WallDebug", "Baked " + floor.wallPolygonsEnu.size() + " wall polygons to ENU");
-}
+    }
     private List<LatLng> getNearestWallPolygon(LatLng from, LatLng to,
                                                List<List<LatLng>> wallPolygons) {
         for (List<LatLng> polygon : wallPolygons) {
@@ -988,7 +988,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 //        }
 
 //        else {
-            usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
+        usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
 //        }
         Log.d("MapMatch", "nearStairs=" + nearStairs + ", nearLift=" + nearLift);
         Log.d("MapMatch", "horizontalDisplacement=" + horizontalDisplacement);
@@ -1019,7 +1019,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
             }
         } else if (usedStairs) {
             LatLng nearestStairsOnNextFloor = getNearestPoint(correctedLocation, nextFloorFeatures.stairsCenters);
-                highlightCenter = nearestStairsOnNextFloor;
+            highlightCenter = nearestStairsOnNextFloor;
 
             if (nearestStairsOnNextFloor != null) {
                 snappedDestination = nearestStairsOnNextFloor;
