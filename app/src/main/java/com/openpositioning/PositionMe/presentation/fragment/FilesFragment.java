@@ -1,7 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.DEBUG_MODE_HEADER;
 import static com.openpositioning.PositionMe.utils.UtilConstants.URL_GET_USER_TRAJECTORIES;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,6 +20,7 @@ import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
+import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
@@ -98,7 +101,19 @@ public class FilesFragment extends Fragment implements Observer {
             LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View rootView = inflater.inflate(R.layout.fragment_files, container, false);
-        getActivity().setTitle("Trajectory Recordings - " + loginManager.getUsername());
+
+        // Make debug mode explicit in the header
+        String debugHeader;
+        SharedPreferences settings =
+                PreferenceManager.getDefaultSharedPreferences(requireContext());
+        if (settings.getBoolean("debug_mode", false)) {
+            debugHeader = DEBUG_MODE_HEADER;
+        } else {
+            debugHeader = "";
+        }
+        getActivity()
+                .setTitle(debugHeader + "Trajectory Recordings - " + loginManager.getUsername());
+
         return rootView;
     }
 

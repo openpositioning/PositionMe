@@ -1,11 +1,13 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.DEBUG_MODE_HEADER;
 import static com.openpositioning.PositionMe.utils.UtilConstants.POSITION_UOE_LAT;
 import static com.openpositioning.PositionMe.utils.UtilConstants.POSITION_UOE_LON;
 
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.net.Uri;
@@ -93,7 +95,18 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         ((AppCompatActivity) getActivity()).getSupportActionBar().show();
         View rootView = inflater.inflate(R.layout.fragment_home, container, false);
-        getActivity().setTitle("Home - " + loginManager.getUsername());
+
+        // Make debug mode explicit in the header
+        String debugHeader;
+        SharedPreferences settings =
+                PreferenceManager.getDefaultSharedPreferences(requireContext());
+        if (settings.getBoolean("debug_mode", false)) {
+            debugHeader = DEBUG_MODE_HEADER;
+        } else {
+            debugHeader = "";
+        }
+        getActivity().setTitle(debugHeader + "Home - " + loginManager.getUsername());
+
         return rootView;
     }
 

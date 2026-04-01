@@ -18,7 +18,7 @@ public final class FusionConstants {
     // Observation standard deviations (metres)
     public static final float WIFI_STD_DEV = 10.0f;
     public static final float GNSS_STD_DEV_DEFAULT = 15.0f;
-    public static final float MAX_STEP_LENGTH = 1.0f;
+    public static final float MAX_STEP_LENGTH = 0.50f;
 
     // Coordinate conversion (WGS84 approximations at Edinburgh ~55.9°N)
     public static final double METRES_PER_DEG_LAT = 110574.0;

@@ -3,7 +3,7 @@ package com.openpositioning.PositionMe.sensors;
 import static com.openpositioning.PositionMe.fusion.FusionConstants.DELTA_T;
 import static com.openpositioning.PositionMe.fusion.FusionConstants.MAX_STEP_LENGTH;
 import static com.openpositioning.PositionMe.fusion.FusionConstants.WIFI_STD_DEV;
-import static com.openpositioning.PositionMe.utils.UtilConstants.ALPHA_ORIENTATION_DEFAULT;
+import static com.openpositioning.PositionMe.utils.UtilConstants.ALPHA_PRESSURE_DEFAULT;
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_OUTSIDE;
 import static com.openpositioning.PositionMe.utils.UtilConstants.SENSOR_POLL_TIME_MS;
 
@@ -85,7 +85,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Coefficient for fusing gyro-based and magnetometer-based orientation
     public static final float FILTER_COEFFICIENT = 0.96f;
     // Tuning value for low pass filter
-    private static final float ALPHA_PRESSURE = 0.8f;
+    private float alphaPressure;
     // String for creating WiFi fingerprint JSON object
     private static final String WIFI_FINGERPRINT = "wf";
 
@@ -124,8 +124,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Settings
     private boolean saveRecording;
-    private float filterCoefficient;
-    private float alphaOrientation;
+
     // Variables to help with timed events
     private long absoluteStartTime;
     private long bootTime;
@@ -295,21 +294,15 @@ public class SensorFusion implements SensorEventListener, Observer {
     /** Update any constants used based on the user's values from the {@link SettingsFragment} */
     public void updateConstants() {
         if (settings.getBoolean("overwrite_fusion_constants", false)) {
-            filterCoefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
-            alphaOrientation =
-                    (float)
-                                    settings.getInt(
-                                            "alpha_orientation",
-                                            (int) ALPHA_ORIENTATION_DEFAULT * 100)
+            alphaPressure =
+                    (float) settings.getInt("alpha_pressure", (int) ALPHA_PRESSURE_DEFAULT * 100)
                             / 100;
         } else {
-            filterCoefficient = FILTER_COEFFICIENT;
-            alphaOrientation = ALPHA_ORIENTATION_DEFAULT;
+            alphaPressure = ALPHA_PRESSURE_DEFAULT;
         }
 
         Log.d(TAG, "Constants updated");
-        Log.d(TAG, "filterCoefficient: " + filterCoefficient);
-        Log.d(TAG, "alphaOrientation: " + alphaOrientation);
+        Log.d(TAG, "alphaPressure: " + alphaPressure);
     }
 
     /**
@@ -338,7 +331,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_PRESSURE:
-                pressure = (1 - ALPHA_PRESSURE) * pressure + ALPHA_PRESSURE * sensorEvent.values[0];
+                pressure = (1 - alphaPressure) * pressure + alphaPressure * sensorEvent.values[0];
                 if (saveRecording) {
                     this.elevation =
                             pdrProcessing.updateElevation(
@@ -471,7 +464,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return The new orientation value to be used, after a low-pass filter has been applied
      * @see SensorFusion#onSensorChanged(SensorEvent)
      */
-    private float applyLPFToOrientation(float oldOrientation, float newOrientation) {
+    private float applyLPFToOrientation(float oldOrientation, float newOrientation, float alpha) {
         // Do not apply filter if going from positive angle to negative angle
         // (Prevents orientation from glitching)
         boolean bothPositive = (oldOrientation >= 0 && newOrientation >= 0);
@@ -479,7 +472,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (!bothPositive && !bothNegative) {
             return newOrientation;
         } else {
-            return (1 - alphaOrientation) * oldOrientation + alphaOrientation * newOrientation;
+            return (1 - alpha) * oldOrientation + alpha * newOrientation;
         }
     }
 

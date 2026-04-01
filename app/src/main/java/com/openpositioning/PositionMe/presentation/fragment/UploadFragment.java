@@ -1,7 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_M_HOUSE;
+import static com.openpositioning.PositionMe.utils.UtilConstants.DEBUG_MODE_HEADER;
 
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -12,6 +14,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
@@ -92,7 +95,18 @@ public class UploadFragment extends Fragment {
     @Override
     public View onCreateView(
             LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        getActivity().setTitle("Upload - " + loginManager.getUsername());
+        // Make debug mode explicit in the header
+        String debugHeader;
+        SharedPreferences settings =
+                PreferenceManager.getDefaultSharedPreferences(requireContext());
+        if (settings.getBoolean("debug_mode", false)) {
+            debugHeader = DEBUG_MODE_HEADER;
+        } else {
+            debugHeader = "";
+        }
+        getActivity().setTitle(debugHeader + "Upload - " + loginManager.getUsername());
+
+        // getActivity().setTitle("Upload - " + loginManager.getUsername());
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_upload, container, false);
     }

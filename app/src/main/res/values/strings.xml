@@ -99,8 +99,8 @@
     <string name="constants_summary_on">The app will use the values provided below</string>
     <string name="weiberg_K_title">Weiberg K</string>
     <string name="weiberg_K">K used in the Weiberg stride length estimation</string>
-    <string name="alpha_orientation_title">Orientation Sensitivity (%)</string>
-    <string name="alpha_orientation">Adjust the turning sensitivity during recordings</string>
+    <string name="alpha_pressure_title">Barometer Sensitivity (%)</string>
+    <string name="alpha_pressure">Adjust the barometer sensitivity during recordings</string>
     <string name="particle_count_title">Particle Count</string>
     <string name="particle_count">The number of particles used for indoor mapping with Particle Fusion</string>
     <string name="fusion_observation_count_title">Observations Count (Fusion)</string>
@@ -129,7 +129,7 @@
     <string name="kalman_noise">Uncertainty of the PDR orientation measurement. Larger values correspond to less trust in the PDR value.</string>
     <string name="kalman_pred_noise_title">Kalman Filter Predicted Noise</string>
     <string name="kalman_pred_noise">Influence of process noise of Kalman filter orientation predictions. Larger values correspond to less trust in the gyroscope predictions.</string>
-    <string name="kalman_noise_bias_title">Orientation Measurement Noise</string>
+    <string name="kalman_noise_bias_title">Orientation Bias Noise</string>
     <string name="kalman_noise_bias">Gyroscope drift. Larger values correspond to faster expected gyroscope drift.</string>
     <!-- Mobile data Preferences -->
     <string name="mobile_data_title">Sync using mobile data</string>
@@ -177,7 +177,7 @@
     <string name="drop_marker">Drop Marker</string>
     <!--  Debug Mode  -->
     <string name="debug_mode_title">Developer Mode</string>
-    <string name="debug_mode_enabled">Developer mode is enabled.</string>
+    <string name="debug_mode_enabled">Developer mode is enabled. You can manually set your PDR start location, and change floor anywhere.</string>
     <string name="debug_mode_disabled">Developer mode is not enabled.</string>
 
 </resources>

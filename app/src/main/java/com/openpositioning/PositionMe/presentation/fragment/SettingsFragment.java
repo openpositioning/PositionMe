@@ -21,7 +21,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private EditTextPreference elevationSeconds;
     private EditTextPreference accelSamples;
     private EditTextPreference epsilon;
-    private EditTextPreference accelFilter;
+    private EditTextPreference kalmanPredictedNoise;
+    private EditTextPreference kalmanBiasNoise;
+    private EditTextPreference kalmanMeasurementNoise;
     private EditTextPreference wifiInterval;
     private LoginManager loginManager;
 
@@ -55,14 +57,26 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                         editText.setInputType(
                                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
 
-        accelFilter = findPreference("accel_filter");
-        accelFilter.setOnBindEditTextListener(
+        wifiInterval = findPreference("wifi_interval");
+        wifiInterval.setOnBindEditTextListener(
+                editText -> editText.setInputType(InputType.TYPE_CLASS_NUMBER));
+
+        kalmanPredictedNoise = findPreference("kalman_pred_noise_std_dev");
+        kalmanPredictedNoise.setOnBindEditTextListener(
                 editText ->
                         editText.setInputType(
                                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
 
-        wifiInterval = findPreference("wifi_interval");
-        wifiInterval.setOnBindEditTextListener(
-                editText -> editText.setInputType(InputType.TYPE_CLASS_NUMBER));
+        kalmanBiasNoise = findPreference("kalman_pred_bias_std_dev");
+        kalmanBiasNoise.setOnBindEditTextListener(
+                editText ->
+                        editText.setInputType(
+                                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        kalmanMeasurementNoise = findPreference("kalman_noise");
+        kalmanMeasurementNoise.setOnBindEditTextListener(
+                editText ->
+                        editText.setInputType(
+                                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
     }
 }

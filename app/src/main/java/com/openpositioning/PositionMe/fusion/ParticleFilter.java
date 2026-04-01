@@ -13,6 +13,7 @@ import android.content.SharedPreferences;
 import android.util.Log;
 import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -56,6 +57,11 @@ public class ParticleFilter {
         updateConstants(context);
     }
 
+    /**
+     * Update any constants used based on the user's values from the {@link SettingsFragment}
+     *
+     * @param context The current app context (for retrieving the settings)
+     */
     public void updateConstants(Context context) {
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
         if (settings.getBoolean("overwrite_fusion_constants", false)) {

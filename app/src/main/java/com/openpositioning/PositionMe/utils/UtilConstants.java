@@ -46,5 +46,7 @@ public class UtilConstants {
     public static final int SENSOR_POLL_TIME_MS = 20;
     public static final int FLOOR_PLAN_POLL_TIME_MS = 1000;
     public static final int ACCELERATION_MAGNITUDE_MAXIMUM_SIZE = 20000;
-    public static final float ALPHA_ORIENTATION_DEFAULT = 0.25f;
+    public static final float ALPHA_PRESSURE_DEFAULT = 0.2f;
+
+    public static final String DEBUG_MODE_HEADER = "[Debug] ";
 }

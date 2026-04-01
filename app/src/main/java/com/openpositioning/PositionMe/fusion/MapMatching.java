@@ -118,18 +118,21 @@ public class MapMatching {
         return validParticles;
     }
 
+    /** TODO - JavaDocs */
     public boolean checkWallCrossed(double[] currentEstimate, double[] newEstimate) {
         if (walls == null) return false;
+
+        List<List<double[]>> wallSegments = walls.get(floor);
+        if (wallSegments == null) return false;
+
+        // If already inside a wall, allow crossing walls (to leave wall polygon)
+        // if (isPointInAnyElement(wallSegments, currentEstimate)) return false;
 
         double currentX = currentEstimate[0];
         double currentY = currentEstimate[1];
         double newX = newEstimate[0];
         double newY = newEstimate[1];
 
-        List<List<double[]>> wallSegments = walls.get(floor);
-
-        boolean crossedWall = false;
-        if (wallSegments == null) return false;
         for (List<double[]> wallSegment : wallSegments) {
             for (int i = 0; i < wallSegment.size(); i++) {
                 double[] wallPointOne = wallSegment.get(i);

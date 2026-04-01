@@ -11,6 +11,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 import androidx.preference.PreferenceManager;
+import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import org.ejml.dense.row.CommonOps_FDRM;
 import org.ejml.simple.SimpleMatrix;
 
@@ -59,11 +60,9 @@ public class KalmanFilter {
     }
 
     /**
-     * Retrieve constants from the settings page and apply them to the Kalman filter
+     * Update any constants used based on the user's values from the {@link SettingsFragment}
      *
-     * @param context The current context from {@link
-     *     com.openpositioning.PositionMe.sensors.SensorFusion SensorFusion}
-     * @see com.openpositioning.PositionMe.sensors.SensorFusion SensorFusion
+     * @param context The current app context (for retrieving the settings)
      */
     public void updateConstants(Context context) {
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);

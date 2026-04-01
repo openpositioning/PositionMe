@@ -111,15 +111,6 @@
             android:summary="@string/movement_epsilon" />
 
         <EditTextPreference
-            android:id="@+id/accelFilterInput"
-            android:inputType="number"
-            app:key="accel_filter"
-            app:title="@string/filter_coefficient_title"
-            app:dependency="overwrite_constants"
-            app:defaultValue="0.96"
-            android:summary="@string/filter_coefficient" />
-
-        <EditTextPreference
             android:id="@+id/wifiIntervalInput"
             android:inputType="number"
             app:key="wifi_interval"
@@ -149,14 +140,24 @@
             android:summary="@string/particle_count"/>
 
         <SeekBarPreference
+            android:max="50"
+            android:min="1"
+            app:defaultValue="20"
+            app:dependency="overwrite_fusion_constants"
+            app:key="fusion_observation_count"
+            app:showSeekBarValue="true"
+            app:title="@string/fusion_observation_count_title"
+            android:summary="@string/fusion_observation_count"/>
+
+        <SeekBarPreference
             android:max="100"
             android:min="1"
-            app:defaultValue="25"
+            app:defaultValue="20"
             app:dependency="overwrite_fusion_constants"
-            app:key="alpha_orientation"
+            app:key="alpha_pressure"
             app:showSeekBarValue="true"
-            app:title="@string/alpha_orientation_title"
-            android:summary="@string/alpha_orientation"/>
+            app:title="@string/alpha_pressure_title"
+            android:summary="@string/alpha_pressure"/>
 
         <SeekBarPreference
             android:max="100"
@@ -213,7 +214,7 @@
             app:key="kalman_noise"
             app:title="@string/kalman_noise_title"
             app:dependency="overwrite_kalman_constants"
-            app:defaultValue="0.1"
+            app:defaultValue="0.25"
             android:summary="@string/kalman_noise" />
 
     </PreferenceCategory>

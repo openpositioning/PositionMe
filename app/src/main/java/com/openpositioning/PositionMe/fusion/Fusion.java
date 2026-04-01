@@ -16,6 +16,7 @@ import android.content.SharedPreferences;
 import android.util.Log;
 import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.Building;
 import com.openpositioning.PositionMe.utils.FloorPlan;
@@ -70,7 +71,7 @@ public class Fusion {
     private int lastWiFiFloor = BUILDING_NO_FLOOR_NUMBER;
     private float sigma;
     private int maximumNumberOfObservations;
-    private double refLng, refLat;
+    private boolean debugEnabled;
 
     private int previousWiFiFloor = BUILDING_NO_FLOOR_NUMBER;
 
@@ -80,6 +81,11 @@ public class Fusion {
         updateConstants(context);
     }
 
+    /**
+     * Update any constants used based on the user's values from the {@link SettingsFragment}
+     *
+     * @param context The current app context (for retrieving the settings)
+     */
     public void updateConstants(Context context) {
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
         if (settings.getBoolean("overwrite_fusion_constants", false)) {
@@ -88,33 +94,12 @@ public class Fusion {
         } else {
             maximumNumberOfObservations = FUSION_TYPE_MAX;
         }
+        debugEnabled = settings.getBoolean("debug_mode", false);
 
         Log.d(TAG, "Constants updated");
         Log.d(TAG, "maximumNumberOfObservations: " + maximumNumberOfObservations);
+        Log.d(TAG, "debugEnabled: " + debugEnabled);
         particleFilter.updateConstants(context);
-    }
-
-    /**
-     * Allows the maximum number of {@link Particle Particles} used by the {@link ParticleFilter} to
-     * be changed
-     *
-     * @param newMaximum The new maximum number of particles
-     */
-    public void updateMaximumNumberOfParticles(int newMaximum) {
-        particleFilter.setMaximumNumberOfParticles(newMaximum);
-    }
-
-    /**
-     * Allows the maximum number of observations saved for use in fusion algorithm to be changed
-     *
-     * @param newMaximum The new maximum number of observations
-     */
-    public void updateMaximumNumberOfObservations(int newMaximum) {
-        maximumNumberOfObservations = newMaximum;
-    }
-
-    public void updateRepopulationJitter(float newJitter) {
-        particleFilter.updateRepopulationJitter(newJitter);
     }
 
     public List<Particle> getParticles() {
@@ -369,7 +354,14 @@ public class Fusion {
         double[] en = particleFilter.latLngToEN(pos.latitude, pos.longitude);
 
         // Only proceed if able to change floors
-        boolean eligible = mapMatching.isEligibleForAltitudeChange(en);
+        boolean eligible;
+
+        // Allow floor changing anywhere in developer mode
+        if (debugEnabled) {
+            eligible = building != null;
+        } else {
+            eligible = mapMatching.isEligibleForAltitudeChange(en);
+        }
         if (!eligible) {
             // Bug fix if floor is uninitialised
             if (estimatedFloor == BUILDING_NO_FLOOR_NUMBER) {

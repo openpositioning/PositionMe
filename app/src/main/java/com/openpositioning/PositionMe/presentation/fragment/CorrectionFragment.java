@@ -128,11 +128,11 @@ public class CorrectionFragment extends Fragment {
                                                 boundsBuilder.build(), 100));
                             } else {
                                 mMap.moveCamera(
-                                        CameraUpdateFactory.newLatLngZoom(fusionPath.get(0), 18f));
+                                        CameraUpdateFactory.newLatLngZoom(fusionPath.get(0), 14f));
                             }
                         } else {
                             // Default if path is empty
-                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 18f));
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 14f));
                         }
                     }
                 });
