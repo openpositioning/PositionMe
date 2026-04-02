@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.sensors;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -18,11 +19,13 @@ import java.util.stream.Stream;
  * replacing the role previously held by {@link SensorFusion}.</p>
  *
  * @see WifiDataProcessor the observable that triggers WiFi scan updates
- * @see WiFiPositioning   the API client for WiFi-based positioning
+ * @see WiFiPositioning the API client for WiFi-based positioning
  */
 public class WifiPositionManager implements Observer {
 
     private static final String WIFI_FINGERPRINT = "wf";
+    private static final float WIFI_FUSION_MAX_DISTANCE_METERS = 10.0f;
+    private static final double WIFI_FUSION_SIGMA_METERS = 12.0;
 
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
@@ -32,10 +35,9 @@ public class WifiPositionManager implements Observer {
      * Creates a new WifiPositionManager.
      *
      * @param wiFiPositioning WiFi positioning API client
-     * @param recorder        trajectory recorder for writing WiFi fingerprints
+     * @param recorder trajectory recorder for writing WiFi fingerprints
      */
-    public WifiPositionManager(WiFiPositioning wiFiPositioning,
-                               TrajectoryRecorder recorder) {
+    public WifiPositionManager(WiFiPositioning wiFiPositioning, TrajectoryRecorder recorder) {
         this.wiFiPositioning = wiFiPositioning;
         this.recorder = recorder;
     }
@@ -49,9 +51,14 @@ public class WifiPositionManager implements Observer {
      */
     @Override
     public void update(Object[] wifiList) {
-        this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
+        Log.d("WifiProbe", "Received WiFi scan results.");
+        this.wifiList = Stream.of(wifiList)
+                .map(o -> (Wifi) o)
+                .filter(w -> w.getLevel() < -40)
+                .collect(Collectors.toList());
         recorder.addWifiFingerprint(this.wifiList);
-        createWifiPositioningRequest();
+        // Use the callback-based request path so the fusion layer can react to the result.
+        createWifiPositionRequestCallback();
     }
 
     /**
@@ -67,7 +74,8 @@ public class WifiPositionManager implements Observer {
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
+            Log.e("WifiProbe", "Failed to build WiFi positioning JSON: " + e);
+            Log.e("jsonErrors", "Error creating json object" + e);
         }
     }
 
@@ -82,19 +90,68 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            Log.d("WifiProbe", "Sending WiFi positioning request.");
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
+                    Log.d("WifiSuccess", "WiFi location received, updating particle filter.");
+
+                    com.openpositioning.PositionMe.fusion.ParticleFilter pf =
+                            SensorFusion.getInstance().getParticleFilter();
+
+                    if (pf != null && wifiLocation != null) {
+                        // Use the start location as the origin of the local coordinate frame.
+                        float[] startCoords = SensorFusion.getInstance().getGNSSLatitude(true);
+                        double lat0 = startCoords[0];
+                        double lng0 = startCoords[1];
+
+                        // Convert the WiFi location from WGS84 to local x/y coordinates in meters.
+                        double radius = 6378137.0;
+                        double lat = wifiLocation.latitude;
+                        double lng = wifiLocation.longitude;
+                        double dLat = Math.toRadians(lat - lat0);
+                        double dLng = Math.toRadians(lng - lng0);
+                        float x = (float) (radius * dLng * Math.cos(Math.toRadians(lat0)));
+                        float y = (float) (radius * dLat);
+
+                        // Build a measurement with the tuned WiFi uncertainty.
+                        com.openpositioning.PositionMe.fusion.Measurement measurement =
+                                new com.openpositioning.PositionMe.fusion.Measurement(
+                                        x, y, WIFI_FUSION_SIGMA_METERS);
+
+                        // Reuse the active map state so WiFi fusion respects map constraints.
+                        LatLng startLocation = new LatLng(startCoords[0], startCoords[1]);
+                        List<FloorplanApiClient.MapShapeFeature> walls =
+                                SensorFusion.getInstance().getCurrentWalls();
+
+                        SensorFusion.getInstance().setLatestWifiLocation(wifiLocation);
+                        com.openpositioning.PositionMe.fusion.Position estimatedPosition =
+                                pf.getEstimatedPosition(walls, startLocation);
+                        double wifiDistance = Math.hypot(
+                                estimatedPosition.x - x, estimatedPosition.y - y);
+
+                        if (wifiDistance <= WIFI_FUSION_MAX_DISTANCE_METERS) {
+                            pf.updateWeights(measurement, walls, startLocation);
+                            pf.resample();
+                        } else {
+                            Log.d("WifiSuccess",
+                                    "Skipping WiFi fusion, distance too large: " + wifiDistance);
+                        }
+
+                        com.openpositioning.PositionMe.fusion.Position pos =
+                                pf.getEstimatedPosition();
+                        Log.d("ParticleFilter",
+                                "Fused WiFi position X: " + pos.x + " Y: " + pos.y);
+                    }
                 }
 
                 @Override
                 public void onError(String message) {
-                    // Handle the error response
+                    Log.e("WifiProbe", "WiFi positioning request failed: " + message);
                 }
             });
         } catch (JSONException e) {
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
+            Log.e("jsonErrors", "Error creating json object" + e);
         }
     }
 

@@ -302,6 +302,18 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        if (trajectoryMapFragment != null) {
+            LatLng newWifi = sensorFusion.popLatestWifiLocation();
+            if (newWifi != null) {
+                trajectoryMapFragment.drawWifiUpdatePoint(newWifi);
+            }
+
+            LatLng newGnss = sensorFusion.popLatestGnssLocation();
+            if (newGnss != null) {
+                trajectoryMapFragment.drawGnssUpdatePoint(newGnss);
+            }
+        }
+        // ===================================
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];

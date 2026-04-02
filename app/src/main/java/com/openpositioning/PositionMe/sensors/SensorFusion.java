@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.widget.Toast;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -52,6 +53,9 @@ public class SensorFusion implements SensorEventListener {
     //region Static variables
     private static final SensorFusion sensorFusion = new SensorFusion();
     //endregion
+    private static final double START_WIFI_WEIGHT = 0.7;
+    private static final double START_GNSS_WEIGHT = 0.3;
+    private static final double MAX_START_BLEND_DISTANCE_METERS = 25.0;
 
     //region Instance variables
     private Context appContext;
@@ -87,6 +91,7 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
+    private com.openpositioning.PositionMe.fusion.ParticleFilter particleFilter;
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
@@ -94,6 +99,9 @@ public class SensorFusion implements SensorEventListener {
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
+    private List<FloorplanApiClient.MapShapeFeature> currentWalls = null;
+    private LatLng latestWifiLocation = null;
+    private LatLng latestGnssLocation = null;
     //endregion
 
     //region Initialisation
@@ -121,7 +129,6 @@ public class SensorFusion implements SensorEventListener {
      * the system for data collection.</p>
      *
      * @param context application context for permissions and device access.
-     *
      * @see MovementSensor handling all SensorManager based data collection devices.
      * @see ServerCommunications handling communication with the server.
      * @see GNSSDataProcessor for location data processing.
@@ -193,6 +200,12 @@ public class SensorFusion implements SensorEventListener {
                             "WiFi RTT is not supported on this device",
                             Toast.LENGTH_LONG).show());
         }
+        // Initialise the particle filter once. Particle placement still happens later
+        // after map bounds become available.
+        this.particleFilter = new com.openpositioning.PositionMe.fusion.ParticleFilter(1000);
+        // ------------------------------
+        this.particleFilter = new com.openpositioning.PositionMe.fusion.ParticleFilter(1000);
+        // ------------------------------
     }
 
     //endregion
@@ -209,9 +222,12 @@ public class SensorFusion implements SensorEventListener {
         eventHandler.handleSensorEvent(sensorEvent);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void onAccuracyChanged(Sensor sensor, int i) {}
+    public void onAccuracyChanged(Sensor sensor, int i) {
+    }
 
     //endregion
 
@@ -488,8 +504,64 @@ public class SensorFusion implements SensorEventListener {
      * @param startPosition contains the initial location set by the user
      */
     public void setStartGNSSLatitude(float[] startPosition) {
-        state.startLocation[0] = startPosition[0];
-        state.startLocation[1] = startPosition[1];
+        LatLng blendedStart = resolveBlendedStartLocation(startPosition);
+        state.startLocation[0] = (float) blendedStart.latitude;
+        state.startLocation[1] = (float) blendedStart.longitude;
+
+        if (this.particleFilter != null) {
+            // The local coordinate origin is the user-selected start point.
+            // Initialise particles within a symmetric uncertainty box around that point.
+            float initialUncertainty = 10.0f; // 10-meter half-width
+
+            com.openpositioning.PositionMe.fusion.MapBounds bounds =
+                    new com.openpositioning.PositionMe.fusion.MapBounds(
+                            -initialUncertainty,  // minX
+                            initialUncertainty,  // maxX
+                            -initialUncertainty,  // minY
+                            initialUncertainty   // maxY
+                    );
+
+            // Initialise particles around the selected start point.
+            this.particleFilter.initialize(bounds);
+
+            Log.d("ParticleFilter", "Particle filter initialised around the selected start point.");
+        }
+        // Particle filter start-up is complete.
+    }
+
+    private LatLng resolveBlendedStartLocation(float[] startPosition) {
+        LatLng gnssStart = new LatLng(startPosition[0], startPosition[1]);
+        LatLng wifiStart = getLatLngWifiPositioning();
+
+        if (wifiStart == null) {
+            Log.d("StartLocation", "Using GNSS-only start location");
+            return gnssStart;
+        }
+
+        double distanceMeters = distanceMeters(gnssStart, wifiStart);
+        if (distanceMeters > MAX_START_BLEND_DISTANCE_METERS) {
+            Log.d("StartLocation", "Skipping WiFi/GNSS start blending, distance too large: "
+                    + distanceMeters);
+            return gnssStart;
+        }
+
+        double blendedLat = wifiStart.latitude * START_WIFI_WEIGHT + gnssStart.latitude * START_GNSS_WEIGHT;
+        double blendedLng = wifiStart.longitude * START_WIFI_WEIGHT + gnssStart.longitude * START_GNSS_WEIGHT;
+        Log.d("StartLocation", "Using blended start location, wifiWeight="
+                + START_WIFI_WEIGHT + ", gnssWeight=" + START_GNSS_WEIGHT
+                + ", distance=" + distanceMeters);
+        return new LatLng(blendedLat, blendedLng);
+    }
+
+    private double distanceMeters(LatLng a, LatLng b) {
+        double radius = 6378137.0;
+        double lat1 = Math.toRadians(a.latitude);
+        double lat2 = Math.toRadians(b.latitude);
+        double dLat = lat2 - lat1;
+        double dLng = Math.toRadians(b.longitude - a.longitude);
+        double x = dLng * Math.cos((lat1 + lat2) / 2.0);
+        double y = dLat;
+        return Math.sqrt(x * x + y * y) * radius;
     }
 
     /**
@@ -645,8 +717,102 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+
+            // Apply GNSS corrections only when the reported accuracy is acceptable.
+            com.openpositioning.PositionMe.fusion.ParticleFilter pf = getParticleFilter();
+
+            if (pf != null && state.startLocation != null && state.startLocation[0] != 0.0f) {
+
+                float realAccuracy = location.getAccuracy();
+
+                // Ignore poor indoor GNSS fixes to avoid dragging the trajectory away.
+                // Indoor GPS errors often become large enough to be harmful instead of helpful.
+                // When that happens, skip this update entirely.
+                // The threshold is currently set to 20 meters.
+                if (realAccuracy > 20.0f) {
+                    android.util.Log.d("ParticleFilter", "GNSS fix rejected due to poor accuracy: " + realAccuracy + "m");
+                    return; // Skip this GNSS correction.
+                }
+
+                // Convert the current GNSS fix into the local map coordinate system.
+                // Convert the current GNSS fix into the local map coordinate system.
+                double lat0 = state.startLocation[0];
+                double lng0 = state.startLocation[1];
+
+                double lat = location.getLatitude();
+                double lng = location.getLongitude();
+
+                double R = 6378137.0;
+                double dLat = Math.toRadians(lat - lat0);
+                double dLng = Math.toRadians(lng - lng0);
+                float x = (float) (R * dLng * Math.cos(Math.toRadians(lat0)));
+                float y = (float) (R * dLat);
+
+                // Use the reported accuracy, but keep a lower bound for numerical stability.
+                // This avoids overly confident updates from unrealistic near-zero values.
+                float usedSigma = Math.max(realAccuracy, 10.0f);
+
+                com.openpositioning.PositionMe.fusion.Measurement gnssMeasurement =
+                        new com.openpositioning.PositionMe.fusion.Measurement(x, y, usedSigma);
+
+                // Feed the accepted GNSS measurement into the particle filter.
+                // Reuse the current map state so blocked particles can be down-weighted.
+                LatLng startLocation = new LatLng(state.startLocation[0], state.startLocation[1]);
+                LatLng gnssLoc = new LatLng(location.getLatitude(), location.getLongitude());
+                setLatestGnssLocation(gnssLoc);
+                pf.updateWeights(gnssMeasurement, currentWalls, startLocation);
+                pf.resample();
+
+                android.util.Log.d("ParticleFilter", "GNSS correction applied with sigma=" + usedSigma + "m");
+
+                android.util.Log.d("ParticleFilter", "GNSS correction applied with sigma=" + usedSigma + "m");
+            }
         }
     }
 
+    // Returns the shared particle filter instance.
+    // Returns the shared particle filter instance.
+    public com.openpositioning.PositionMe.fusion.ParticleFilter getParticleFilter() {
+        return this.particleFilter;
+    }
+
+    // Accessors for the current map state used by map matching and drawing.
+    public void setCurrentWalls(List<FloorplanApiClient.MapShapeFeature> walls) {
+        this.currentWalls = walls;
+    }
+
+    public List<FloorplanApiClient.MapShapeFeature> getCurrentWalls() {
+        return this.currentWalls;
+    }
+
+    public LatLng getStartLocationLatLng() {
+        if (state.startLocation == null || state.startLocation.length < 2) {
+            return null;
+        }
+        if (state.startLocation[0] == 0.0f && state.startLocation[1] == 0.0f) {
+            return null;
+        }
+        return new LatLng(state.startLocation[0], state.startLocation[1]);
+    }
+
+    public void setLatestWifiLocation(LatLng loc) {
+        this.latestWifiLocation = loc;
+    }
+
+    public LatLng popLatestWifiLocation() {
+        LatLng loc = this.latestWifiLocation;
+        this.latestWifiLocation = null; // Clear after consumption so the marker is drawn once.
+        return loc;
+    }
+
+    public void setLatestGnssLocation(LatLng loc) {
+        this.latestGnssLocation = loc;
+    }
+
+    public LatLng popLatestGnssLocation() {
+        LatLng loc = this.latestGnssLocation;
+        this.latestGnssLocation = null; // Clear after consumption so the marker is drawn once.
+        return loc;
+    }
     //endregion
 }

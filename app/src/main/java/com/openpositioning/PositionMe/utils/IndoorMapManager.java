@@ -161,15 +161,22 @@ public class IndoorMapManager {
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
         if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
 
+        int targetIndex = -1;
+
         if (autoFloor) {
-            newFloor += getAutoFloorBias();
+            targetIndex = newFloor + 1;
+        } else {
+            targetIndex = newFloor;
         }
 
-        if (newFloor >= 0 && newFloor < currentFloorShapes.size()
-                && newFloor != this.currentFloor) {
-            this.currentFloor = newFloor;
-            drawFloorShapes(newFloor);
+        if (targetIndex >= 0 && targetIndex < currentFloorShapes.size()) {
+            this.currentFloor = targetIndex;
+            drawFloorShapes(targetIndex);
         }
+        List<FloorplanApiClient.MapShapeFeature> currentFeatures = currentFloorShapes.get(targetIndex).getFeatures();
+        SensorFusion.getInstance().setCurrentWalls(currentFeatures);
+
+        android.util.Log.d("FloorFix", "鎴愬姛鍒囨崲鍒版ゼ灞傜储寮? " + targetIndex + "锛屽苟鏇存柊浜嗗澹佹暟鎹紒");
     }
 
     /**
@@ -235,6 +242,8 @@ public class IndoorMapManager {
                 if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
                     drawFloorShapes(currentFloor);
                     isIndoorMapSet = true;
+                    List<FloorplanApiClient.MapShapeFeature> currentFeatures = currentFloorShapes.get(currentFloor).getFeatures();
+                    SensorFusion.getInstance().setCurrentWalls(currentFeatures);
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
@@ -410,5 +419,13 @@ public class IndoorMapManager {
             pts.add(pts.get(0));
             gMap.addPolyline(new PolylineOptions().color(Color.GREEN).addAll(pts));
         }
+    }
+    /**
+     */
+    public List<FloorplanApiClient.MapShapeFeature> getCurrentFloorMapShapes() {
+        if (currentFloorShapes != null && currentFloor >= 0 && currentFloor < currentFloorShapes.size()) {
+            return currentFloorShapes.get(currentFloor).getFeatures();
+        }
+        return null;
     }
 }

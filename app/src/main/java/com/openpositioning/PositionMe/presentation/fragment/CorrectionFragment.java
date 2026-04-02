@@ -31,16 +31,17 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 /**
- * A simple {@link Fragment} subclass. Corrections Fragment is displayed after a recording session
- * is finished to enable manual adjustments to the PDR. The adjustments are not saved as of now.
+ * Lets the user review and manually rescale the recorded PDR trajectory after a session.
+ *
+ * <p>Corrections made in this screen are applied to the preview only and are not persisted.
  */
 public class CorrectionFragment extends Fragment {
 
-    //Map variable
+    /** Google Map used to preview the corrected trajectory. */
     public GoogleMap mMap;
-    //Button to go to next
+    /** Advances to the next screen after reviewing the correction. */
     private Button button;
-    //Singleton SensorFusion class
+    /** Shared sensor fusion pipeline instance. */
     private SensorFusion sensorFusion = SensorFusion.getInstance();
     private TextView averageStepLengthText;
     private EditText stepLengthInput;
@@ -53,7 +54,7 @@ public class CorrectionFragment extends Fragment {
     private PathView pathView;
 
     public CorrectionFragment() {
-        // Required empty public constructor
+        // Required empty public constructor.
     }
 
     @Override
@@ -65,13 +66,13 @@ public class CorrectionFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
 
-        // Validate trajectory quality before uploading
+        // Validate trajectory quality before uploading.
         validateAndUpload();
 
-        //Obtain start position
+        // Obtain the start position.
         float[] startPosition = sensorFusion.getGNSSLatitude(true);
 
-        // Initialize map fragment
+        // Initialize the embedded map fragment.
         SupportMapFragment supportMapFragment=(SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.map);
 
@@ -85,11 +86,11 @@ public class CorrectionFragment extends Fragment {
                 mMap.getUiSettings().setRotateGesturesEnabled(true);
                 mMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                // Add a marker at the start position
+                // Add a marker at the start position.
                 start = new LatLng(startPosition[0], startPosition[1]);
                 mMap.addMarker(new MarkerOptions().position(start).title("Start Position"));
 
-                // Calculate zoom for demonstration
+                // Calculate a zoom level that matches the rendered path scale.
                 double zoom = Math.log(156543.03392f * Math.cos(startPosition[0] * Math.PI / 180)
                         * scalingRatio) / Math.log(2);
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) zoom));
@@ -111,11 +112,11 @@ public class CorrectionFragment extends Fragment {
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
                 + String.format("%.2f", averageStepLength));
 
-        // Listen for ENTER key
+        // Listen for the Enter key to apply a new step length.
         this.stepLengthInput.setOnKeyListener((v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_ENTER) {
                 newStepLength = Float.parseFloat(changedText.toString());
-                // Rescale path
+                // Rescale the previewed path.
                 sensorFusion.redrawPath(newStepLength / averageStepLength);
                 averageStepLengthText.setText(getString(R.string.averageStepLgn)
                         + ": " + String.format("%.2f", newStepLength));
@@ -170,7 +171,6 @@ public class CorrectionFragment extends Fragment {
         TrajectoryValidator.ValidationResult result = sensorFusion.validateTrajectory();
 
         if (result.isClean()) {
-            // All checks passed — upload immediately
             Log.i("CorrectionFragment", "Trajectory validation passed, uploading");
             sensorFusion.sendTrajectoryToCloud();
             return;
@@ -180,7 +180,6 @@ public class CorrectionFragment extends Fragment {
         Log.w("CorrectionFragment", "Trajectory quality issues:\n" + summary);
 
         if (!result.isPassed()) {
-            // Blocking errors exist — warn strongly but still allow upload
             new AlertDialog.Builder(requireContext())
                     .setTitle(R.string.validation_error_title)
                     .setMessage(getString(R.string.validation_error_message, summary))
@@ -193,7 +192,6 @@ public class CorrectionFragment extends Fragment {
                     .setCancelable(false)
                     .show();
         } else {
-            // Only warnings — show lighter dialog
             new AlertDialog.Builder(requireContext())
                     .setTitle(R.string.validation_warning_title)
                     .setMessage(getString(R.string.validation_warning_message, summary))

@@ -6,12 +6,14 @@ import android.hardware.SensorManager;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import com.google.android.gms.maps.model.LatLng;
 
 /**
  * Handles sensor event dispatching for all registered movement sensors.
@@ -24,7 +26,10 @@ public class SensorEventHandler {
 
     private static final float ALPHA = 0.8f;
     private static final long LARGE_GAP_THRESHOLD_MS = 500;
-
+    private static final float MAP_MATCH_SUBSTEP_METERS = 0.75f;
+    private static final int MAX_MAP_MATCH_SUBDIVISIONS = 2;
+    private static final long TURN_CONFIRM_WINDOW_MS = 850;
+    private static final float TURN_CONFIRM_GYRO_THRESHOLD_RAD_S = 0.6f;
     private final SensorState state;
     private final PdrProcessing pdrProcessing;
     private final PathView pathView;
@@ -34,10 +39,14 @@ public class SensorEventHandler {
     private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
     private final HashMap<Integer, Integer> eventCounts = new HashMap<>();
     private long lastStepTime = 0;
+    private long lastHeadingMotionTimestamp = 0;
     private long bootTime;
 
     // Acceleration magnitude buffer between steps
     private final List<Double> accelMagnitude = new ArrayList<>();
+    // Track the previous raw PDR position to compute per-step deltas.
+    private float lastPdrX = 0f;
+    private float lastPdrY = 0f;
 
     /**
      * Creates a new SensorEventHandler.
@@ -98,7 +107,9 @@ public class SensorEventHandler {
                 state.angularVelocity[0] = sensorEvent.values[0];
                 state.angularVelocity[1] = sensorEvent.values[1];
                 state.angularVelocity[2] = sensorEvent.values[2];
-
+                if (Math.abs(sensorEvent.values[2]) >= TURN_CONFIRM_GYRO_THRESHOLD_RAD_S) {
+                    lastHeadingMotionTimestamp = currentTime;
+                }
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 state.filteredAcc[0] = sensorEvent.values[0];
                 state.filteredAcc[1] = sensorEvent.values[1];
@@ -164,21 +175,63 @@ public class SensorEventHandler {
                                 "stepDetection triggered, accelMagnitude size = "
                                         + accelMagnitude.size());
                     }
-
-                    float[] newCords = this.pdrProcessing.updatePdr(
+                    float[] rawPdrCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
-                            state.orientation[0]
+                            state.orientation[0],
+                            state.angularVelocity[2],
+                            currentTime - lastHeadingMotionTimestamp <= TURN_CONFIRM_WINDOW_MS
                     );
-
                     this.accelMagnitude.clear();
+                    // Derive the raw PDR delta for this detected step.
+                    float deltaX = rawPdrCords[0] - lastPdrX;
+                    float deltaY = rawPdrCords[1] - lastPdrY;
+
+                    // Persist the raw PDR position for the next step.
+                    lastPdrX = rawPdrCords[0];
+                    lastPdrY = rawPdrCords[1];
+
+                    // Run prediction and map matching before drawing the fused position.
+                    com.openpositioning.PositionMe.fusion.ParticleFilter pf = SensorFusion.getInstance().getParticleFilter();
+                    float[] finalCordsToDraw = rawPdrCords;
+                    if (pf != null && (deltaX != 0 || deltaY != 0)) {
+                        // Split larger moves into a small number of map-matching substeps.
+                        int subdivisions = Math.max(1, Math.min(MAX_MAP_MATCH_SUBDIVISIONS,
+                                (int) Math.ceil(Math.hypot(deltaX, deltaY) / MAP_MATCH_SUBSTEP_METERS)));
+
+                        // Apply area-based horizontal motion scaling and wall constraints.
+                        List<FloorplanApiClient.MapShapeFeature> walls = SensorFusion.getInstance().getCurrentWalls();
+                        LatLng startLocation = new LatLng(state.startLocation[0], state.startLocation[1]);
+                        float horizontalMovementScale = pf.getHorizontalMovementScale(
+                                walls, startLocation, state.elevator);
+                        float adjustedDeltaX = deltaX * horizontalMovementScale;
+                        float adjustedDeltaY = deltaY * horizontalMovementScale;
+                        for (int i = 0; i < subdivisions; i++) {
+                            pf.predict(new com.openpositioning.PositionMe.fusion.PDRMovement(adjustedDeltaX, adjustedDeltaY), subdivisions);
+                            pf.applyMapMatching(walls, startLocation);
+                        }
+
+                        // Draw the fused position instead of the raw PDR position.
+                        com.openpositioning.PositionMe.fusion.Position fusedPosition =
+                                pf.getEstimatedPosition(walls, startLocation);
+
+                        // Debug logging for comparing raw PDR and particle-filter output.
+                        finalCordsToDraw = new float[]{fusedPosition.x, fusedPosition.y};
+
+                        // Debug logging for comparing raw PDR and particle-filter output.
+                        Log.d("ParticleFilter", "X: " + rawPdrCords[0] + " Y: " + rawPdrCords[1]);
+                        Log.d("ParticleFilter", "X: " + fusedPosition.x + " Y: " + fusedPosition.y);
+                    }
 
                     if (recorder.isRecording()) {
-                        this.pathView.drawTrajectory(newCords);
+                        // Draw the fused trajectory on screen.
+                        this.pathView.drawTrajectory(finalCordsToDraw);
+
                         state.stepCounter++;
+                        // Keep the recorded PDR trace in the raw local coordinate frame.
                         recorder.addPdrData(
                                 SystemClock.uptimeMillis() - bootTime,
-                                newCords[0], newCords[1]);
+                                rawPdrCords[0], rawPdrCords[1]);
                     }
                     break;
                 }
@@ -204,4 +257,5 @@ public class SensorEventHandler {
     void resetBootTime(long newBootTime) {
         this.bootTime = newBootTime;
     }
+
 }

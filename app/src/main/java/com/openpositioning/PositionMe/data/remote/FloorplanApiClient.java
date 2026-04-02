@@ -372,7 +372,19 @@ public class FloorplanApiClient {
             while (it.hasNext()) {
                 keys.add(it.next());
             }
-            Collections.sort(keys);
+            //Collections.sort(keys);
+            List<String> Keys = new ArrayList<>();
+            String[] physicalOrder = {"LG", "GF", "F1", "F2", "F3"};
+            for (String pKey : physicalOrder) {
+                if (root.has(pKey)) {
+                    Keys.add(pKey);
+                }
+            }
+            Iterator<String> allKeys = root.keys();
+            while (allKeys.hasNext()) {
+                String k = allKeys.next();
+                if (!Keys.contains(k)) Keys.add(k);
+            }
 
             for (String key : keys) {
                 JSONObject floorCollection = root.getJSONObject(key);
