@@ -84,6 +84,14 @@ public class RecordingFragment extends Fragment {
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
+    // Fused trajectory update loop (1-second interval)
+    private Handler fusedTrajectoryHandler;
+    private LatLng lastFusedPos = null;
+    private LatLng lastGnssObsPos = null;
+    private LatLng lastWifiObsPos = null;
+    private float previousObsPosX = 0f;
+    private float previousObsPosY = 0f;
+
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
@@ -93,6 +101,15 @@ public class RecordingFragment extends Fragment {
             updateUIandPosition();
             // Loop again
             refreshDataHandler.postDelayed(refreshDataTask, 200);
+        }
+    };
+
+    /** Updates the fused best-estimate marker and trajectory polyline every 1 second. */
+    private final Runnable fusedTrajectoryTask = new Runnable() {
+        @Override
+        public void run() {
+            updateFusedDisplay();
+            fusedTrajectoryHandler.postDelayed(this, 1000);
         }
     };
 
@@ -107,6 +124,7 @@ public class RecordingFragment extends Fragment {
         Context context = requireActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
+        this.fusedTrajectoryHandler = new Handler();
     }
 
     @Nullable
@@ -193,6 +211,9 @@ public class RecordingFragment extends Fragment {
         // The blinking effect for recIcon
         blinkingRecordingIcon();
 
+        // Start the 1-second fused position + trajectory update loop
+        fusedTrajectoryHandler.postDelayed(fusedTrajectoryTask, 1000);
+
         // Start the timed or indefinite UI refresh
         if (this.settings.getBoolean("split_trajectory", false)) {
             // A maximum recording time is set
@@ -228,7 +249,7 @@ public class RecordingFragment extends Fragment {
         LatLng cur = trajectoryMapFragment.getCurrentLocation();
         if (cur == null) {
             Toast.makeText(requireContext(), "" +
-                    "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
+                            "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
                     Toast.LENGTH_SHORT).show();
             return;
         }
@@ -247,6 +268,26 @@ public class RecordingFragment extends Fragment {
         trajectoryMapFragment.addTestPointMarker(idx, ts, cur);
     }
 
+    /**
+     * Updates the purple fused trajectory polyline every 1 second.
+     * Uses the WiFi fix as the best estimate when available; falls back to the current
+     * PDR-derived position. Raw GNSS is intentionally excluded here to avoid polyline jumps.
+     * The position marker (arrow) is updated separately in the 200ms loop via
+     * {@link #updateUIandPosition}.
+     */
+    private void updateFusedDisplay() {
+        if (trajectoryMapFragment == null) return;
+
+        LatLng bestEstimate = sensorFusion.getFusedPosition();
+        if (bestEstimate == null) return;
+
+        // Append to fused trajectory only if the position has moved > 0.3 m
+        if (lastFusedPos == null
+                || UtilFunctions.distanceBetweenPoints(lastFusedPos, bestEstimate) > 0.3) {
+            trajectoryMapFragment.updateFusedTrajectory(bestEstimate);
+            lastFusedPos = bestEstimate;
+        }
+    }
 
     /**
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
@@ -276,10 +317,15 @@ public class RecordingFragment extends Fragment {
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
-            // Pass the location + orientation to the map
+            // Update the red PDR polyline and move the position marker.
+            // Priority: particle filter → WiFi fix → PDR-derived fallback.
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                float orientation = (float) Math.toDegrees(sensorFusion.passOrientation());
+                trajectoryMapFragment.updateUserLocation(newLocation, orientation);
+                LatLng fusedPos = sensorFusion.getFusedPosition();
+                if (fusedPos == null) fusedPos = sensorFusion.getLatLngWifiPositioning();
+                trajectoryMapFragment.updateFusedPosition(
+                        fusedPos != null ? fusedPos : newLocation, orientation);
             }
         }
 
@@ -302,6 +348,44 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // --- Colour-coded observation markers ---
+
+        // GNSS observation: add a blue marker whenever the raw GNSS fix changes
+        float[] gnssRaw = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+        if (gnssRaw != null) {
+            LatLng gnssObs = new LatLng(gnssRaw[0], gnssRaw[1]);
+            if (!gnssObs.equals(lastGnssObsPos)) {
+                trajectoryMapFragment.addObservationMarker(gnssObs,
+                        TrajectoryMapFragment.ObservationSource.GNSS);
+                lastGnssObsPos = gnssObs;
+            }
+        }
+
+        // WiFi observation: add an orange marker and correct the particle filter
+        // whenever a new WiFi fix arrives
+        LatLng wifiObs = sensorFusion.getLatLngWifiPositioning();
+        if (wifiObs != null && !wifiObs.equals(lastWifiObsPos)) {
+            trajectoryMapFragment.addObservationMarker(wifiObs,
+                    TrajectoryMapFragment.ObservationSource.WIFI);
+            sensorFusion.correctWithWifiPosition(wifiObs);
+            lastWifiObsPos = wifiObs;
+        }
+
+        // PDR observation: add a red marker whenever PDR position has moved ≥ 1 m
+        LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+        if (currentLoc != null) {
+            double pdrDelta = Math.sqrt(
+                    Math.pow(pdrValues[0] - previousObsPosX, 2)
+                            + Math.pow(pdrValues[1] - previousObsPosY, 2));
+            if (pdrDelta >= 1.0) {
+                trajectoryMapFragment.addObservationMarker(currentLoc,
+                        TrajectoryMapFragment.ObservationSource.PDR);
+                previousObsPosX = pdrValues[0];
+                previousObsPosY = pdrValues[1];
+            }
+        }
+
+
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
@@ -323,6 +407,7 @@ public class RecordingFragment extends Fragment {
     public void onPause() {
         super.onPause();
         refreshDataHandler.removeCallbacks(refreshDataTask);
+        fusedTrajectoryHandler.removeCallbacks(fusedTrajectoryTask);
     }
 
     @Override
@@ -331,6 +416,7 @@ public class RecordingFragment extends Fragment {
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
+        fusedTrajectoryHandler.postDelayed(fusedTrajectoryTask, 1000);
     }
 
     private int testPointIndex = 0;

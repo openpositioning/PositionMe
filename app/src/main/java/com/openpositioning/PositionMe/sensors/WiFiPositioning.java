@@ -54,6 +54,7 @@ public class WiFiPositioning {
     // Store current floor of user, default value 0 (ground floor)
     private int floor=0;
 
+    private ParticleFilter particleFilter;
 
     /**
      * Constructor to create the WiFi positioning object
@@ -62,9 +63,14 @@ public class WiFiPositioning {
      *
      * @param context Context of object calling
      */
-    public WiFiPositioning(Context context){
+    public WiFiPositioning(Context context, ParticleFilter particleFilter){
         // Initialising the Request queue
         this.requestQueue = Volley.newRequestQueue(context.getApplicationContext());
+        this.particleFilter = particleFilter;
+    }
+
+    public void setParticleFilter(ParticleFilter particleFilter) {
+        this.particleFilter = particleFilter;
     }
 
     /**
@@ -89,6 +95,14 @@ public class WiFiPositioning {
                     try {
                             wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                             floor = response.getInt("floor");
+
+                            //Update particle filter weights with WiFi
+                            if (particleFilter != null && particleFilter.isInitialised()) {
+                                // Update particle filter weights with WiFi measurement
+                                Log.d("ParticleFilter", "WiFi weight update: lat=" + wifiLocation.latitude
+                                        + ", lon=" + wifiLocation.longitude);
+                                particleFilter.updateWeights(wifiLocation, 8.0f);
+                                }
                     } catch (JSONException e) {
                         // Error log to keep record of errors (for secure programming and maintainability)
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);
@@ -140,6 +154,15 @@ public class WiFiPositioning {
                         Log.d("jsonObject",response.toString());
                         wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                         floor = response.getInt("floor");
+
+                        //Update particle filter weights with WiFi
+                        if (particleFilter != null && particleFilter.isInitialised()) {
+                            // Update particle filter weights with WiFi measurement
+                            Log.d("ParticleFilter", "WiFi weight update: lat=" + wifiLocation.latitude
+                                    + ", lon=" + wifiLocation.longitude);
+                            particleFilter.updateWeights(wifiLocation, 8.0f);
+                        }
+
                         callback.onSuccess(wifiLocation,floor);
                     } catch (JSONException e) {
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);

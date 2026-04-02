@@ -29,6 +29,7 @@ public class SensorEventHandler {
     private final PdrProcessing pdrProcessing;
     private final PathView pathView;
     private final TrajectoryRecorder recorder;
+    private final ParticleFilter particleFilter;
 
     // Timestamp tracking
     private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -39,6 +40,10 @@ public class SensorEventHandler {
     // Acceleration magnitude buffer between steps
     private final List<Double> accelMagnitude = new ArrayList<>();
 
+    // Previous PDR position for displacement deltas computation
+    private float previousPDRX = 0f;
+    private float previousPDRY = 0f;
+
     /**
      * Creates a new SensorEventHandler.
      *
@@ -46,15 +51,17 @@ public class SensorEventHandler {
      * @param pdrProcessing PDR processor for step-length and position calculation
      * @param pathView      path drawing view for trajectory visualisation
      * @param recorder      trajectory recorder for checking recording state and writing PDR data
+     * @param particleFilter particle filter sensor fusion algorithm
      * @param bootTime      initial boot time offset
      */
     public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
                               PathView pathView, TrajectoryRecorder recorder,
-                              long bootTime) {
+                              ParticleFilter particleFilter, long bootTime) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
         this.pathView = pathView;
         this.recorder = recorder;
+        this.particleFilter = particleFilter;
         this.bootTime = bootTime;
     }
 
@@ -174,6 +181,15 @@ public class SensorEventHandler {
                     this.accelMagnitude.clear();
 
                     if (recorder.isRecording()) {
+                        // Compute PDR displacement and shift particles
+                        float deltaX = newCords[0] - previousPDRX;
+                        float deltaY = newCords[1] - previousPDRY;
+                        particleFilter.predict(deltaX, deltaY, ParticleFilter.PDR_Process_Noise_STD);
+
+                        // Update previous PDR position for next step
+                        previousPDRX = newCords[0];
+                        previousPDRY = newCords[1];
+
                         this.pathView.drawTrajectory(newCords);
                         state.stepCounter++;
                         recorder.addPdrData(
