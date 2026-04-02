@@ -12,6 +12,9 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import com.openpositioning.PositionMe.positioning.FusionManager;
+
+import com.openpositioning.PositionMe.mapmatching.MapMatchingEngine;
 
 /**
  * Handles sensor event dispatching for all registered movement sensors.
@@ -30,6 +33,7 @@ public class SensorEventHandler {
     private final PathView pathView;
     private final TrajectoryRecorder recorder;
 
+    private final MapMatchingEngine mapMatchingEngine;
     // Timestamp tracking
     private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
     private final HashMap<Integer, Integer> eventCounts = new HashMap<>();
@@ -50,12 +54,13 @@ public class SensorEventHandler {
      */
     public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
                               PathView pathView, TrajectoryRecorder recorder,
-                              long bootTime) {
+                              long bootTime, MapMatchingEngine mapMatchingEngine) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
         this.pathView = pathView;
         this.recorder = recorder;
         this.bootTime = bootTime;
+        this.mapMatchingEngine = mapMatchingEngine;
     }
 
     /**
@@ -172,6 +177,27 @@ public class SensorEventHandler {
                     );
 
                     this.accelMagnitude.clear();
+
+                    // Propagate particles using PDR step displacement
+                    if (mapMatchingEngine != null && mapMatchingEngine.isActive()) {
+                        float dx = newCords[0] - state.lastPdrX;
+                        float dy = newCords[1] - state.lastPdrY;
+                        float stepLen = (float) Math.sqrt(dx * dx + dy * dy);
+                        mapMatchingEngine.predict(
+                                stepLen,
+                                state.orientation[0],
+                                state.elevation
+                        );
+                        state.lastPdrX = newCords[0];
+                        state.lastPdrY = newCords[1];
+                    }
+
+                    // Feed step into FusionManager
+                    float avgStepLength = pdrProcessing.getAverageStepLength();
+                    float heading = state.orientation[0];
+                    if (!Float.isNaN(avgStepLength) && avgStepLength > 0.05f && !Float.isNaN(heading)) {
+                        FusionManager.getInstance().onStep(avgStepLength, heading);
+                    }
 
                     if (recorder.isRecording()) {
                         this.pathView.drawTrajectory(newCords);

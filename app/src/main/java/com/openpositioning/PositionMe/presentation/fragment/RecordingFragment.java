@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,69 +37,84 @@ import java.util.ArrayList;
 import java.util.List;
 
 import android.widget.Toast;
-
-
-
+import com.openpositioning.PositionMe.positioning.FusionManager;
 
 /**
- * Fragment responsible for managing the recording process of trajectory data.
- * <p>
- * The RecordingFragment serves as the interface for users to initiate, monitor, and
- * complete trajectory recording. It integrates sensor fusion data to track user movement
- * and updates a map view in real time. Additionally, it provides UI controls to cancel,
- * stop, and monitor recording progress.
- * <p>
- * Features:
- * - Starts and stops trajectory recording.
- * - Displays real-time sensor data such as elevation and distance traveled.
- * - Provides UI controls to cancel or complete recording.
- * - Uses {@link TrajectoryMapFragment} to visualize recorded paths.
- * - Manages GNSS tracking and error display.
+ * Fragment responsible for the recording screen during a live positioning session.
  *
- * @see TrajectoryMapFragment The map fragment displaying the recorded trajectory.
- * @see RecordingActivity The activity managing the recording workflow.
- * @see SensorFusion Handles sensor data collection.
- * @see SensorTypes Enumeration of available sensor types.
+ * <p>Position display architecture (§3.1 + §3.2 + §3.3):</p>
+ * <ol>
+ *   <li><b>Primary</b>: FusionManager particle filter output, passed through
+ *       MapMatchingEngine's {@code constrainPosition()} for building outline
+ *       boundary enforcement.</li>
+ *   <li><b>Fallback</b>: MapMatchingEngine particle filter estimate (before
+ *       FusionManager initialises from WiFi/GNSS).</li>
+ *   <li><b>Last resort</b>: raw PDR position from step detection.</li>
+ * </ol>
  *
- * @author Shu Gu
+ * <p>Floor detection uses MapMatchingEngine's barometric particle filter
+ * with 30s warmup, sustained-step guards, and stairs/lift classification.</p>
+ *
+ * <p>Display updates at 5 Hz (200ms interval) with colour-coded observation
+ * markers for GNSS, WiFi, and PDR (§3.3).</p>
  */
-
 public class RecordingFragment extends Fragment {
 
-    // UI elements
+    private static final String TAG = "RecordingFragment";
+
     private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
 
-    // App settings
     private SharedPreferences settings;
-
-    // Sensor & data logic
     private SensorFusion sensorFusion;
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
 
-    // Distance tracking
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
-    // References to the child map fragment
-    private TrajectoryMapFragment trajectoryMapFragment;
+    private LatLng rawPdrPosition = null;
 
+    private TrajectoryMapFragment trajectoryMapFragment;
+    private int uiUpdateCount = 0;
+
+    /** Tracks last MME floor to detect and log floor changes. */
+    private int lastMmFloor = -1;
+
+    // Observation display throttling — prevents marker spam on the map
+    private LatLng lastDisplayedGnssObservation = null;
+    private long lastDisplayedGnssTimeMs = 0L;
+    private static final long GNSS_DISPLAY_MIN_INTERVAL_MS = 1500L;
+    private static final double GNSS_DISPLAY_MIN_DISTANCE_M = 3.0;
+
+    // Display-only GNSS sanity gates:
+// 1) If GNSS is >25 m away from the current displayed path, don't draw it.
+// 2) If a new GNSS point jumps >20 m from the last drawn GNSS point, don't draw it.
+    private static final double GNSS_MAX_DISPLAY_ERROR_M = 25.0;
+    private static final double GNSS_MAX_JUMP_FROM_LAST_M = 20.0;
+
+    private LatLng lastDisplayedWifiObservation = null;
+    private long lastDisplayedWifiTimeMs = 0L;
+    private static final long WIFI_DISPLAY_MIN_INTERVAL_MS = 1500L;
+    private static final double WIFI_DISPLAY_MIN_DISTANCE_M = 2.0;
+
+    /** Heading smoothing to prevent arrow jitter on the map (§3.3). */
+    private Float smoothedHeadingDeg = null;
+    private static final float HEADING_SMOOTHING_ALPHA = 0.20f;
+
+    /** UI refresh task at 5 Hz. */
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
             updateUIandPosition();
-            // Loop again
             refreshDataHandler.postDelayed(refreshDataTask, 200);
         }
     };
 
-    public RecordingFragment() {
-        // Required empty public constructor
-    }
+    public RecordingFragment() {}
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -114,7 +130,6 @@ public class RecordingFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // Inflate only the "recording" UI parts (no map)
         return inflater.inflate(R.layout.fragment_recording, container, false);
     }
 
@@ -123,12 +138,9 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Child Fragment: the container in fragment_recording.xml
-        // where TrajectoryMapFragment is placed
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
 
-        // If not present, create it
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
             getChildFragmentManager()
@@ -137,7 +149,6 @@ public class RecordingFragment extends Fragment {
                     .commit();
         }
 
-        // Initialize UI references
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
@@ -148,54 +159,39 @@ public class RecordingFragment extends Fragment {
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
         view.findViewById(R.id.btn_test_point).setOnClickListener(v -> onAddTestPoint());
 
-
-        // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
-        // Buttons
         completeButton.setOnClickListener(v -> {
-            // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
-            // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
 
-
-        // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
             AlertDialog dialog = new AlertDialog.Builder(requireActivity())
                     .setTitle("Confirm Cancel")
                     .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
                     .setNegativeButton("Yes", (dialogInterface, which) -> {
-                        // User confirmed cancellation
                         sensorFusion.stopRecording();
                         if (autoStop != null) autoStop.cancel();
                         requireActivity().onBackPressed();
                     })
-                    .setPositiveButton("No", (dialogInterface, which) -> {
-                        // User cancelled the dialog. Do nothing.
-                        dialogInterface.dismiss();
-                    })
-                    .create(); // Create the dialog but do not show it yet
+                    .setPositiveButton("No", (dialogInterface, which) -> dialogInterface.dismiss())
+                    .create();
 
-            // Show the dialog and change the button color
             dialog.setOnShowListener(dialogInterface -> {
                 Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-                negativeButton.setTextColor(Color.RED); // Set "Yes" button color to red
+                negativeButton.setTextColor(Color.RED);
             });
 
-            dialog.show(); // Finally, show the dialog
+            dialog.show();
         });
 
-        // The blinking effect for recIcon
         blinkingRecordingIcon();
 
-        // Start the timed or indefinite UI refresh
         if (this.settings.getBoolean("split_trajectory", false)) {
-            // A maximum recording time is set
             long limit = this.settings.getInt("split_duration", 30) * 60000L;
             timeRemaining.setMax((int) (limit / 1000));
             timeRemaining.setProgress(0);
@@ -215,101 +211,226 @@ public class RecordingFragment extends Fragment {
                 }
             }.start();
         } else {
-            // No set time limit, just keep refreshing
             refreshDataHandler.post(refreshDataTask);
         }
     }
 
+    /** Adds a user ground-truth test point marker at the current position. */
     private void onAddTestPoint() {
-        // 1) Ensure the map fragment is ready
         if (trajectoryMapFragment == null) return;
 
-        // 2) Read current track position (must lie on the current path)
         LatLng cur = trajectoryMapFragment.getCurrentLocation();
         if (cur == null) {
-            Toast.makeText(requireContext(), "" +
+            Toast.makeText(requireContext(),
                     "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
                     Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // 3) Generate index + timestamp (satisfies "save timestamp")
         int idx = ++testPointIndex;
         long ts = System.currentTimeMillis();
-
-        // 4) Keep a local copy for in-session tracking
         testPoints.add(new TestPoint(idx, ts, cur.latitude, cur.longitude));
-
-        // Write test point into protobuf payload
         sensorFusion.addTestPointToProto(ts, cur.latitude, cur.longitude);
-
-        // 5) Draw numbered marker on map (satisfies "leave numbered marker")
         trajectoryMapFragment.addTestPointMarker(idx, ts, cur);
     }
 
-
     /**
-     * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
+     * Core UI update cycle. Called at 5 Hz.
+     *
+     * <p>Retrieves the best position from FusionManager, applies MapMatchingEngine's
+     * building outline constraint, updates the map, and refreshes sensor readouts.</p>
      */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
-        // Distance
+        uiUpdateCount++;
+
+        // Update distance counter
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
                 + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
-        // Elevation
+        // Update elevation readout
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
+        com.openpositioning.PositionMe.mapmatching.MapMatchingEngine mmEngine =
+                sensorFusion.getMapMatchingEngine();
 
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
-            }
+        // Wait for MME initialisation before drawing — ensures traces
+        // start from the manual pin position, not from (0,0)
+        if (mmEngine == null || !mmEngine.isActive()) {
+            previousPosX = pdrValues[0];
+            previousPosY = pdrValues[1];
+            return;
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
+        // Initialise raw PDR trace from the manual start pin (once)
+        if (rawPdrPosition == null) {
+            LatLng mmStart = mmEngine.getStartLatLng();
+            if (mmStart == null) mmStart = mmEngine.getEstimatedPosition();
+            if (mmStart != null) rawPdrPosition = mmStart;
+        }
+
+        // Advance raw PDR by step delta (red polyline, §3.3)
+        if (rawPdrPosition != null) {
+            rawPdrPosition = UtilFunctions.calculateNewPos(
+                    rawPdrPosition,
+                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY });
+        }
+
+        if (rawPdrPosition != null && trajectoryMapFragment != null) {
+            trajectoryMapFragment.addRawPdrPoint(rawPdrPosition);
+        }
+
+        // ── Position source selection (§3.1 + §3.2) ─────────────────────────
+        LatLng fusedLocation = null;
+        String positionSource = "none";
+
+        // Primary: FusionManager → building outline constraint
+        double[] fusedPos = FusionManager.getInstance().getBestPosition();
+        if (fusedPos != null) {
+            fusedLocation = mmEngine.constrainPosition(fusedPos[0], fusedPos[1]);
+            positionSource = "FusionManager+MMConstraint";
+        }
+
+        // Fallback: MME particle filter (before FM initialises)
+        if (fusedLocation == null) {
+            fusedLocation = mmEngine.getEstimatedPosition();
+            if (fusedLocation != null) positionSource = "MapMatchingEngine";
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── Floor detection from MME (§3.2) ──────────────────────────────────
+        int mmFloor = mmEngine.getEstimatedFloor();
+        if (mmFloor != lastMmFloor && lastMmFloor != -1) {
+            Log.d(TAG, "MME floor change: " + lastMmFloor + " → " + mmFloor);
+        }
+        lastMmFloor = mmFloor;
+        // ─────────────────────────────────────────────────────────────────────
+
+        if (uiUpdateCount % 5 == 0) {
+            Log.d(TAG, "Position source=" + positionSource
+                    + " | floor=" + mmFloor
+                    + " | fusedLoc=" + (fusedLocation == null ? "null"
+                    : String.format("(%.5f, %.5f)",
+                    fusedLocation.latitude, fusedLocation.longitude)));
+        }
+
+        // Smooth heading for display arrow (§3.3)
+        float headingDeg = smoothHeadingDeg(
+                (float) Math.toDegrees(sensorFusion.passOrientation()));
+
+        // Update map with best position
+        if (fusedLocation != null && trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateUserLocation(fusedLocation, headingDeg);
+            trajectoryMapFragment.updatePdrObservation(fusedLocation);
+        } else if (rawPdrPosition != null && trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateUserLocation(rawPdrPosition, headingDeg);
+            trajectoryMapFragment.updatePdrObservation(rawPdrPosition);
+        }
+
+        long now = System.currentTimeMillis();
+
+        // ── GNSS observation markers (§3.3) ──────────────────────────────────
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+
+                double errorDist = -1.0;
                 if (currentLoc != null) {
-                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
+                    errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
                     gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
+                    gnssError.setText(String.format(
+                            getString(R.string.gnss_error) + "%.2fm", errorDist));
+                } else {
+                    gnssError.setVisibility(View.GONE);
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
+
+                boolean tooFarFromDisplayedPath =
+                        (currentLoc != null && errorDist > GNSS_MAX_DISPLAY_ERROR_M);
+
+                boolean hugeJumpFromLastDisplayed =
+                        (lastDisplayedGnssObservation != null &&
+                                UtilFunctions.distanceBetweenPoints(lastDisplayedGnssObservation, gnssLocation)
+                                        > GNSS_MAX_JUMP_FROM_LAST_M);
+
+                if (!tooFarFromDisplayedPath && !hugeJumpFromLastDisplayed &&
+                        shouldDisplayObservation(
+                                gnssLocation,
+                                lastDisplayedGnssObservation,
+                                now - lastDisplayedGnssTimeMs,
+                                GNSS_DISPLAY_MIN_INTERVAL_MS,
+                                GNSS_DISPLAY_MIN_DISTANCE_M)) {
+
+                    trajectoryMapFragment.updateGNSS(gnssLocation);
+                    lastDisplayedGnssObservation = gnssLocation;
+                    lastDisplayedGnssTimeMs = now;
+
+                } else {
+                    if (tooFarFromDisplayedPath) {
+                        Log.d(TAG, "Skipping GNSS draw: too far from displayed path ("
+                                + String.format("%.2f", errorDist) + "m)");
+                    } else if (hugeJumpFromLastDisplayed) {
+                        Log.d(TAG, "Skipping GNSS draw: huge jump from last GNSS point");
+                    }
+                }
+
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
             }
         }
 
-        // Update previous
+        // ── WiFi observation markers (§3.3) ──────────────────────────────────
+        if (trajectoryMapFragment != null) {
+            LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+            if (wifiLocation != null && shouldDisplayObservation(
+                    wifiLocation, lastDisplayedWifiObservation,
+                    now - lastDisplayedWifiTimeMs,
+                    WIFI_DISPLAY_MIN_INTERVAL_MS, WIFI_DISPLAY_MIN_DISTANCE_M)) {
+                trajectoryMapFragment.updateWifiObservation(wifiLocation);
+                lastDisplayedWifiObservation = wifiLocation;
+                lastDisplayedWifiTimeMs = now;
+            }
+        }
+
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
 
     /**
-     * Start the blinking effect for the recording icon.
+     * Throttles observation marker display to prevent map clutter.
+     * Only shows a new marker if enough time and distance have passed.
      */
+    private boolean shouldDisplayObservation(LatLng candidate, LatLng previous,
+                                             long ageMs, long minIntervalMs,
+                                             double minDistanceMeters) {
+        if (candidate == null) return false;
+        if (previous == null) return true;
+        if (ageMs < minIntervalMs) return false;
+        return UtilFunctions.distanceBetweenPoints(previous, candidate) >= minDistanceMeters;
+    }
+
+    /** Exponential heading smoother to prevent display arrow jitter. */
+    private float smoothHeadingDeg(float newHeadingDeg) {
+        if (Float.isNaN(newHeadingDeg) || Float.isInfinite(newHeadingDeg)) {
+            return smoothedHeadingDeg != null ? smoothedHeadingDeg : 0f;
+        }
+        if (smoothedHeadingDeg == null) {
+            smoothedHeadingDeg = newHeadingDeg;
+            return newHeadingDeg;
+        }
+        float delta = newHeadingDeg - smoothedHeadingDeg;
+        while (delta > 180f) delta -= 360f;
+        while (delta < -180f) delta += 360f;
+        smoothedHeadingDeg = smoothedHeadingDeg + HEADING_SMOOTHING_ALPHA * delta;
+        return smoothedHeadingDeg;
+    }
+
     private void blinkingRecordingIcon() {
         Animation blinking = new AlphaAnimation(1, 0);
         blinking.setDuration(800);
@@ -328,11 +449,12 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if(!this.settings.getBoolean("split_trajectory", false)) {
+        if (!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
     }
 
+    // ── Test point tracking ──────────────────────────────────────────────────
     private int testPointIndex = 0;
 
     private static class TestPoint {
@@ -350,6 +472,4 @@ public class RecordingFragment extends Fragment {
     }
 
     private final List<TestPoint> testPoints = new ArrayList<>();
-
-
 }

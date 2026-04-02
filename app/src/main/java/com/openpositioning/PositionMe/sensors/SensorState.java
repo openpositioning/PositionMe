@@ -39,4 +39,8 @@ public class SensorState {
 
     // Step counting
     public volatile int stepCounter;
+
+    // Last PDR position for step length calculation (used by map matching)
+    public volatile float lastPdrX = 0f;
+    public volatile float lastPdrY = 0f;
 }

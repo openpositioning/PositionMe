@@ -31,6 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.openpositioning.PositionMe.positioning.FusionManager;
+
+import com.openpositioning.PositionMe.mapmatching.MapMatchingEngine;
 
 /**
  * The SensorFusion class is the main data gathering and processing class of the application.
@@ -41,7 +44,7 @@ import java.util.stream.Stream;
  *   <li>{@link SensorState} &ndash; shared sensor data holder</li>
  *   <li>{@link SensorEventHandler} &ndash; sensor event dispatch (switch logic)</li>
  *   <li>{@link TrajectoryRecorder} &ndash; recording lifecycle &amp; protobuf construction</li>
- *   <li>{@link WifiPositionManager} &ndash; WiFi scan processing &amp; positioning</li>
+ *   <li>{@link WifiPositionManager} &ndash; WiFi scan processing &amp; com.openpositioning.PositionMe.positioning</li>
  * </ul>
  *
  * <p>The public API is unchanged &ndash; all external callers continue to use
@@ -87,6 +90,8 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
+
+    private final MapMatchingEngine mapMatchingEngine = new MapMatchingEngine();
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
@@ -162,7 +167,7 @@ public class SensorFusion implements SensorEventListener {
 
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pathView, recorder, bootTime, mapMatchingEngine);
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -326,6 +331,7 @@ public class SensorFusion implements SensorEventListener {
      * @see SensorCollectionService
      */
     public void startRecording() {
+        FusionManager.getInstance().reset();
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
 
@@ -483,6 +489,34 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns the floor estimated by the MapMatchingEngine's barometric
+     * particle filter, or -1 if not available.
+     */
+    public int getMapMatchingFloor() {
+        if (mapMatchingEngine != null && mapMatchingEngine.isActive()) {
+            return mapMatchingEngine.getEstimatedFloor();
+        }
+        return -1;
+    }
+
+    /**
+     * Returns the map matching particle filter engine.
+     */
+    public MapMatchingEngine getMapMatchingEngine() {
+        return mapMatchingEngine;
+    }
+
+    /**
+     * Initialises map matching with current position and building data.
+     * Called when user starts recording inside a building.
+     */
+    public void initialiseMapMatching(double lat, double lng, int floor,
+                                      float floorHeight,
+                                      java.util.List<FloorplanApiClient.FloorShapes> shapes) {
+        mapMatchingEngine.initialise(lat, lng, floor, floorHeight, shapes);
+    }
+
+    /**
      * Setter function for core location data.
      *
      * @param startPosition contains the initial location set by the user
@@ -606,7 +640,7 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Returns the user position obtained using WiFi positioning.
+     * Returns the user position obtained using WiFi com.openpositioning.PositionMe.positioning.
      *
      * @return {@link LatLng} corresponding to user's position.
      */
@@ -615,7 +649,7 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Returns the current floor the user is on, obtained using WiFi positioning.
+     * Returns the current floor the user is on, obtained using WiFi com.openpositioning.PositionMe.positioning.
      *
      * @return current floor number.
      */
@@ -645,6 +679,10 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+            FusionManager.getInstance().onGnss(
+                    location.getLatitude(),
+                    location.getLongitude(),
+                    location.getAccuracy());
         }
     }
 

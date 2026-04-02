@@ -37,6 +37,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+
 /**
  * Fragment for selecting the start location before recording begins.
  * Displays a Google Map with building outlines fetched from the floorplan API.
@@ -297,17 +299,10 @@ public class StartLocationFragment extends Fragment {
         // Store building selection
         selectedBuildingId = buildingName;
 
-        // Compute building centre from polygon points
+        // Compute building centre for camera zoom only
         LatLng center = computePolygonCenter(polygon);
 
-        // Move the marker to building centre
-        if (startMarker != null) {
-            startMarker.setPosition(center);
-        }
-        startPosition[0] = (float) center.latitude;
-        startPosition[1] = (float) center.longitude;
-
-        // Zoom to the building
+        // Keep marker at user's actual position, don't move to building centre
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 20f));
 
         // Show floor plan overlay for the selected building
@@ -471,8 +466,40 @@ public class StartLocationFragment extends Fragment {
                 // Start sensor recording + set the start location
                 sensorFusion.startRecording();
                 sensorFusion.setStartGNSSLatitude(startPosition);
-                // Write trajectory_id, initial_position and initial heading to protobuf
                 sensorFusion.writeInitialMetadata();
+
+                // Initialise particle filter if inside a known building
+                if (selectedBuildingId != null) {
+                    FloorplanApiClient.BuildingInfo building =
+                            sensorFusion.getFloorplanBuilding(selectedBuildingId);
+                    if (building != null) {
+                        int startFloor = sensorFusion.getWifiFloor();
+                        float floorHeight = 4.0f;
+                        switch (selectedBuildingId) {
+                            case "nucleus_building": floorHeight = 4.2f; break;
+                            case "library":          floorHeight = 3.6f; break;
+                            case "murchison_house":  floorHeight = 4.0f; break;
+                        }
+                        sensorFusion.initialiseMapMatching(
+                                startPosition[0], startPosition[1],
+                                startFloor, floorHeight,
+                                building.getFloorShapesList()
+                        );
+
+                        // Pass building outline for boundary checking
+                        List<LatLng> outline = building.getOutlinePolygon();
+                        if (outline != null) {
+                            sensorFusion.getMapMatchingEngine().setBuildingOutline(
+                                    outline,
+                                    startPosition[0],
+                                    startPosition[1]
+                            );
+                        }
+
+                        sensorFusion.getMapMatchingEngine().logWallStats();
+                        Log.d(TAG, "Map matching initialised for " + selectedBuildingId);
+                    }
+                }
 
                 // Switch to the recording screen
                 ((RecordingActivity) requireActivity()).showRecordingScreen();

@@ -12,7 +12,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 /**
  * Class for creating and handling POST requests for obtaining the current position using
- * WiFi positioning API from https://openpositioning.org/api/position/fine
+ * WiFi com.openpositioning.PositionMe.positioning API from https://openpositioning.org/api/position/fine
  *
  * The class creates POST requests based on WiFi fingerprints and obtains the user's location
  *
@@ -30,21 +30,21 @@ import org.json.JSONObject;
 public class WiFiPositioning {
     // Queue for storing the POST requests made
     private RequestQueue requestQueue;
-    // URL for WiFi positioning API
+    // URL for WiFi com.openpositioning.PositionMe.positioning API
     private static final String url="https://openpositioning.org/api/position/fine";
 
     /**
-     * Getter for the WiFi positioning coordinates obtained using openpositioning API
+     * Getter for the WiFi com.openpositioning.PositionMe.positioning coordinates obtained using openpositioning API
      * @return the user's coordinates based on openpositioning API
      */
     public LatLng getWifiLocation() {
         return wifiLocation;
     }
 
-    // Store user's location obtained using WiFi positioning
+    // Store user's location obtained using WiFi com.openpositioning.PositionMe.positioning
     private LatLng wifiLocation;
     /**
-     * Getter for the  WiFi positioning floor obtained using openpositioning API
+     * Getter for the  WiFi com.openpositioning.PositionMe.positioning floor obtained using openpositioning API
      * @return the user's location based on openpositioning API
      */
     public int getFloor() {
@@ -56,7 +56,7 @@ public class WiFiPositioning {
 
 
     /**
-     * Constructor to create the WiFi positioning object
+     * Constructor to create the WiFi com.openpositioning.PositionMe.positioning object
      *
      * Initialising a request queue to handle the POST requests asynchronously
      *

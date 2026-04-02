@@ -1,5 +1,5 @@
-**PositionMe** is an indoor positioning data collection application initially developed for the University of Edinburgh's Embedded Wireless course. The application now includes enhanced features, including **trajectory playback**, improved UI design, and comprehensive location tracking.
-
+**PositionMe** is an indoor com.openpositioning.PositionMe.positioning data collection application initially developed for the University of Edinburgh's Embedded Wireless course. The application now includes enhanced features, including **trajectory playback**, improved UI design, and comprehensive location tracking.
+/////////
 ## Features
 
 - **Real-time Sensor Data Collection**: Captures sensor, location, and GNSS data.
@@ -34,7 +34,7 @@
     - Sensor access
     - Location services
     - Internet connectivity
-4. **Collect real-time positioning data**:
+4. **Collect real-time com.openpositioning.PositionMe.positioning data**:
     - Follow on-screen instructions to record sensor data.
 5. **Replay previously recorded trajectories**:
     - Navigate to the **Files** section.
