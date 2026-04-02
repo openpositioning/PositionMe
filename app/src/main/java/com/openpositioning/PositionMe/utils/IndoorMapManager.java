@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.utils;
 
+import static com.openpositioning.PositionMe.BuildConstants.DEBUG;
+
 import android.graphics.Color;
 import android.util.Log;
 
@@ -49,10 +51,17 @@ public class IndoorMapManager {
     // Per-floor vector shape data for the current building
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
 
-    // Average floor heights per building (meters), used for barometric auto-floor
+    // Physical floor heights per building (meters), used for display
     public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
+
+    // Barometric floor heights per building (meters) — the effective altitude
+    // change the barometer sees per floor. Close to the physical height but
+    // slightly lower to add a small sensitivity margin.
+    private static final float NUCLEUS_BARO_FLOOR_HEIGHT = 5.0F;
+    private static final float LIBRARY_BARO_FLOOR_HEIGHT = 3.5F;
+    private static final float MURCHISON_BARO_FLOOR_HEIGHT = 4.0F;
 
     // Colours for different indoor feature types
     private static final int WALL_STROKE = Color.argb(200, 80, 80, 80);
@@ -99,6 +108,65 @@ public class IndoorMapManager {
     }
 
     /**
+     * Checks if the given position is inside a stairs or lift polygon on the current floor.
+     *
+     * @param position the LatLng to test
+     * @return true if inside a stairs/lift area
+     */
+    public boolean isNearStairs(LatLng position) {
+        if (!isIndoorMapSet || currentFloorShapes == null || position == null) return false;
+        if (currentFloor < 0 || currentFloor >= currentFloorShapes.size()) return false;
+
+        FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(currentFloor);
+        for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+            String type = feature.getIndoorType();
+            if ("stairs".equals(type)) {
+                for (List<LatLng> ring : feature.getParts()) {
+                    if (ring.size() >= 3 && BuildingPolygon.pointInPolygon(position, ring)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks if the given position is within a specified distance of any
+     * stairs or lift polygon on the current floor.
+     *
+     * @param position the LatLng to test
+     * @param radiusM  proximity radius in metres
+     * @return true if within radius of a stairs or lift area
+     */
+    public boolean isNearStairsOrLift(LatLng position, double radiusM) {
+        if (!isIndoorMapSet || currentFloorShapes == null || position == null) return false;
+        if (currentFloor < 0 || currentFloor >= currentFloorShapes.size()) return false;
+
+        FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(currentFloor);
+        for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+            String type = feature.getIndoorType();
+            if ("stairs".equals(type) || "lift".equals(type)) {
+                for (List<LatLng> ring : feature.getParts()) {
+                    if (ring.size() < 3) continue;
+                    // Check if inside polygon
+                    if (BuildingPolygon.pointInPolygon(position, ring)) return true;
+                    // Check proximity: distance to centroid of polygon
+                    double cLat = 0, cLng = 0;
+                    for (LatLng p : ring) { cLat += p.latitude; cLng += p.longitude; }
+                    cLat /= ring.size();
+                    cLng /= ring.size();
+                    double dLat = (position.latitude - cLat) * 111132.92;
+                    double dLng = (position.longitude - cLng) * 111132.92
+                            * Math.cos(Math.toRadians(cLat));
+                    if (Math.hypot(dLat, dLng) <= radiusM) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns the identifier of the building the user is currently in.
      *
      * @return one of {@link #BUILDING_NONE}, {@link #BUILDING_NUCLEUS},
@@ -106,6 +174,20 @@ public class IndoorMapManager {
      */
     public int getCurrentBuilding() {
         return currentBuilding;
+    }
+
+    /**
+     * Returns a human-readable name for the current building.
+     *
+     * @return building name string, or "Outdoor" if not inside a known building
+     */
+    public String getCurrentBuildingName() {
+        switch (currentBuilding) {
+            case BUILDING_NUCLEUS:   return "Nucleus";
+            case BUILDING_LIBRARY:   return "Library";
+            case BUILDING_MURCHISON: return "Murchison House";
+            default:                 return "Outdoor";
+        }
     }
 
     /**
@@ -189,13 +271,73 @@ public class IndoorMapManager {
     }
 
     /**
-     * Sets the map overlay for the building if the user's current location is
-     * inside a building and the overlay is not already set. Removes the overlay
-     * if the user leaves all buildings.
+     * Forces indoor mode for a known building, bypassing pointInPolygon detection.
+     * Used by Indoor Positioning mode where we already know the user is in a building.
      *
-     * <p>Detection priority: floorplan API real polygon outlines first,
-     * then legacy hard-coded rectangular boundaries as fallback.</p>
+     * @param apiName building API name (e.g. "nucleus_building")
+     * @return true if the building was set up successfully
      */
+    public boolean forceSetBuilding(String apiName) {
+        if (isIndoorMapSet) return true;
+
+        int buildingType = resolveBuildingType(apiName);
+        if (buildingType == BUILDING_NONE) {
+            if (DEBUG) Log.w(TAG, "[forceSetBuilding] Unknown building: " + apiName);
+            return false;
+        }
+
+        currentBuilding = buildingType;
+        int floorBias;
+        float baroFloorH;
+        switch (buildingType) {
+            case BUILDING_NUCLEUS:
+                floorBias = 1;
+                floorHeight = NUCLEUS_FLOOR_HEIGHT;
+                baroFloorH = NUCLEUS_BARO_FLOOR_HEIGHT;
+                break;
+            case BUILDING_LIBRARY:
+                floorBias = 0;
+                floorHeight = LIBRARY_FLOOR_HEIGHT;
+                baroFloorH = LIBRARY_BARO_FLOOR_HEIGHT;
+                break;
+            case BUILDING_MURCHISON:
+                floorBias = 1;
+                floorHeight = MURCHISON_FLOOR_HEIGHT;
+                baroFloorH = MURCHISON_BARO_FLOOR_HEIGHT;
+                break;
+            default:
+                return false;
+        }
+
+        SensorFusion.getInstance().setBaroFloorHeight(baroFloorH);
+        if (DEBUG) Log.i(TAG, "[forceSetBuilding] Building=" + apiName
+                + " baroFloorHeight=" + baroFloorH + "m");
+
+        int wifiFloor = SensorFusion.getInstance().getWifiFloor();
+        if (wifiFloor >= 0) {
+            SensorFusion.getInstance().setInitialFloor(wifiFloor);
+            currentFloor = wifiFloor + floorBias;
+        } else {
+            currentFloor = floorBias;
+        }
+
+        FloorplanApiClient.BuildingInfo building =
+                SensorFusion.getInstance().getFloorplanBuilding(apiName);
+        if (building != null) {
+            currentFloorShapes = building.getFloorShapesList();
+        }
+
+        if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+            drawFloorShapes(currentFloor);
+            isIndoorMapSet = true;
+            if (DEBUG) Log.i(TAG, "[forceSetBuilding] Success, floor=" + currentFloor);
+            return true;
+        }
+
+        if (DEBUG) Log.w(TAG, "[forceSetBuilding] No floor shapes for " + apiName);
+        return false;
+    }
+
     private void setBuildingOverlay() {
         try {
             int detected = detectCurrentBuilding();
@@ -205,24 +347,52 @@ public class IndoorMapManager {
                 currentBuilding = detected;
                 String apiName;
 
+                // Floor bias: index offset so that floor 0 in the list maps to the correct physical floor
+                int floorBias;
+                float baroFloorH;
                 switch (detected) {
                     case BUILDING_NUCLEUS:
                         apiName = "nucleus_building";
-                        currentFloor = 1;
+                        floorBias = 1;  // LG=0, G=1, ...
                         floorHeight = NUCLEUS_FLOOR_HEIGHT;
+                        baroFloorH = NUCLEUS_BARO_FLOOR_HEIGHT;
                         break;
                     case BUILDING_LIBRARY:
                         apiName = "library";
-                        currentFloor = 0;
+                        floorBias = 0;
                         floorHeight = LIBRARY_FLOOR_HEIGHT;
+                        baroFloorH = LIBRARY_BARO_FLOOR_HEIGHT;
                         break;
                     case BUILDING_MURCHISON:
                         apiName = "murchison_house";
-                        currentFloor = 1;
+                        floorBias = 1;
                         floorHeight = MURCHISON_FLOOR_HEIGHT;
+                        baroFloorH = MURCHISON_BARO_FLOOR_HEIGHT;
                         break;
                     default:
                         return;
+                }
+
+                // Tell PdrProcessing to use building-specific barometric floor height
+                SensorFusion.getInstance().setBaroFloorHeight(baroFloorH);
+                if (DEBUG) Log.i(TAG, "[BaroFloorHeight] Building=" + apiName
+                        + " baroFloorHeight=" + baroFloorH + "m");
+
+                // Seed initial floor from WiFi positioning API.
+                // WiFi floor is a logical floor (0=GF, 1=F1, 2=F2, …).
+                // floorBias converts to the building's array index.
+                int wifiFloor = SensorFusion.getInstance().getWifiFloor();
+                if (wifiFloor >= 0) {
+                    SensorFusion.getInstance().setInitialFloor(wifiFloor);
+                    currentFloor = wifiFloor + floorBias;
+                    if (DEBUG) Log.i(TAG, String.format(
+                            "[WifiFloorInit] wifiFloor=%d → initialFloor=%d (idx=%d, bias=%d)",
+                            wifiFloor, wifiFloor, currentFloor, floorBias));
+                } else {
+                    currentFloor = floorBias; // GF default
+                    if (DEBUG) Log.w(TAG, String.format(
+                            "[FloorInit] WiFi floor unavailable (%d) → fallback GF idx=%d",
+                            wifiFloor, currentFloor));
                 }
 
                 // Load floor shapes from cached API data
@@ -233,6 +403,16 @@ public class IndoorMapManager {
                 }
 
                 if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+                    if (DEBUG) {
+                        StringBuilder floorMap = new StringBuilder("[FloorMap] ");
+                        for (int i = 0; i < currentFloorShapes.size(); i++) {
+                            floorMap.append(String.format("idx%d=%s ", i,
+                                    currentFloorShapes.get(i).getDisplayName()));
+                        }
+                        floorMap.append("| current=").append(currentFloor);
+                        Log.i(TAG, floorMap.toString());
+                    }
+
                     drawFloorShapes(currentFloor);
                     isIndoorMapSet = true;
                 }
@@ -262,6 +442,15 @@ public class IndoorMapManager {
                 || floorIndex >= currentFloorShapes.size()) return;
 
         FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(floorIndex);
+        if (DEBUG) {
+            java.util.Set<String> seenTypes = new java.util.LinkedHashSet<>();
+            for (FloorplanApiClient.MapShapeFeature f : floor.getFeatures()) {
+                seenTypes.add(f.getIndoorType() + "(" + f.getGeometryType() + ")");
+            }
+            Log.i(TAG, "[FloorShapeTypes] floor=" + floor.getDisplayName()
+                    + " types=" + seenTypes);
+        }
+
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
             String geoType = feature.getGeometryType();
             String indoorType = feature.getIndoorType();
@@ -334,19 +523,30 @@ public class IndoorMapManager {
         // Phase 1: API real polygon outlines
         List<FloorplanApiClient.BuildingInfo> apiBuildings =
                 SensorFusion.getInstance().getFloorplanBuildings();
+        if (DEBUG) Log.d(TAG, "[detectBuilding] loc=" + currentLocation
+                + " apiBuildings=" + apiBuildings.size());
         for (FloorplanApiClient.BuildingInfo building : apiBuildings) {
             List<LatLng> outline = building.getOutlinePolygon();
-            if (outline != null && outline.size() >= 3
-                    && BuildingPolygon.pointInPolygon(currentLocation, outline)) {
+            boolean inPoly = outline != null && outline.size() >= 3
+                    && BuildingPolygon.pointInPolygon(currentLocation, outline);
+            if (DEBUG) Log.d(TAG, "[detectBuilding] API name=" + building.getName()
+                    + " outlineSize=" + (outline != null ? outline.size() : 0)
+                    + " inPolygon=" + inPoly);
+            if (inPoly) {
                 int type = resolveBuildingType(building.getName());
                 if (type != BUILDING_NONE) return type;
             }
         }
 
         // Phase 2: legacy hard-coded fallback
-        if (BuildingPolygon.inNucleus(currentLocation)) return BUILDING_NUCLEUS;
-        if (BuildingPolygon.inLibrary(currentLocation)) return BUILDING_LIBRARY;
-        if (BuildingPolygon.inMurchison(currentLocation)) return BUILDING_MURCHISON;
+        boolean inNuc = BuildingPolygon.inNucleus(currentLocation);
+        boolean inLib = BuildingPolygon.inLibrary(currentLocation);
+        boolean inMur = BuildingPolygon.inMurchison(currentLocation);
+        if (DEBUG) Log.d(TAG, "[detectBuilding] legacy: nucleus=" + inNuc
+                + " library=" + inLib + " murchison=" + inMur);
+        if (inNuc) return BUILDING_NUCLEUS;
+        if (inLib) return BUILDING_LIBRARY;
+        if (inMur) return BUILDING_MURCHISON;
 
         return BUILDING_NONE;
     }

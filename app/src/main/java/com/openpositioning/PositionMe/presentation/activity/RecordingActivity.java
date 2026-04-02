@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.activity;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.WindowManager;
@@ -8,14 +9,24 @@ import android.widget.EditText;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -44,19 +55,38 @@ import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
  */
 
 public class RecordingActivity extends AppCompatActivity {
+    public static final String EXTRA_LAUNCH_INDOOR_MODE = "extra_launch_indoor_mode";
+    private boolean launchIndoorMode;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Hide status bar before inflating layout to avoid flash/reflow
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+
         setContentView(R.layout.activity_recording);
+        launchIndoorMode = getIntent().getBooleanExtra(EXTRA_LAUNCH_INDOOR_MODE, false);
 
         if (savedInstanceState == null) {
-            // Show trajectory name input dialog before proceeding to start location
-            showTrajectoryNameDialog();
+            if (launchIndoorMode) {
+                launchIndoorPositioningMode();
+            } else {
+                // Show trajectory name input dialog before proceeding to start location
+                showTrajectoryNameDialog();
+            }
         }
 
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Hide system status bar for immersive experience
+        WindowInsetsControllerCompat insetsController =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        insetsController.hide(WindowInsetsCompat.Type.statusBars());
+        insetsController.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
     }
 
     /**
@@ -132,10 +162,104 @@ public class RecordingActivity extends AppCompatActivity {
      * Show the RecordingFragment, which contains the TrajectoryMapFragment internally.
      */
     public void showRecordingScreen() {
+        showRecordingScreen(false);
+    }
+
+    public void showRecordingScreen(boolean indoorMode) {
+        RecordingFragment fragment = new RecordingFragment();
+        Bundle args = new Bundle();
+        args.putBoolean(RecordingFragment.ARG_INDOOR_MODE, indoorMode);
+        fragment.setArguments(args);
+
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
-        ft.replace(R.id.mainFragmentContainer, new RecordingFragment());
-        ft.addToBackStack(null);
+        ft.replace(R.id.mainFragmentContainer, fragment);
+        if (!indoorMode) {
+            ft.addToBackStack(null);
+        }
+        // Indoor mode: no back stack — back/cancel goes straight to home
         ft.commit();
+    }
+
+    private void launchIndoorPositioningMode() {
+        SensorFusion sensorFusion = SensorFusion.getInstance();
+        sensorFusion.ensureWirelessScanning();
+        sensorFusion.setTrajectoryId(nextIndoorTrajectoryName());
+
+        LatLng preferredLocation = sensorFusion.getLatLngWifiPositioning();
+        if (preferredLocation == null) {
+            float[] gnss = sensorFusion.getGNSSLatitude(false);
+            preferredLocation = new LatLng(gnss[0], gnss[1]);
+        }
+
+        final LatLng requestLocation = preferredLocation;
+        List<String> observedMacs = new ArrayList<>();
+        List<Wifi> wifiList = sensorFusion.getWifiList();
+        if (wifiList != null) {
+            for (Wifi wifi : wifiList) {
+                String mac = wifi.getBssidString();
+                if (mac != null && !mac.isEmpty()) {
+                    observedMacs.add(mac);
+                }
+            }
+        }
+
+        new FloorplanApiClient().requestFloorplan(
+                requestLocation.latitude,
+                requestLocation.longitude,
+                observedMacs,
+                new FloorplanApiClient.FloorplanCallback() {
+                    @Override
+                    public void onSuccess(List<FloorplanApiClient.BuildingInfo> buildings) {
+                        startIndoorRecording(sensorFusion, requestLocation, buildings);
+                    }
+
+                    @Override
+                    public void onFailure(String error) {
+                        startIndoorRecording(sensorFusion, requestLocation, new ArrayList<>());
+                    }
+                }
+        );
+    }
+
+    private void startIndoorRecording(SensorFusion sensorFusion,
+                                      LatLng fallbackLocation,
+                                      List<FloorplanApiClient.BuildingInfo> buildings) {
+        sensorFusion.setFloorplanBuildings(buildings);
+
+        LatLng startLocation = fallbackLocation;
+        String selectedBuildingId = null;
+
+        if (buildings != null && !buildings.isEmpty()) {
+            double bestDist = Double.MAX_VALUE;
+            for (FloorplanApiClient.BuildingInfo building : buildings) {
+                LatLng center = building.getCenter();
+                double dLat = center.latitude - fallbackLocation.latitude;
+                double dLon = center.longitude - fallbackLocation.longitude;
+                double distance = Math.hypot(dLat, dLon);
+                if (distance < bestDist) {
+                    bestDist = distance;
+                    selectedBuildingId = building.getName();
+                    startLocation = center;
+                }
+            }
+        }
+
+        sensorFusion.setSelectedBuildingId(selectedBuildingId);
+
+        sensorFusion.setStartGNSSLatitude(new float[]{
+                (float) startLocation.latitude,
+                (float) startLocation.longitude
+        });
+        sensorFusion.startRecording();
+        sensorFusion.writeInitialMetadata();
+        showRecordingScreen(true);
+    }
+
+    private String nextIndoorTrajectoryName() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        int nextValue = prefs.getInt("indoor_history_counter", 0) + 1;
+        prefs.edit().putInt("indoor_history_counter", nextValue).apply();
+        return "navigate history" + nextValue;
     }
 
     /**

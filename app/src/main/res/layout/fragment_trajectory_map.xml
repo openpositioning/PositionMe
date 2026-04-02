@@ -12,59 +12,195 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Overlaid controls for map visualization -->
-    <com.google.android.material.card.MaterialCardView
+    <View
+        android:id="@+id/mapInteractionBlocker"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="#01000000"
+        android:elevation="2dp" />
+
+    <!-- Overlaid controls: collapsible toolbar panel + toggle tab -->
+    <LinearLayout
+        android:id="@+id/toolbarContainer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:layout_margin="10dp"
-        android:padding="18dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardElevation="4dp"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+        android:clipChildren="false"
+        android:scaleX="0.80"
+        android:scaleY="0.80"
+        android:transformPivotX="0dp"
+        android:transformPivotY="0dp"
+        android:elevation="12dp"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
-        <LinearLayout
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/controlPanel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:alpha="0.85"
+            android:padding="18dp"
+            app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+            app:cardElevation="4dp"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:minWidth="200dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/compassSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:singleLine="true"
+                    android:text="@string/compassSwitch" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp"/>
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/weatherSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:singleLine="true"
+                    android:text="@string/weatherSwitch" />
 
-            <Spinner
-                android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/gnssSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:singleLine="true"
+                    android:text="@string/gnssSwitch" />
 
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/wifiSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:singleLine="true"
+                    android:text="@string/wifiSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/estimatedSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:singleLine="true"
+                    android:text="@string/estimatedSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/pdrPathSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:singleLine="true"
+                    android:text="@string/pdrPathSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/fusedPathSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:singleLine="true"
+                    android:text="@string/fusedPathSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/smoothPathSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:singleLine="true"
+                    android:text="@string/smoothPathSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/autoFloor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:singleLine="true"
+                    android:text="@string/auto_floor" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/navigatingSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:singleLine="true"
+                    android:text="@string/navigatingSwitch" />
+
+                <Spinner
+                    android:id="@+id/mapSwitchSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_gravity="center_horizontal"
+                    android:background="@android:color/white"
+                    android:spinnerMode="dropdown"
+                    android:elevation="5dp"/>
+
+                <LinearLayout
+                    android:id="@+id/calibrationMapStyleList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:background="@android:color/white"
+                    android:paddingVertical="4dp">
+
+                    <TextView
+                        android:id="@+id/mapStyleHybridOption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="12dp"
+                        android:text="@string/hybrid"
+                        android:textColor="@color/md_theme_onSurface"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/mapStyleNormalOption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="12dp"
+                        android:text="@string/normal"
+                        android:textColor="@color/md_theme_onSurface"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/mapStyleSatelliteOption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="12dp"
+                        android:text="@string/satellite"
+                        android:textColor="@color/md_theme_onSurface"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Toggle tab: tap to collapse/expand the control panel -->
+        <ImageView
+            android:id="@+id/toolbarToggle"
+            android:layout_width="24dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top"
+            android:background="@drawable/toggle_tab_bg"
+            android:scaleType="center"
+            android:src="@drawable/ic_chevron_left"
+            android:contentDescription="Toggle toolbar" />
+
+    </LinearLayout>
 
     <!-- Floating action buttons for floor control, properly spaced -->
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -75,44 +211,49 @@
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="12dp"
             android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
+            android:alpha="0.85"
+            app:fabSize="mini"
+            app:backgroundTint="#CE93D8"
+            app:tint="@android:color/white"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_down" />
 
         <TextView
             android:id="@+id/floorLabel"
-            android:layout_width="56dp"
+            android:layout_width="40dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="4dp"
             android:background="@drawable/floor_label_bg"
             android:gravity="center"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
             android:text="G"
+            android:alpha="0.85"
             android:textColor="@color/md_theme_onSurface"
-            android:textSize="18sp"
+            android:textSize="13sp"
             android:textStyle="bold"
             app:layout_constraintBottom_toTopOf="@id/floorDownButton"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintStart_toStartOf="@id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="@id/floorDownButton" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="28dp"
+            android:layout_marginBottom="4dp"
             android:contentDescription="@string/floor_up"
             android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/md_theme_primary"
+            android:alpha="0.85"
+            app:fabSize="mini"
+            app:backgroundTint="#CE93D8"
+            app:tint="@android:color/white"
             app:layout_constraintBottom_toTopOf="@+id/floorLabel"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/md_theme_onPrimary" />
+            app:layout_constraintStart_toStartOf="@id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="@id/floorDownButton" />
 
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideline"

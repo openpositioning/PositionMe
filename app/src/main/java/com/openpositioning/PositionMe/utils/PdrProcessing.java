@@ -1,8 +1,11 @@
 package com.openpositioning.PositionMe.utils;
 
+import static com.openpositioning.PositionMe.BuildConstants.DEBUG;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
@@ -29,8 +32,10 @@ public class PdrProcessing {
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
     private static final float K = 0.364f;
+    /** Fixed step length override (metres). Set to 0 to use Weiberg estimation. */
+    private static final float FIXED_STEP_LENGTH = 0.8f;
     // Number of samples (seconds) to keep as memory for elevation calculation
-    private static final int elevationSeconds = 4;
+    private static final int elevationSeconds = 6;
     // Number of samples (0.01 seconds)
     private static final int accelSamples = 100;
     // Threshold used to detect significant movement
@@ -38,6 +43,13 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
+    /** Hysteresis for floor detection (fraction of floorHeight).
+     *  Walking/stairs: higher threshold resists baro drift from movement.
+     *  Elevator (stationary): lower threshold, baro signal is clean. */
+    private static final float WALK_HYSTERESIS = 0.7f;
+    private static final float ELEVATOR_HYSTERESIS = 0.5f;
+    /** If no step for this many ms, assume elevator (stationary). */
+    private static final long ELEVATOR_IDLE_MS = 3000;
     //endregion
 
     //region Instance variables
@@ -58,8 +70,10 @@ public class PdrProcessing {
     private float startElevation;
     private int setupIndex = 0;
     private float elevation;
-    private int floorHeight;
+    private float floorHeight;
     private int currentFloor;
+    private float lastSmoothedAlt; // latest smoothed altitude for baseline resets
+    private long lastStepTimeMs;   // timestamp of last detected step (for elevator detection)
 
     // Buffer of most recent elevations calculated
     private CircularFloatBuffer elevationList;
@@ -67,6 +81,9 @@ public class PdrProcessing {
     // Buffer for most recent directional acceleration magnitudes
     private CircularFloatBuffer verticalAccel;
     private CircularFloatBuffer horizontalAccel;
+
+    // Initial floor offset (set externally when starting floor is known)
+    private int initialFloorOffset = 0;
 
     // Step sum and length aggregation variables
     private float sumStepLength = 0;
@@ -155,16 +172,16 @@ public class PdrProcessing {
         }
         
         // Calculate step length
-        if(!useManualStep) {
-            //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
-            // Estimate stride
+        if (FIXED_STEP_LENGTH > 0) {
+            this.stepLength = FIXED_STEP_LENGTH;
+        } else if(!useManualStep) {
             this.stepLength = weibergMinMax(accelMagnitudeOvertime);
-            // System.err.println("Step Length" + stepLength);
         }
 
         // Increment aggregate variables
         sumStepLength += stepLength;
         stepCount++;
+        lastStepTimeMs = System.currentTimeMillis();
 
         // Translate to cartesian coordinate system
         float x = (float) (stepLength * Math.cos(adaptedHeading));
@@ -205,18 +222,44 @@ public class PdrProcessing {
             // Add to buffer
             this.elevationList.putNewest(absoluteElevation);
 
-            // Check if there was floor movement
-            // Check if there is enough data to evaluate
+            // Floor detection with hysteresis:
+            // Once on a floor, require 0.7×floorHeight deviation to trigger
+            // a change (instead of 0.5× from Math.round). This widens the
+            // drift tolerance from 1.8m to 2.6m per floor.
             if(this.elevationList.isFull()) {
-                // Check average of elevation array
                 List<Float> elevationMemory = this.elevationList.getListCopy();
                 OptionalDouble currentAvg = elevationMemory.stream().mapToDouble(f -> f).average();
-                float finishAvg = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : 0;
-
-                // Check if we moved floor by comparing with start position
-                if(Math.abs(finishAvg - startElevation) > this.floorHeight) {
-                    // Change floors - 'floor' division
-                    this.currentFloor += (finishAvg - startElevation)/this.floorHeight;
+                float smoothedAlt = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : startElevation;
+                this.lastSmoothedAlt = smoothedAlt;
+                float relHeight = smoothedAlt - startElevation;
+                float fracFloors = relHeight / this.floorHeight;
+                int currentDelta = this.currentFloor - this.initialFloorOffset;
+                // Elevator vs walk detection: no step for 3s = elevator (clean baro)
+                boolean isElevator = (System.currentTimeMillis() - lastStepTimeMs) > ELEVATOR_IDLE_MS;
+                float hyst = isElevator ? ELEVATOR_HYSTERESIS : WALK_HYSTERESIS;
+                // Hysteresis: need ±hyst floor beyond current floor center
+                int deltaFloors;
+                if (fracFloors > currentDelta + hyst) {
+                    deltaFloors = currentDelta + 1;
+                } else if (fracFloors < currentDelta - hyst) {
+                    deltaFloors = currentDelta - 1;
+                } else {
+                    deltaFloors = currentDelta; // stay on current floor
+                }
+                int targetFloor = initialFloorOffset + deltaFloors;
+                // Clamp to ±1 floor per update as additional safety net
+                int prevFloor = this.currentFloor;
+                if (targetFloor > prevFloor + 1) {
+                    targetFloor = prevFloor + 1;
+                } else if (targetFloor < prevFloor - 1) {
+                    targetFloor = prevFloor - 1;
+                }
+                this.currentFloor = targetFloor;
+                if (this.currentFloor != prevFloor) {
+                    if (DEBUG) Log.i("PDR", String.format(
+                            "[BaroCalc] relHeight=%.2fm frac=%.2f hyst=%.1f(%s) offset=%d => floor %d→%d",
+                            relHeight, fracFloors, hyst, isElevator ? "ELEV" : "WALK",
+                            initialFloorOffset, prevFloor, this.currentFloor));
                 }
             }
             // Return current elevation
@@ -398,19 +441,88 @@ public class PdrProcessing {
     }
 
     /**
-     * Getter for the average step length calculated from the aggregated distance and step count.
+     * Returns the most recently computed step length (metres).
+     * Used by the fusion module to feed the particle filter prediction step.
+     */
+    public float getLastStepLength() {
+        return this.stepLength;
+    }
+
+    /**
+     * Sets the initial floor offset. Call before recording starts when the
+     * starting floor is known (e.g. from WiFi, calibration DB, or user selection).
+     */
+    public void setInitialFloor(int floor) {
+        this.initialFloorOffset = floor;
+        this.currentFloor = floor;
+    }
+
+    /**
+     * Reseeds the floor to a known value (e.g. from WiFi API) during recording.
+     * Unlike {@link #setInitialFloor} + {@link #resetBaroBaseline}, this method
+     * uses the CURRENT smoothed baro altitude as the new baseline, avoiding the
+     * ordering bug where resetBaroBaseline sees floorsChanged=0.
      *
-     * @return  average step length in meters.
+     * @param floor the logical floor number to reseed to (0=GF, 1=F1, …)
+     */
+    public void reseedFloor(int floor) {
+        float oldStart = this.startElevation;
+        int oldOffset = this.initialFloorOffset;
+        // Use the latest smoothed baro altitude as new baseline so relHeight ≈ 0
+        float baseAlt = this.lastSmoothedAlt > 0 ? this.lastSmoothedAlt : this.startElevation;
+        this.startElevation = baseAlt;
+        this.initialFloorOffset = floor;
+        this.currentFloor = floor;
+        if (DEBUG) Log.i("PDR", String.format(
+                "[FloorReseed] floor=%d startElev %.2f→%.2f offset %d→%d",
+                floor, oldStart, this.startElevation, oldOffset, floor));
+    }
+
+    /**
+     * Overrides the barometric floor height used for floor detection.
+     * Call when the building is identified, since HVAC systems make the
+     * actual barometric altitude difference per floor much smaller than
+     * the physical floor-to-floor height.
+     *
+     * @param height barometric floor height in metres (e.g. 2.0)
+     */
+    public void setBaroFloorHeight(float height) {
+        if (height > 0) {
+            this.floorHeight = height;
+        }
+    }
+
+    /**
+     * Resets the barometric baseline after a confirmed floor change.
+     * Uses THEORETICAL altitude (floors × floorHeight) instead of the
+     * measured smoothed altitude, because the 6-second average lags behind
+     * during transitions and would cause incorrect relHeight after reset.
+     *
+     * @param confirmedFloor the confirmed floor number after transition
+     */
+    public void resetBaroBaseline(int confirmedFloor) {
+        float oldStart = this.startElevation;
+        int oldOffset = this.initialFloorOffset;
+        // Shift baseline by the number of confirmed floors × floorHeight
+        int floorsChanged = confirmedFloor - oldOffset;
+        this.startElevation += floorsChanged * this.floorHeight;
+        this.initialFloorOffset = confirmedFloor;
+        this.currentFloor = confirmedFloor;
+        if (DEBUG) Log.i("PDR", String.format(
+                "[BaroReset] baseline %.2f→%.2f (%.1fm × %d floors) offset %d→%d",
+                oldStart, this.startElevation, this.floorHeight, floorsChanged,
+                oldOffset, confirmedFloor));
+    }
+
+    /**
+     * Returns the average step length and resets the accumulator.
+     *
+     * @return average step length in metres
      */
     public float getAverageStepLength(){
-        //Calculate average step length
         float averageStepLength = sumStepLength/(float) stepCount;
-
-        //Reset sum and number of steps
         stepCount = 0;
         sumStepLength = 0;
-
-        //Return average step length
         return averageStepLength;
     }
 

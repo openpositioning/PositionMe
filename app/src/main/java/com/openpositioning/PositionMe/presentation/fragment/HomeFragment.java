@@ -124,7 +124,10 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // Indoor Positioning button
         indoorButton = view.findViewById(R.id.indoorButton);
         indoorButton.setOnClickListener(v -> {
-            Toast.makeText(requireContext(), R.string.indoor_mode_hint, Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(requireContext(), RecordingActivity.class);
+            intent.putExtra(RecordingActivity.EXTRA_LAUNCH_INDOOR_MODE, true);
+            startActivity(intent);
+            ((AppCompatActivity) getActivity()).getSupportActionBar().hide();
         });
 
         // TextView to display GNSS disabled message
