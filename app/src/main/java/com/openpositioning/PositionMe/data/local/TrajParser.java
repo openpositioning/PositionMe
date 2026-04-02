@@ -104,6 +104,12 @@ public class TrajParser {
         public double latitude, longitude; // GNSS coordinates
     }
 
+    /** Represents a fused/corrected position record from protobuf corrected_positions. */
+    private static class CorrectedRecord {
+        public long relativeTimestamp;
+        public double latitude, longitude;
+    }
+
     /**
      * Parses trajectory data from a JSON file and reconstructs a list of replay points.
      *
@@ -150,43 +156,71 @@ public class TrajParser {
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
+                JsonArray correctedArray = root.has("correctedPositions")
+                    ? root.getAsJsonArray("correctedPositions")
+                    : root.getAsJsonArray("corrected_positions");
+                List<CorrectedRecord> correctedList = parseCorrectedData(correctedArray);
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
-                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
+                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records"
+                    + ", Corrected: " + correctedList.size() + " records");
 
-            for (int i = 0; i < pdrList.size(); i++) {
-                PdrRecord pdr = pdrList.get(i);
+                if (!correctedList.isEmpty()) {
+                for (int i = 0; i < correctedList.size(); i++) {
+                    CorrectedRecord corrected = correctedList.get(i);
 
-                ImuRecord closestImu = findClosestImuRecord(imuList, pdr.relativeTimestamp);
-                float orientationDeg = closestImu != null ? computeOrientationFromRotationVector(
+                    ImuRecord closestImu = findClosestImuRecord(imuList, corrected.relativeTimestamp);
+                    float orientationDeg = closestImu != null ? computeOrientationFromRotationVector(
                         closestImu.rotationVectorX,
                         closestImu.rotationVectorY,
                         closestImu.rotationVectorZ,
                         closestImu.rotationVectorW,
                         context
-                ) : 0f;
+                    ) : 0f;
 
-                float speed = 0f;
-                if (i > 0) {
+                    LatLng correctedLocation = new LatLng(corrected.latitude, corrected.longitude);
+
+                    GnssRecord closestGnss = findClosestGnssRecord(gnssList, corrected.relativeTimestamp);
+                    LatLng gnssLocation = closestGnss != null ?
+                        new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
+
+                    result.add(new ReplayPoint(correctedLocation, gnssLocation, orientationDeg,
+                        0f, corrected.relativeTimestamp));
+                }
+                } else {
+                for (int i = 0; i < pdrList.size(); i++) {
+                    PdrRecord pdr = pdrList.get(i);
+
+                    ImuRecord closestImu = findClosestImuRecord(imuList, pdr.relativeTimestamp);
+                    float orientationDeg = closestImu != null ? computeOrientationFromRotationVector(
+                        closestImu.rotationVectorX,
+                        closestImu.rotationVectorY,
+                        closestImu.rotationVectorZ,
+                        closestImu.rotationVectorW,
+                        context
+                    ) : 0f;
+
+                    float speed = 0f;
+                    if (i > 0) {
                     PdrRecord prev = pdrList.get(i - 1);
                     double dt = (pdr.relativeTimestamp - prev.relativeTimestamp) / 1000.0;
                     double dx = pdr.x - prev.x;
                     double dy = pdr.y - prev.y;
                     double distance = Math.sqrt(dx * dx + dy * dy);
                     if (dt > 0) speed = (float) (distance / dt);
-                }
+                    }
 
+                    double lat = originLat + pdr.y * 1E-5;
+                    double lng = originLng + pdr.x * 1E-5;
+                    LatLng pdrLocation = new LatLng(lat, lng);
 
-                double lat = originLat + pdr.y * 1E-5;
-                double lng = originLng + pdr.x * 1E-5;
-                LatLng pdrLocation = new LatLng(lat, lng);
-
-                GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
-                LatLng gnssLocation = closestGnss != null ?
+                    GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
+                    LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
 
-                result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
-                        0f, pdr.relativeTimestamp));
+                    result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                        speed, pdr.relativeTimestamp));
+                }
             }
 
             Collections.sort(result, Comparator.comparingLong(rp -> rp.timestamp));
@@ -199,35 +233,172 @@ public class TrajParser {
 
         return result;
     }
-/** Parses IMU data from JSON. */
+/** Parses IMU data from JSON, handling multiple field naming conventions. */
 private static List<ImuRecord> parseImuData(JsonArray imuArray) {
     List<ImuRecord> imuList = new ArrayList<>();
     if (imuArray == null) return imuList;
-    Gson gson = new Gson();
+    
     for (int i = 0; i < imuArray.size(); i++) {
-        ImuRecord record = gson.fromJson(imuArray.get(i), ImuRecord.class);
-        imuList.add(record);
+        try {
+            JsonObject imuObj = imuArray.get(i).getAsJsonObject();
+            ImuRecord record = new ImuRecord();
+            
+            // Handle both naming conventions
+            if (imuObj.has("relativeTimestamp")) {
+                record.relativeTimestamp = imuObj.get("relativeTimestamp").getAsLong();
+            } else if (imuObj.has("relative_timestamp")) {
+                record.relativeTimestamp = imuObj.get("relative_timestamp").getAsLong();
+            }
+            
+            // Standard field names
+            if (imuObj.has("accX")) {
+                record.accX = imuObj.get("accX").getAsFloat();
+            }
+            if (imuObj.has("accY")) {
+                record.accY = imuObj.get("accY").getAsFloat();
+            }
+            if (imuObj.has("accZ")) {
+                record.accZ = imuObj.get("accZ").getAsFloat();
+            }
+            if (imuObj.has("gyrX")) {
+                record.gyrX = imuObj.get("gyrX").getAsFloat();
+            }
+            if (imuObj.has("gyrY")) {
+                record.gyrY = imuObj.get("gyrY").getAsFloat();
+            }
+            if (imuObj.has("gyrZ")) {
+                record.gyrZ = imuObj.get("gyrZ").getAsFloat();
+            }
+            if (imuObj.has("rotationVectorX")) {
+                record.rotationVectorX = imuObj.get("rotationVectorX").getAsFloat();
+            }
+            if (imuObj.has("rotationVectorY")) {
+                record.rotationVectorY = imuObj.get("rotationVectorY").getAsFloat();
+            }
+            if (imuObj.has("rotationVectorZ")) {
+                record.rotationVectorZ = imuObj.get("rotationVectorZ").getAsFloat();
+            }
+            if (imuObj.has("rotationVectorW")) {
+                record.rotationVectorW = imuObj.get("rotationVectorW").getAsFloat();
+            }
+            
+            imuList.add(record);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to parse IMU record " + i, e);
+        }
     }
+    
     return imuList;
-}/** Parses PDR data from JSON. */
+}/** Parses PDR data from JSON, handling multiple field naming conventions. */
 private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
     List<PdrRecord> pdrList = new ArrayList<>();
     if (pdrArray == null) return pdrList;
-    Gson gson = new Gson();
+    
     for (int i = 0; i < pdrArray.size(); i++) {
-        PdrRecord record = gson.fromJson(pdrArray.get(i), PdrRecord.class);
-        pdrList.add(record);
+        try {
+            JsonObject pdrObj = pdrArray.get(i).getAsJsonObject();
+            PdrRecord record = new PdrRecord();
+            
+            // Handle both naming conventions
+            if (pdrObj.has("relativeTimestamp")) {
+                record.relativeTimestamp = pdrObj.get("relativeTimestamp").getAsLong();
+            } else if (pdrObj.has("relative_timestamp")) {
+                record.relativeTimestamp = pdrObj.get("relative_timestamp").getAsLong();
+            }
+            
+            if (pdrObj.has("x")) {
+                record.x = pdrObj.get("x").getAsFloat();
+            }
+            if (pdrObj.has("y")) {
+                record.y = pdrObj.get("y").getAsFloat();
+            }
+            
+            pdrList.add(record);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to parse PDR record " + i, e);
+        }
     }
+    
     return pdrList;
-}/** Parses GNSS data from JSON. */
+}/** Parses corrected (fused) data from JSON, handling multiple field naming conventions. */
+private static List<CorrectedRecord> parseCorrectedData(JsonArray correctedArray) {
+    List<CorrectedRecord> correctedList = new ArrayList<>();
+    if (correctedArray == null) return correctedList;
+    
+    for (int i = 0; i < correctedArray.size(); i++) {
+        try {
+            JsonObject corrObj = correctedArray.get(i).getAsJsonObject();
+            CorrectedRecord record = new CorrectedRecord();
+            
+            // Handle both naming conventions
+            if (corrObj.has("relativeTimestamp")) {
+                record.relativeTimestamp = corrObj.get("relativeTimestamp").getAsLong();
+            } else if (corrObj.has("relative_timestamp")) {
+                record.relativeTimestamp = corrObj.get("relative_timestamp").getAsLong();
+            }
+            
+            if (corrObj.has("latitude")) {
+                record.latitude = corrObj.get("latitude").getAsDouble();
+            }
+            if (corrObj.has("longitude")) {
+                record.longitude = corrObj.get("longitude").getAsDouble();
+            }
+            
+            correctedList.add(record);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to parse corrected record " + i, e);
+        }
+    }
+    
+    return correctedList;
+}
+
+/** Parses GNSS data from JSON, handling protobuf nested structure. */
 private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
     List<GnssRecord> gnssList = new ArrayList<>();
-    if (gnssArray == null) return gnssList;
-    Gson gson = new Gson();
-    for (int i = 0; i < gnssArray.size(); i++) {
-        GnssRecord record = gson.fromJson(gnssArray.get(i), GnssRecord.class);
-        gnssList.add(record);
+    if (gnssArray == null || gnssArray.size() == 0) {
+        return gnssList;
     }
+    
+    for (int i = 0; i < gnssArray.size(); i++) {
+        try {
+            JsonObject gnssObj = gnssArray.get(i).getAsJsonObject();
+            GnssRecord record = new GnssRecord();
+
+            // In protobuf JSON, position data is nested under "position" object
+            JsonObject positionObj = null;
+            if (gnssObj.has("position") && gnssObj.get("position").isJsonObject()) {
+                positionObj = gnssObj.getAsJsonObject("position");
+            } else {
+                // Fallback: try top-level fields if no nested structure
+                positionObj = gnssObj;
+            }
+            
+            // Handle both "relativeTimestamp" and "relative_timestamp"
+            if (positionObj.has("relativeTimestamp")) {
+                String ts = positionObj.get("relativeTimestamp").getAsString();
+                record.relativeTimestamp = Long.parseLong(ts);
+            } else if (positionObj.has("relative_timestamp")) {
+                String ts = positionObj.get("relative_timestamp").getAsString();
+                record.relativeTimestamp = Long.parseLong(ts);
+            }
+            
+            // Extract latitude
+            if (positionObj.has("latitude")) {
+                record.latitude = positionObj.get("latitude").getAsDouble();
+            }
+            
+            // Extract longitude
+            if (positionObj.has("longitude")) {
+                record.longitude = positionObj.get("longitude").getAsDouble();
+            }
+            
+            gnssList.add(record);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to parse GNSS record " + i, e);
+        }
+    }
+    
     return gnssList;
 }/** Finds the closest IMU record to the given timestamp. */
 private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {

@@ -57,20 +57,40 @@ import java.util.List;
 
 public class TrajectoryMapFragment extends Fragment {
 
+    private static final int MAX_OBSERVATION_MARKERS = 20;
+    private static final long TRAJECTORY_APPEND_MIN_INTERVAL_MS = 500;
+    private static final double TRAJECTORY_APPEND_MIN_METERS = 0.70;
+
+    // When true the distance gate is bypassed so every recorded point is drawn
+    private boolean replayMode = false;
+    private static final double OBSERVATION_CIRCLE_RADIUS_M = 1.4;
+    private static final long GNSS_OBSERVATION_TTL_MS = 15000;
+    private static final long WIFI_OBSERVATION_TTL_MS = 20000;
+
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     // Keep test point markers so they can be cleared when recording ends
     private final List<Marker> testPointMarkers = new ArrayList<>();
+    private final List<Circle> gnssObservationCircles = new ArrayList<>();
+    private final List<Circle> wifiObservationCircles = new ArrayList<>();
+    private final List<Circle> pdrObservationCircles = new ArrayList<>();
+    private final List<Long> gnssObservationTimesMs = new ArrayList<>();
+    private final List<Long> wifiObservationTimesMs = new ArrayList<>();
+    private final List<Long> pdrObservationTimesMs = new ArrayList<>();
 
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+    private long lastTrajectoryAppendMs = 0L;
+    private LatLng lastTrajectoryPoint;
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
+    private LatLng lastPdrLocationForViz = null; // Previous PDR position for delta calculation
+    private LatLng lastFusionLocationForViz = null; // Previous fusion position for delta calculation
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
@@ -91,6 +111,14 @@ public class TrajectoryMapFragment extends Fragment {
 
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
+    private SwitchMaterial pdrPointsSwitch;
+    private SwitchMaterial gnssPointsSwitch;
+    private SwitchMaterial wifiPointsSwitch;
+
+    // Visibility flags for each observation type
+    private boolean showPdrPoints  = true;
+    private boolean showGnssPoints = true;
+    private boolean showWifiPoints = true;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
@@ -123,7 +151,34 @@ public class TrajectoryMapFragment extends Fragment {
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
+        switchColorButton = null; // color button removed from layout
+        pdrPointsSwitch  = view.findViewById(R.id.pdrPointsSwitch);
+        gnssPointsSwitch = view.findViewById(R.id.gnssPointsSwitch);
+        wifiPointsSwitch = view.findViewById(R.id.wifiPointsSwitch);
+
+        // Collapsible left panel
+        View leftPanelContent = view.findViewById(R.id.leftPanelContent);
+        TextView leftToggle = view.findViewById(R.id.leftPanelToggle);
+        View leftPanelHeader = view.findViewById(R.id.leftPanelHeader);
+        View.OnClickListener leftPanelToggleClick = v -> {
+            boolean visible = leftPanelContent.getVisibility() == View.VISIBLE;
+            leftPanelContent.setVisibility(visible ? View.GONE : View.VISIBLE);
+            leftToggle.setText(visible ? "▼" : "▲");
+        };
+        leftToggle.setOnClickListener(leftPanelToggleClick);
+        leftPanelHeader.setOnClickListener(leftPanelToggleClick);
+
+        // Collapsible right panel
+        View rightPanelContent = view.findViewById(R.id.rightPanelContent);
+        TextView rightToggle = view.findViewById(R.id.rightPanelToggle);
+        View rightPanelHeader = view.findViewById(R.id.rightPanelHeader);
+        View.OnClickListener rightPanelToggleClick = v -> {
+            boolean visible = rightPanelContent.getVisibility() == View.VISIBLE;
+            rightPanelContent.setVisibility(visible ? View.GONE : View.VISIBLE);
+            rightToggle.setText(visible ? "▼" : "▲");
+        };
+        rightToggle.setOnClickListener(rightPanelToggleClick);
+        rightPanelHeader.setOnClickListener(rightPanelToggleClick);
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -149,6 +204,10 @@ public class TrajectoryMapFragment extends Fragment {
 
                     drawBuildingPolygon();
 
+                    if (autoFloorSwitch != null && autoFloorSwitch.isChecked()) {
+                        startAutoFloor();
+                    }
+
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
 
 
@@ -168,20 +227,27 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Color switch
-        switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
-                } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
-                }
-            }
-        });
+        // Data-point visibility toggles
+        if (pdrPointsSwitch != null) {
+            pdrPointsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showPdrPoints = isChecked;
+                setCircleBucketVisible(pdrObservationCircles, isChecked);
+            });
+        }
+        if (gnssPointsSwitch != null) {
+            gnssPointsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showGnssPoints = isChecked;
+                setCircleBucketVisible(gnssObservationCircles, isChecked);
+            });
+        }
+        if (wifiPointsSwitch != null) {
+            wifiPointsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showWifiPoints = isChecked;
+                setCircleBucketVisible(wifiObservationCircles, isChecked);
+            });
+        }
+
+        // color button removed
 
         // Auto-floor toggle: start/stop periodic floor evaluation
         sensorFusion = SensorFusion.getInstance();
@@ -192,6 +258,9 @@ public class TrajectoryMapFragment extends Fragment {
                 stopAutoFloor();
             }
         });
+        if (autoFloorSwitch.isChecked()) {
+            startAutoFloor();
+        }
 
         floorUpButton.setOnClickListener(v -> {
             // If user manually changes floor, turn off auto floor
@@ -237,6 +306,7 @@ public class TrajectoryMapFragment extends Fragment {
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(5f)
+            .zIndex(10f)
                 .add() // start empty
         );
 
@@ -244,6 +314,7 @@ public class TrajectoryMapFragment extends Fragment {
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
                 .width(5f)
+            .zIndex(10f)
                 .add() // start empty
         );
     }
@@ -273,9 +344,10 @@ public class TrajectoryMapFragment extends Fragment {
         };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
                 requireContext(),
-                android.R.layout.simple_spinner_dropdown_item,
+            R.layout.item_map_type_spinner,
                 maps
         );
+        adapter.setDropDownViewResource(R.layout.item_map_type_spinner_dropdown);
         switchMapSpinner.setAdapter(adapter);
 
         switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -301,7 +373,20 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Update the user's current location on the map, create or move orientation marker,
+     * Enables or disables replay mode.
+     * In replay mode the distance gate in {@link #maybeAppendTrajectoryPoint} is bypassed
+     * so every recorded position is drawn, regardless of how small the step is.
+     * Live recording should keep this false so that sensor noise is not committed to
+     * the polyline when the user is standing still.
+     *
+     * @param replay true when this fragment is displaying a recorded-trajectory replay
+     */
+    public void setReplayMode(boolean replay) {
+        this.replayMode = replay;
+    }
+
+    /**
+     * Update the user’s current location on the map, create or move orientation marker,
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
@@ -310,27 +395,37 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
+        // Expire stale GNSS/WiFi observation points even when no new fixes arrive.
+        pruneExpiredObservations();
+
+        LatLng displayLocation = newLocation;
+
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        this.currentLocation = displayLocation;
 
         // If no marker, create it
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
+                    .position(displayLocation)
                     .flat(true)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            if (!replayMode) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
+            }
         } else {
             // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
+            orientationMarker.setPosition(displayLocation);
             orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            // In replay mode skip constant camera follow so seeking doesn't cause
+            // dozens of rapid camera moves; the camera was already set by setInitialCameraPosition.
+            if (!replayMode) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(displayLocation));
+            }
         }
 
         // Extend polyline if movement occurred
@@ -340,26 +435,26 @@ public class TrajectoryMapFragment extends Fragment {
             polyline.setPoints(points);
         }*/
         // Extend polyline
-        if (polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-
-            // First position fix: add the first polyline point
-            if (oldLocation == null) {
-                points.add(newLocation);
-                polyline.setPoints(points);
-            } else if (!oldLocation.equals(newLocation)) {
-                // Subsequent movement: append a new polyline point
-                points.add(newLocation);
-                polyline.setPoints(points);
-            }
-        }
+        maybeAppendTrajectoryPoint(oldLocation, displayLocation);
 
 
         // Update indoor map overlay
         if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
+            indoorMapManager.setCurrentLocation(displayLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+    }
+
+    /**
+     * Forces indoor-map building detection from a replay/location seed without
+     * affecting playback state.
+     */
+    public void refreshIndoorMapForLocation(@NonNull LatLng location) {
+        if (indoorMapManager == null) {
+            return;
+        }
+        indoorMapManager.setCurrentLocation(location);
+        setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
     }
 
 
@@ -418,6 +513,16 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
+
+        addObservationMarker(
+            gnssObservationCircles,
+            gnssObservationTimesMs,
+                gnssLocation,
+            Color.argb(220, 33, 150, 243),
+            Color.argb(80, 33, 150, 243),
+                false,
+                GNSS_OBSERVATION_TTL_MS);
+
         if (!isGnssOn) return;
 
         if (gnssMarker == null) {
@@ -440,6 +545,68 @@ public class TrajectoryMapFragment extends Fragment {
             }
             lastGnssLocation = gnssLocation;
         }
+    }
+
+    /**
+     * Adds a WiFi observation marker (last N points).
+     */
+    public void updateWiFiObservation(@NonNull LatLng wifiLocation) {
+        addObservationMarker(
+            wifiObservationCircles,
+            wifiObservationTimesMs,
+                wifiLocation,
+            Color.argb(220, 67, 160, 71),
+            Color.argb(80, 67, 160, 71),
+                false,
+                WIFI_OBSERVATION_TTL_MS);
+    }
+
+    /**
+     * Adds a PDR observation marker (last N points).
+     * Visualized as: currentLocation + (delta_pdr - delta_fusion) to show only the
+     * current discrepancy between PDR and fusion, without cumulative drift.
+     */
+    public void updatePdrObservation(@NonNull LatLng pdrLocation) {
+        if (currentLocation == null) return;
+        
+        // Calculate deltas from last positions
+        double pdrDeltaLat = 0;
+        double pdrDeltaLng = 0;
+        double fusionDeltaLat = 0;
+        double fusionDeltaLng = 0;
+        
+        if (lastPdrLocationForViz != null) {
+            pdrDeltaLat = pdrLocation.latitude - lastPdrLocationForViz.latitude;
+            pdrDeltaLng = pdrLocation.longitude - lastPdrLocationForViz.longitude;
+        }
+        
+        if (lastFusionLocationForViz != null) {
+            fusionDeltaLat = currentLocation.latitude - lastFusionLocationForViz.latitude;
+            fusionDeltaLng = currentLocation.longitude - lastFusionLocationForViz.longitude;
+        }
+        
+        // PDR discrepancy: how much PDR moved vs fusion in this step
+        double discrepancyLat = pdrDeltaLat - fusionDeltaLat;
+        double discrepancyLng = pdrDeltaLng - fusionDeltaLng;
+        
+        // Visualize at: currentLocation + discrepancy
+        LatLng visualPdrLocation = new LatLng(
+            currentLocation.latitude + discrepancyLat,
+            currentLocation.longitude + discrepancyLng
+        );
+        
+        addObservationMarker(
+            pdrObservationCircles,
+            pdrObservationTimesMs,
+                visualPdrLocation,
+            Color.argb(220, 251, 140, 0),
+            Color.argb(80, 251, 140, 0),
+                false,
+                Long.MAX_VALUE);
+        
+        // Update tracking positions for next call
+        lastPdrLocationForViz = pdrLocation;
+        lastFusionLocationForViz = currentLocation;
     }
 
 
@@ -482,8 +649,11 @@ public class TrajectoryMapFragment extends Fragment {
     public void clearMapAndReset() {
         stopAutoFloor();
         if (autoFloorSwitch != null) {
-            autoFloorSwitch.setChecked(false);
+            autoFloorSwitch.setChecked(true);
         }
+        startAutoFloor();
+        lastPdrLocationForViz = null;
+        lastFusionLocationForViz = null;
         if (polyline != null) {
             polyline.remove();
             polyline = null;
@@ -502,12 +672,15 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation  = null;
+        lastTrajectoryPoint = null;
+        lastTrajectoryAppendMs = 0L;
 
         // Clear test point markers
         for (Marker m : testPointMarkers) {
             m.remove();
         }
         testPointMarkers.clear();
+        clearObservationMarkers();
 
 
         // Re-create empty polylines with your chosen colors
@@ -515,12 +688,152 @@ public class TrajectoryMapFragment extends Fragment {
             polyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(5f)
+                .zIndex(10f)
                     .add());
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
                     .width(5f)
+                .zIndex(10f)
                     .add());
         }
+    }
+
+    private void maybeAppendTrajectoryPoint(@Nullable LatLng oldLocation,
+                                            @NonNull LatLng newLocation) {
+        if (polyline == null) {
+            return;
+        }
+
+        List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        if (oldLocation == null || points.isEmpty()) {
+            points.add(newLocation);
+            polyline.setPoints(points);
+            lastTrajectoryPoint = newLocation;
+            lastTrajectoryAppendMs = SystemClock.elapsedRealtime();
+            return;
+        }
+
+        long now = SystemClock.elapsedRealtime();
+        double moved = lastTrajectoryPoint == null
+                ? UtilFunctions.distanceBetweenPoints(oldLocation, newLocation)
+                : UtilFunctions.distanceBetweenPoints(lastTrajectoryPoint, newLocation);
+
+        // Distance-only gate: never add a point just because time passed.
+        // WiFi/GNSS noise causes small constant drift in the estimate — a time-based
+        // condition would commit that drift to the polyline even when standing still.
+        // In replay mode every recorded position is drawn regardless of distance so
+        // densely-sampled trajectories are not filtered to a single dot.
+        if (replayMode || moved >= TRAJECTORY_APPEND_MIN_METERS) {
+            points.add(newLocation);
+            polyline.setPoints(points);
+            lastTrajectoryPoint = newLocation;
+            lastTrajectoryAppendMs = now;
+        }
+    }
+
+    private void addObservationMarker(@NonNull List<Circle> bucket,
+                                      @NonNull List<Long> timesBucket,
+                                      @NonNull LatLng location,
+                                      int strokeColor,
+                                      int fillColor,
+                                      boolean respectGnssSwitch,
+                                      long ttlMs) {
+        if (gMap == null) {
+            return;
+        }
+        if (respectGnssSwitch && !isGnssOn) {
+            return;
+        }
+
+        pruneExpiredObservationCircles(bucket, timesBucket, ttlMs);
+
+        // Determine whether this new circle should start visible based on its bucket's toggle
+        boolean visibleNow;
+        if (bucket == gnssObservationCircles) {
+            visibleNow = showGnssPoints;
+        } else if (bucket == wifiObservationCircles) {
+            visibleNow = showWifiPoints;
+        } else {
+            visibleNow = showPdrPoints;
+        }
+
+        Circle circle = gMap.addCircle(new CircleOptions()
+            .center(location)
+                .radius(OBSERVATION_CIRCLE_RADIUS_M)
+                .strokeWidth(2f)
+                .strokeColor(strokeColor)
+                .fillColor(fillColor)
+                .zIndex(3f)
+                .visible(visibleNow));
+
+        if (circle == null) {
+            return;
+        }
+
+        bucket.add(circle);
+        timesBucket.add(SystemClock.elapsedRealtime());
+        while (bucket.size() > MAX_OBSERVATION_MARKERS) {
+            Circle stale = bucket.remove(0);
+            stale.remove();
+            if (!timesBucket.isEmpty()) {
+                timesBucket.remove(0);
+            }
+        }
+    }
+
+    private void pruneExpiredObservations() {
+        long now = SystemClock.elapsedRealtime();
+        pruneExpiredObservationCircles(gnssObservationCircles, gnssObservationTimesMs,
+                GNSS_OBSERVATION_TTL_MS, now);
+        pruneExpiredObservationCircles(wifiObservationCircles, wifiObservationTimesMs,
+                WIFI_OBSERVATION_TTL_MS, now);
+    }
+
+    private void pruneExpiredObservationCircles(@NonNull List<Circle> bucket,
+                                                @NonNull List<Long> timesBucket,
+                                                long ttlMs) {
+        pruneExpiredObservationCircles(bucket, timesBucket, ttlMs, SystemClock.elapsedRealtime());
+    }
+
+    private void pruneExpiredObservationCircles(@NonNull List<Circle> bucket,
+                                                @NonNull List<Long> timesBucket,
+                                                long ttlMs,
+                                                long nowMs) {
+        if (ttlMs == Long.MAX_VALUE) {
+            return;
+        }
+
+        while (!bucket.isEmpty() && !timesBucket.isEmpty()) {
+            long ageMs = nowMs - timesBucket.get(0);
+            if (ageMs <= ttlMs) {
+                break;
+            }
+            Circle stale = bucket.remove(0);
+            stale.remove();
+            timesBucket.remove(0);
+        }
+    }
+
+    private void clearObservationMarkers() {
+        clearObservationCircles(gnssObservationCircles, gnssObservationTimesMs);
+        clearObservationCircles(wifiObservationCircles, wifiObservationTimesMs);
+        clearObservationCircles(pdrObservationCircles, pdrObservationTimesMs);
+    }
+
+    /** Shows or hides every circle in a bucket without removing them from the map. */
+    private void setCircleBucketVisible(@NonNull List<Circle> bucket, boolean visible) {
+        for (Circle c : bucket) {
+            c.setVisible(visible);
+        }
+    }
+
+    private void clearObservationCircles(@NonNull List<Circle> bucket,
+                                         @NonNull List<Long> timesBucket) {
+        for (Circle c : bucket) {
+            c.remove();
+        }
+        bucket.clear();
+        timesBucket.clear();
     }
 
     /**
@@ -623,6 +936,9 @@ public class TrajectoryMapFragment extends Fragment {
      * of consistent readings).
      */
     private void startAutoFloor() {
+        if (autoFloorHandler != null && autoFloorTask != null) {
+            return;
+        }
         if (autoFloorHandler == null) {
             autoFloorHandler = new Handler(Looper.getMainLooper());
         }
@@ -676,6 +992,7 @@ public class TrajectoryMapFragment extends Fragment {
         if (autoFloorHandler != null && autoFloorTask != null) {
             autoFloorHandler.removeCallbacks(autoFloorTask);
         }
+        autoFloorTask = null;
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0;
         Log.d(TAG, "Auto-floor stopped");

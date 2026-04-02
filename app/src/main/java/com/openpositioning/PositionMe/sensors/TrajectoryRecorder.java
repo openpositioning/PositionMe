@@ -222,16 +222,43 @@ public class TrajectoryRecorder {
             trajectory.setTrajectoryId(trajectoryId);
         }
 
-        if (state.startLocation != null
-                && (state.startLocation[0] != 0 || state.startLocation[1] != 0)) {
-            trajectory.setInitialPosition(
-                    Traj.GNSSPosition.newBuilder()
-                            .setRelativeTimestamp(0)
-                            .setLatitude(state.startLocation[0])
-                            .setLongitude(state.startLocation[1])
-                            .setAltitude(0.0)
-            );
+        if (hasValidStartLocation()) {
+            setInitialPosition(state.startLocation[0], state.startLocation[1]);
+        } else if (isValidReplayCoordinate(state.latitude, state.longitude)) {
+            // Fallback when start location was not explicitly set before recording.
+            state.startLocation[0] = state.latitude;
+            state.startLocation[1] = state.longitude;
+            setInitialPosition(state.startLocation[0], state.startLocation[1]);
         }
+    }
+
+    /**
+     * Ensures initial_position metadata is present for replay anchoring.
+     */
+    public void ensureInitialPosition(double latitude, double longitude) {
+        if (trajectory == null) return;
+        if (!isValidReplayCoordinate(latitude, longitude)) return;
+
+        state.startLocation[0] = (float) latitude;
+        state.startLocation[1] = (float) longitude;
+
+        if (!trajectory.hasInitialPosition()) {
+            setInitialPosition(latitude, longitude);
+        }
+    }
+
+    private void setInitialPosition(double latitude, double longitude) {
+        trajectory.setInitialPosition(
+                Traj.GNSSPosition.newBuilder()
+                        .setRelativeTimestamp(0)
+                        .setLatitude(latitude)
+                        .setLongitude(longitude)
+                        .setAltitude(0.0)
+        );
+    }
+
+    private boolean hasValidStartLocation() {
+        return isValidReplayCoordinate(state.startLocation[0], state.startLocation[1]);
     }
 
     //endregion
@@ -248,6 +275,45 @@ public class TrajectoryRecorder {
                     .setX(x)
                     .setY(y));
         }
+    }
+
+    /**
+     * Adds a fused/corrected position entry to the trajectory.
+     */
+    public void addCorrectedPosition(long relativeTimestamp,
+                                     double latitude,
+                                     double longitude,
+                                     int floor) {
+        if (trajectory == null || !saveRecording) return;
+
+        // Guard against replay-breaking placeholder coordinates.
+        if (!isValidReplayCoordinate(latitude, longitude)) {
+            return;
+        }
+
+        if (relativeTimestamp < 0) {
+            relativeTimestamp = 0;
+        }
+
+        Traj.GNSSPosition.Builder corrected = Traj.GNSSPosition.newBuilder()
+                .setRelativeTimestamp(relativeTimestamp)
+                .setLatitude(latitude)
+                .setLongitude(longitude)
+                .setAltitude(0.0);
+
+        corrected.setFloor(String.valueOf(floor));
+        trajectory.addCorrectedPositions(corrected);
+    }
+
+    private boolean isValidReplayCoordinate(double latitude, double longitude) {
+        if (!Double.isFinite(latitude) || !Double.isFinite(longitude)) {
+            return false;
+        }
+        if (Math.abs(latitude) > 90.0 || Math.abs(longitude) > 180.0) {
+            return false;
+        }
+        // (0,0) is typically an uninitialised fallback and breaks replay focus.
+        return !(Math.abs(latitude) < 1e-7 && Math.abs(longitude) < 1e-7);
     }
 
     /**

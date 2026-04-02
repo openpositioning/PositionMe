@@ -1,4 +1,11 @@
 <resources>
+    <!-- Glass panel colours (dark mode) -->
+    <color name="glass_card_bg">#44C0C0C0</color>
+    <color name="glass_btn_bg">#BB3A3A3A</color>
+    <color name="glass_card_stroke">#44FFFFFF</color>
+    <color name="glass_text">#EEEEEE</color>
+    <color name="glass_fab_bg">#CCE0E0E0</color>
+    <color name="glass_fab_icon">#1A1A1A</color>
     <color name="md_theme_primary">#86D1EA</color>
     <color name="md_theme_onPrimary">#003642</color>
     <color name="md_theme_primaryContainer">#004E5F</color>

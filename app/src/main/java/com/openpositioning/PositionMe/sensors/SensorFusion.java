@@ -11,6 +11,7 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -51,6 +52,7 @@ public class SensorFusion implements SensorEventListener {
 
     //region Static variables
     private static final SensorFusion sensorFusion = new SensorFusion();
+    private static final String TAG = "SensorFusion";
     //endregion
 
     //region Instance variables
@@ -63,6 +65,7 @@ public class SensorFusion implements SensorEventListener {
     private SensorEventHandler eventHandler;
     private TrajectoryRecorder recorder;
     private WifiPositionManager wifiPositionManager;
+    private PositionFusionEngine fusionEngine;
 
     // Movement sensor instances (lifecycle managed here)
     private MovementSensor accelerometerSensor;
@@ -94,6 +97,15 @@ public class SensorFusion implements SensorEventListener {
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
+
+    // Trajectory-based heading tracking for arrow orientation
+    private static final double TRAJECTORY_HEADING_MIN_MOVE_M = 0.40;
+    private static final float TRAJECTORY_HEADING_BLEND_ALPHA = 0.30f;
+    private double lastTrajectoryHeadingLatDeg;
+    private double lastTrajectoryHeadingLonDeg;
+    private boolean hasTrajectoryHeadingAnchor;
+    private double trajectoryHeadingRad;
+    private boolean hasTrajectoryHeading;
     //endregion
 
     //region Initialisation
@@ -151,6 +163,7 @@ public class SensorFusion implements SensorEventListener {
         this.pdrProcessing = new PdrProcessing(context);
         this.pathView = new PathView(context, null);
         WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
+        this.fusionEngine = new PositionFusionEngine(settings.getInt("floor_height", 4));
 
         // Create internal modules
         this.recorder = new TrajectoryRecorder(appContext, state, serverCommunications, settings);
@@ -162,7 +175,19 @@ public class SensorFusion implements SensorEventListener {
 
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pathView, recorder, bootTime,
+                (dxEastMeters, dyNorthMeters, relativeTimestampMs) -> {
+                    fusionEngine.updatePdrDisplacement(dxEastMeters, dyNorthMeters);
+                    fusionEngine.updateElevation(state.elevation, state.elevator);
+                    updateFusedState();
+                },
+                () -> (float) fusionEngine.getHeadingBiasRad(),
+                rawHeadingRad -> fusionEngine.updateRawHeadingRad(rawHeadingRad));
+
+        this.wifiPositionManager.setWifiFixListener((wifiLocation, floor) -> {
+            fusionEngine.updateWifi(wifiLocation.latitude, wifiLocation.longitude, floor);
+            updateFusedState();
+        });
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -421,6 +446,23 @@ public class SensorFusion implements SensorEventListener {
                 continue;
             }
             floorplanBuildingCache.put(building.getName(), building);
+
+                List<FloorplanApiClient.FloorShapes> floors = building.getFloorShapesList();
+                Log.i(TAG, "Floorplan cache building=" + building.getName()
+                    + " floors=" + floors.size());
+                for (int i = 0; i < floors.size(); i++) {
+                FloorplanApiClient.FloorShapes floor = floors.get(i);
+                Log.d(TAG, "Floorplan floor index=" + i
+                    + " display=" + floor.getDisplayName()
+                    + " features=" + floor.getFeatures().size());
+                }
+        }
+
+        if (fusionEngine != null) {
+            fusionEngine.updateMapMatchingContext(
+                    state.latitude,
+                    state.longitude,
+                    getFloorplanBuildings());
         }
     }
 
@@ -490,6 +532,17 @@ public class SensorFusion implements SensorEventListener {
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];
         state.startLocation[1] = startPosition[1];
+        if (recorder != null) {
+            recorder.ensureInitialPosition(startPosition[0], startPosition[1]);
+        }
+        if (fusionEngine != null) {
+            fusionEngine.reset(startPosition[0], startPosition[1], 0);
+            // Anchor is now valid — immediately load wall geometry from cached building data
+            // so map matching is active from the very first step, not just after the first GNSS fix.
+            fusionEngine.updateMapMatchingContext(
+                    startPosition[0], startPosition[1], getFloorplanBuildings());
+            updateFusedState();
+        }
     }
 
     /**
@@ -512,11 +565,61 @@ public class SensorFusion implements SensorEventListener {
 
     /**
      * Getter function for device orientation.
+     * Blends raw sensor orientation toward the trajectory heading computed from
+     * sustained fused position movement.
      *
-     * @return orientation of device in radians.
+     * @return orientation of device in radians, blended toward trajectory direction.
      */
     public float passOrientation() {
-        return state.orientation[0];
+        float rawHeading = state.orientation[0];
+        float correctedHeading = normalizeAngleRad(rawHeading + fusionEngine.getHeadingBiasRad());
+        return correctedHeading;
+    }
+
+    /**
+     * Wraps an angle in radians to the range [-π, π].
+     */
+    private float normalizeAngleRad(double angleRad) {
+        float result = (float) angleRad;
+        while (result > Math.PI) result -= (float) (2 * Math.PI);
+        while (result < -Math.PI) result += (float) (2 * Math.PI);
+        return result;
+    }
+
+    /**
+     * Tracks the bearing direction from sustained fused position movement.
+     * On significant position changes, updates the trajectory heading via bearing calculation.
+     * This provides a secondary heading reference independent of raw sensor orientation.
+     */
+    private void updateTrajectoryHeading(double latDeg, double lonDeg) {
+        if (!hasTrajectoryHeadingAnchor) {
+            lastTrajectoryHeadingLatDeg = latDeg;
+            lastTrajectoryHeadingLonDeg = lonDeg;
+            hasTrajectoryHeadingAnchor = true;
+            hasTrajectoryHeading = false;
+            return;
+        }
+
+        // Flat-earth distance in metres
+        double dLat = (latDeg - lastTrajectoryHeadingLatDeg) * 111320.0;
+        double dLon = (lonDeg - lastTrajectoryHeadingLonDeg)
+                * 111320.0 * Math.cos(Math.toRadians(lastTrajectoryHeadingLatDeg));
+        double distM = Math.sqrt(dLat * dLat + dLon * dLon);
+
+        if (distM >= TRAJECTORY_HEADING_MIN_MOVE_M) {
+            // Compute bearing: atan2(E, N) gives bearing from north
+            double newHeadingRad = Math.atan2(dLon, dLat);
+            if (!hasTrajectoryHeading) {
+                trajectoryHeadingRad = newHeadingRad;
+                hasTrajectoryHeading = true;
+            } else {
+                // EMA blend to smooth trajectory heading
+                float delta = normalizeAngleRad(newHeadingRad - trajectoryHeadingRad);
+                trajectoryHeadingRad = trajectoryHeadingRad + 0.4f * delta;
+            }
+            lastTrajectoryHeadingLatDeg = latDeg;
+            lastTrajectoryHeadingLonDeg = lonDeg;
+        }
     }
 
     /**
@@ -615,6 +718,23 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns the best fused location estimate, if available.
+     */
+    public LatLng getFusedLatLng() {
+        if (!state.fusedAvailable) {
+            return null;
+        }
+        return new LatLng(state.fusedLatitude, state.fusedLongitude);
+    }
+
+    /**
+     * Returns the current fused floor estimate.
+     */
+    public int getFusedFloor() {
+        return state.fusedFloor;
+    }
+
+    /**
      * Returns the current floor the user is on, obtained using WiFi positioning.
      *
      * @return current floor number.
@@ -644,7 +764,54 @@ public class SensorFusion implements SensorEventListener {
         public void onLocationChanged(@NonNull Location location) {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
+            if (recorder != null && recorder.isRecording()) {
+                recorder.ensureInitialPosition(location.getLatitude(), location.getLongitude());
+            }
+            if (fusionEngine != null) {
+                // Update GNSS first so the local-frame anchor is established,
+                // then load wall geometry which is converted into that frame.
+                fusionEngine.updateGnss(
+                        location.getLatitude(),
+                        location.getLongitude(),
+                        location.getAccuracy());
+                fusionEngine.updateMapMatchingContext(
+                        location.getLatitude(),
+                        location.getLongitude(),
+                        getFloorplanBuildings());
+                updateFusedState();
+            }
             recorder.addGnssData(location);
+        }
+    }
+
+    private void updateFusedState() {
+        if (fusionEngine == null) {
+            return;
+        }
+        PositionFusionEstimate estimate = fusionEngine.getEstimate();
+        if (!estimate.isAvailable() || estimate.getLatLng() == null) {
+            state.fusedAvailable = false;
+            return;
+        }
+
+        state.fusedLatitude = (float) estimate.getLatLng().latitude;
+        state.fusedLongitude = (float) estimate.getLatLng().longitude;
+        state.fusedFloor = estimate.getFloor();
+        state.fusedAvailable = true;
+
+        // Update trajectory-based heading from fused position movement
+        updateTrajectoryHeading(estimate.getLatLng().latitude, estimate.getLatLng().longitude);
+
+        if (recorder != null && recorder.isRecording()) {
+            long relativeTimestamp = SystemClock.uptimeMillis() - recorder.getBootTime();
+            if (relativeTimestamp < 0) {
+                relativeTimestamp = 0;
+            }
+            recorder.addCorrectedPosition(
+                    relativeTimestamp,
+                    estimate.getLatLng().latitude,
+                    estimate.getLatLng().longitude,
+                    estimate.getFloor());
         }
     }
 

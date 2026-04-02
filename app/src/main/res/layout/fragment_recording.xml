@@ -81,18 +81,24 @@
         app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
         app:layout_constraintBottom_toTopOf="@id/controlLayout" />
 
-    <!-- 🔹 Test Point Button (Floating on top of the map) -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <!-- Test Point Button — glass pill, centred above the dashboard -->
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/btn_test_point"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="18dp"
-        android:layout_marginBottom="213dp"
+        android:layout_marginBottom="8dp"
         android:contentDescription="Add test point"
-        android:src="@android:drawable/ic_input_add"
+        android:text="Test Point"
+        android:textColor="@color/glass_text"
+        app:icon="@drawable/ic_baseline_add_location_24"
+        app:iconTint="@color/glass_text"
+        app:backgroundTint="@color/glass_btn_bg"
+        app:strokeColor="@color/glass_card_stroke"
+        app:strokeWidth="1dp"
+        app:elevation="0dp"
         app:layout_constraintBottom_toTopOf="@id/controlLayout"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-
 
     <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
     <LinearLayout

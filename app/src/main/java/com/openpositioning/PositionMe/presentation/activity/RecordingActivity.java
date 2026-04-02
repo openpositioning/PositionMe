@@ -16,6 +16,7 @@ import com.openpositioning.PositionMe.service.SensorCollectionService;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+import com.openpositioning.PositionMe.utils.ThemePreferences;
 
 
 /**
@@ -48,6 +49,7 @@ public class RecordingActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ThemePreferences.applyThemeFromPreferences(this);
         setContentView(R.layout.activity_recording);
 
         if (savedInstanceState == null) {

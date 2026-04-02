@@ -74,9 +74,24 @@
                 android:layout_marginBottom="24dp"
                 android:text="@string/setLocation"
                 android:textSize="24sp"
+                android:visibility="gone"
                 app:icon="@drawable/ic_baseline_add_location_24"
                 app:iconGravity="start"
                 app:iconSize="30dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <Button
+                android:id="@+id/startLocationLoading"
+                android:layout_width="150dp"
+                android:layout_height="56dp"
+                android:layout_marginBottom="24dp"
+                android:backgroundTint="#616161"
+                android:enabled="false"
+                android:text="@string/loadingLabel"
+                android:textColor="#FFFFFF"
+                android:textSize="24sp"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent" />

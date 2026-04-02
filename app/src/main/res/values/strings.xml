@@ -15,6 +15,7 @@
     <string name="ok">OK</string>
     <string name="show_storage">Show locally</string>
     <string name="setLocation">Set</string>
+    <string name="loadingLabel">Loading...</string>
     <string name="cancel">Cancel</string>
 
     <!-- Sensors -->
@@ -46,6 +47,8 @@
     <string name="averageStepLgn">Computed Avg. Step Length</string>
     <string name="correctStepLgn">unit: cm</string>
     <string name="locationInstructions">Long press and drag the marker to your start location</string>
+    <string name="initialEstimateWaiting">Waiting for initial position estimate...</string>
+    <string name="floorplanLoadingWaiting">Loading indoor map data...</string>
     <string name="buildingSelectionInstructions">Tap a building outline to select your venue, then adjust the marker</string>
     <string name="buildingSelected">Selected: %1$s</string>
     <string name="noBuildingsFound">No buildings found nearby. Drag the marker to your start position.</string>
@@ -60,6 +63,8 @@
 
     <!-- Preference Titles -->
     <string name="settings_title">Settings</string>
+    <string name="appearance_header">Appearance</string>
+    <string name="theme_mode_title">Theme</string>
     <string name="sensor_header">Sensors</string>
     <string name="sync_header">Sync</string>
     <string name="user_header">User information</string>

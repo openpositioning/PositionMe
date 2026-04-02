@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
 import android.util.Log;
+import android.os.SystemClock;
 
 import com.google.android.gms.maps.model.LatLng;
 
@@ -22,11 +23,25 @@ import java.util.stream.Stream;
  */
 public class WifiPositionManager implements Observer {
 
+    public interface WifiFixListener {
+        void onWifiFix(LatLng wifiLocation, int floor);
+    }
+
     private static final String WIFI_FINGERPRINT = "wf";
+
+    // Exponential moving average smoothing for WiFi positions.
+    // Prevents sudden large jumps from individual noisy scan results bugging out the trajectory.
+    private static final double EMA_ALPHA = 0.80;          // stronger pull to newest WiFi fix
+    private static final double JUMP_THRESHOLD_M = 10.0;   // dampen very large jumps
+    private static final long WIFI_TIME_DECAY_HALF_LIFE_MS = 10000L;
 
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
     private List<Wifi> wifiList;
+    private WifiFixListener wifiFixListener;
+    private LatLng smoothedWifiPosition = null;
+    private int lastSmoothedFloor = 0;
+    private long lastSmoothedWifiFixMs = 0L;
 
     /**
      * Creates a new WifiPositionManager.
@@ -61,11 +76,31 @@ public class WifiPositionManager implements Observer {
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+                String bssidKey = getBssidKey(data);
+                if (bssidKey == null) {
+                    continue;
+                }
+                wifiAccessPoints.put(bssidKey, data.getLevel());
+            }
+            if (wifiAccessPoints.length() == 0) {
+                Log.w("WifiPositionManager", "Skipping WiFi positioning request: no valid BSSID keys");
+                return;
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    if (wifiFixListener != null && wifiLocation != null) {
+                        wifiFixListener.onWifiFix(smoothWifiPosition(wifiLocation, floor), floor);
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e("WifiPositionManager", "WiFi positioning request failed: " + message);
+                }
+            });
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());
         }
@@ -78,7 +113,15 @@ public class WifiPositionManager implements Observer {
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+                String bssidKey = getBssidKey(data);
+                if (bssidKey == null) {
+                    continue;
+                }
+                wifiAccessPoints.put(bssidKey, data.getLevel());
+            }
+            if (wifiAccessPoints.length() == 0) {
+                Log.w("WifiPositionManager", "Skipping WiFi callback request: no valid BSSID keys");
+                return;
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
@@ -124,4 +167,98 @@ public class WifiPositionManager implements Observer {
     public List<Wifi> getWifiList() {
         return this.wifiList;
     }
+
+    /**
+     * Registers a listener receiving WiFi absolute fixes for downstream fusion.
+     */
+    public void setWifiFixListener(WifiFixListener wifiFixListener) {
+        this.wifiFixListener = wifiFixListener;
+    }
+
+    /**
+     * Applies exponential moving average smoothing to consecutive WiFi positions.
+        * Large jumps (beyond JUMP_THRESHOLD_M) are dampened to avoid abrupt spikes.
+        * Smaller jumps use EMA blending with time decay.
+     * The floor resets the smoothed position when the user changes floor so cross-floor
+     * averaging is avoided.
+     */
+    private LatLng smoothWifiPosition(LatLng raw, int floor) {
+        long nowMs = SystemClock.elapsedRealtime();
+        if (smoothedWifiPosition == null || floor != lastSmoothedFloor) {
+            smoothedWifiPosition = raw;
+            lastSmoothedFloor = floor;
+            lastSmoothedWifiFixMs = nowMs;
+            return raw;
+        }
+
+        // Flat-earth distance in metres between smoothed position and new raw fix
+        double dLat = (raw.latitude  - smoothedWifiPosition.latitude)  * 111320.0;
+        double dLon = (raw.longitude - smoothedWifiPosition.longitude)
+                * 111320.0 * Math.cos(Math.toRadians(smoothedWifiPosition.latitude));
+        double distM = Math.sqrt(dLat * dLat + dLon * dLon);
+
+        // Age-based decay: older WiFi fixes fade faster, newer fixes retain more weight.
+        long ageMs = Math.max(0L, nowMs - lastSmoothedWifiFixMs);
+        double timeDecay = Math.pow(0.5, ageMs / (double) WIFI_TIME_DECAY_HALF_LIFE_MS);
+        double alpha = EMA_ALPHA;
+        if (distM > JUMP_THRESHOLD_M) {
+            alpha *= JUMP_THRESHOLD_M / distM;
+        }
+        alpha *= timeDecay;
+
+        double smoothLat = smoothedWifiPosition.latitude
+                + alpha * (raw.latitude  - smoothedWifiPosition.latitude);
+        double smoothLon = smoothedWifiPosition.longitude
+                + alpha * (raw.longitude - smoothedWifiPosition.longitude);
+
+        smoothedWifiPosition = new LatLng(smoothLat, smoothLon);
+        lastSmoothedWifiFixMs = nowMs;
+        Log.d("WifiPositionManager", String.format(
+            "WiFi EMA raw=(%.6f,%.6f) dist=%.1fm age=%dms alpha=%.2f smooth=(%.6f,%.6f)",
+            raw.latitude, raw.longitude, distM, ageMs, alpha,
+                smoothLat, smoothLon));
+        return smoothedWifiPosition;
+    }
+
+    private String getBssidKey(Wifi wifi) {
+        String bssidString = wifi.getBssidString();
+        if (bssidString != null && !bssidString.trim().isEmpty()) {
+            String normalizedHex = normalizeMacToHex(bssidString.trim());
+            if (normalizedHex != null) {
+                long macValue = Long.parseUnsignedLong(normalizedHex, 16);
+                return Long.toUnsignedString(macValue);
+            }
+        }
+
+        // Fallback: convert packed long (lower 48 bits) to unsigned decimal string.
+        long mac = wifi.getBssid() & 0x0000FFFFFFFFFFFFL;
+        return Long.toUnsignedString(mac);
+    }
+
+    private String normalizeMacToHex(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.replace(":", "").replace("-", "").toUpperCase();
+        if (!isValidHexMac(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    private boolean isValidHexMac(String value) {
+        if (value.length() != 12) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            boolean digit = c >= '0' && c <= '9';
+            boolean upperHex = c >= 'A' && c <= 'F';
+            if (!digit && !upperHex) {
+                return false;
+            }
+        }
+        return true;
+    }
+
 }

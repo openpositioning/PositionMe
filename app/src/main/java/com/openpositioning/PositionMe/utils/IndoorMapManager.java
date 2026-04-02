@@ -13,7 +13,11 @@ import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Manages indoor floor map display for all supported buildings
@@ -49,16 +53,42 @@ public class IndoorMapManager {
     // Per-floor vector shape data for the current building
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
 
+    // Outline polygon of the current building — used as the orange base fill
+    private List<LatLng> currentBuildingOutline;
+
     // Average floor heights per building (meters), used for barometric auto-floor
     public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
 
     // Colours for different indoor feature types
-    private static final int WALL_STROKE = Color.argb(200, 80, 80, 80);
-    private static final int ROOM_STROKE = Color.argb(180, 33, 150, 243);
-    private static final int ROOM_FILL = Color.argb(40, 33, 150, 243);
-    private static final int DEFAULT_STROKE = Color.argb(150, 100, 100, 100);
+    // Walls — black stroke, transparent fill (structural outlines only)
+    private static final int WALL_STROKE       = Color.argb(255,   0,   0,   0);
+
+    // Rooms — beige fill, dark brown stroke
+    private static final int ROOM_STROKE       = Color.argb(200, 140, 110,  70);
+    private static final int ROOM_FILL         = Color.argb(210, 245, 230, 200);
+
+    // Corridors / hallways — slightly darker beige to distinguish from rooms
+    private static final int CORRIDOR_STROKE   = Color.argb(180, 140, 110,  70);
+    private static final int CORRIDOR_FILL     = Color.argb(180, 225, 210, 175);
+
+    // Stairs — amber/orange so they pop as a navigation landmark
+    private static final int STAIRS_STROKE     = Color.argb(255, 180,  90,   0);
+    private static final int STAIRS_FILL       = Color.argb(220, 255, 160,  40);
+
+    // Lifts / elevators — violet, distinct from stairs
+    private static final int LIFT_STROKE       = Color.argb(255, 110,  40, 180);
+    private static final int LIFT_FILL         = Color.argb(220, 200, 150, 240);
+
+    // Unknown — beige same as rooms
+    private static final int UNKNOWN_STROKE    = Color.argb(160, 140, 110,  70);
+    private static final int UNKNOWN_FILL      = Color.argb(180, 235, 220, 190);
+
+    // Fallback for any unrecognised indoor type — beige fill, dark brown stroke
+    private static final int DEFAULT_STROKE    = Color.argb(200, 140, 110,  70);
+    private static final int DEFAULT_FILL      = Color.argb(210, 245, 230, 200);
+    private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     /**
      * Constructor to set the map instance.
@@ -161,14 +191,27 @@ public class IndoorMapManager {
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
         if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
 
+        int requestedFloor = newFloor;
+        int bias = getAutoFloorBias();
+
         if (autoFloor) {
-            newFloor += getAutoFloorBias();
+            newFloor += bias;
+            Log.d(TAG, "Auto-floor request logical=" + requestedFloor
+                    + " bias=" + bias + " -> index=" + newFloor);
         }
 
         if (newFloor >= 0 && newFloor < currentFloorShapes.size()
                 && newFloor != this.currentFloor) {
             this.currentFloor = newFloor;
+            Log.i(TAG, "Set floor index=" + newFloor
+                    + " display=" + getCurrentFloorDisplayName()
+                    + " totalFloors=" + currentFloorShapes.size());
             drawFloorShapes(newFloor);
+        } else {
+            Log.d(TAG, "Ignored floor change request requested=" + requestedFloor
+                    + " mappedIndex=" + newFloor
+                    + " current=" + this.currentFloor
+                    + " totalFloors=" + currentFloorShapes.size());
         }
     }
 
@@ -229,12 +272,34 @@ public class IndoorMapManager {
                 FloorplanApiClient.BuildingInfo building =
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
-                    currentFloorShapes = building.getFloorShapesList();
+                    currentBuildingOutline = building.getOutlinePolygon();
+                    currentFloorShapes = normalizeFloorOrder(building.getFloorShapesList());
+                    Log.i(TAG, "Loaded floorplan building=" + apiName
+                            + " floors=" + (currentFloorShapes == null ? 0 : currentFloorShapes.size()));
+                    if (currentFloorShapes != null) {
+                        for (int i = 0; i < currentFloorShapes.size(); i++) {
+                            FloorplanApiClient.FloorShapes floorShapes = currentFloorShapes.get(i);
+                            Log.d(TAG, "Floor index=" + i + " display=" + floorShapes.getDisplayName()
+                                    + " features=" + floorShapes.getFeatures().size());
+                        }
+                    }
+                }
+
+                if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+                    int groundFloorIndex = findFloorIndexForLogicalFloor(0);
+                    if (groundFloorIndex >= 0) {
+                        currentFloor = groundFloorIndex;
+                    } else if (currentFloor < 0 || currentFloor >= currentFloorShapes.size()) {
+                        currentFloor = 0;
+                    }
                 }
 
                 if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
                     drawFloorShapes(currentFloor);
                     isIndoorMapSet = true;
+                    Log.i(TAG, "Indoor overlay enabled building=" + apiName
+                            + " startFloorIndex=" + currentFloor
+                            + " display=" + getCurrentFloorDisplayName());
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
@@ -243,6 +308,8 @@ public class IndoorMapManager {
                 currentBuilding = BUILDING_NONE;
                 currentFloor = 0;
                 currentFloorShapes = null;
+                currentBuildingOutline = null;
+                Log.i(TAG, "Indoor overlay disabled (left mapped buildings)");
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error with overlay: " + ex.toString());
@@ -261,7 +328,21 @@ public class IndoorMapManager {
         if (currentFloorShapes == null || floorIndex < 0
                 || floorIndex >= currentFloorShapes.size()) return;
 
+        // Draw building outline as a beige base fill so the interior is visible
+        // and data points don't blend in with the background.
+        if (currentBuildingOutline != null && currentBuildingOutline.size() >= 3) {
+            Polygon baseFill = gMap.addPolygon(new PolygonOptions()
+                    .addAll(currentBuildingOutline)
+                    .strokeColor(Color.TRANSPARENT)
+                    .strokeWidth(0f)
+                .fillColor(Color.argb(210, 245, 230, 200))
+                    .zIndex(0f));
+            drawnPolygons.add(baseFill);
+        }
+
         FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(floorIndex);
+        Log.d(TAG, "Draw floor index=" + floorIndex + " display=" + floor.getDisplayName()
+            + " featureCount=" + floor.getFeatures().size());
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
             String geoType = feature.getGeometryType();
             String indoorType = feature.getIndoorType();
@@ -269,11 +350,15 @@ public class IndoorMapManager {
             if ("MultiPolygon".equals(geoType) || "Polygon".equals(geoType)) {
                 for (List<LatLng> ring : feature.getParts()) {
                     if (ring.size() < 3) continue;
+                    // Walls get a thicker stroke; filled areas get a thinner one
+                    // so the fill colour is the dominant visual cue
+                    float sw = "wall".equals(indoorType) ? 5f : 2.5f;
                     Polygon p = gMap.addPolygon(new PolygonOptions()
                             .addAll(ring)
                             .strokeColor(getStrokeColor(indoorType))
-                            .strokeWidth(5f)
-                            .fillColor(getFillColor(indoorType)));
+                            .strokeWidth(sw)
+                            .fillColor(getFillColor(indoorType))
+                            .zIndex(getZIndex(indoorType)));
                     drawnPolygons.add(p);
                 }
             } else if ("MultiLineString".equals(geoType)
@@ -283,7 +368,7 @@ public class IndoorMapManager {
                     Polyline pl = gMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getStrokeColor(indoorType))
-                            .width(6f));
+                            .width("wall".equals(indoorType) ? 6f : 4f));
                     drawnPolylines.add(pl);
                 }
             }
@@ -301,15 +386,46 @@ public class IndoorMapManager {
     }
 
     /**
+     * Returns the z-index for a given indoor feature type so that fills render
+     * underneath structural elements (walls always draw on top).
+     *
+     * @param indoorType the indoor_type property value
+     * @return z-index float
+     */
+    private float getZIndex(String indoorType) {
+        if (indoorType == null) return 1f;
+        switch (indoorType) {
+            case "wall":       return 3f;   // always on top
+            case "stairs":
+            case "lift":
+            case "elevator":   return 2f;   // navigation features above room fills
+            case "room":       return 1f;
+            case "corridor":
+            case "hallway":    return 1f;
+            default:           return 0f;
+        }
+    }
+
+    /**
      * Returns the stroke colour for a given indoor feature type.
      *
      * @param indoorType the indoor_type property value
      * @return ARGB colour value
      */
     private int getStrokeColor(String indoorType) {
-        if ("wall".equals(indoorType)) return WALL_STROKE;
-        if ("room".equals(indoorType)) return ROOM_STROKE;
-        return DEFAULT_STROKE;
+        if (indoorType == null) return DEFAULT_STROKE;
+        switch (indoorType) {
+            case "wall":                return WALL_STROKE;
+            case "room":                return ROOM_STROKE;
+            case "corridor":
+            case "hallway":             return CORRIDOR_STROKE;
+            case "stairs":
+            case "staircase":           return STAIRS_STROKE;
+            case "lift":
+            case "elevator":            return LIFT_STROKE;
+            case "unknown":             return UNKNOWN_STROKE;
+            default:                    return DEFAULT_STROKE;
+        }
     }
 
     /**
@@ -319,8 +435,92 @@ public class IndoorMapManager {
      * @return ARGB colour value
      */
     private int getFillColor(String indoorType) {
-        if ("room".equals(indoorType)) return ROOM_FILL;
-        return Color.TRANSPARENT;
+        if (indoorType == null) return DEFAULT_FILL;
+        switch (indoorType) {
+            case "wall":                return Color.TRANSPARENT;
+            case "room":                return ROOM_FILL;
+            case "corridor":
+            case "hallway":             return CORRIDOR_FILL;
+            case "stairs":
+            case "staircase":           return STAIRS_FILL;
+            case "lift":
+            case "elevator":            return LIFT_FILL;
+            case "unknown":             return UNKNOWN_FILL;
+            default:                    return DEFAULT_FILL;
+        }
+    }
+
+    private List<FloorplanApiClient.FloorShapes> normalizeFloorOrder(
+            List<FloorplanApiClient.FloorShapes> input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        List<FloorplanApiClient.FloorShapes> ordered = new ArrayList<>(input);
+        Collections.sort(ordered, (a, b) -> {
+            Integer floorA = logicalFloorFromDisplayName(a == null ? null : a.getDisplayName());
+            Integer floorB = logicalFloorFromDisplayName(b == null ? null : b.getDisplayName());
+
+            if (floorA != null && floorB != null) {
+                return Integer.compare(floorA, floorB);
+            }
+            if (floorA != null) {
+                return -1;
+            }
+            if (floorB != null) {
+                return 1;
+            }
+            return 0;
+        });
+        return ordered;
+    }
+
+    private int findFloorIndexForLogicalFloor(int logicalFloor) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return -1;
+        }
+        for (int i = 0; i < currentFloorShapes.size(); i++) {
+            FloorplanApiClient.FloorShapes floorShapes = currentFloorShapes.get(i);
+            Integer candidate = logicalFloorFromDisplayName(
+                    floorShapes == null ? null : floorShapes.getDisplayName());
+            if (candidate != null && candidate == logicalFloor) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private Integer logicalFloorFromDisplayName(String displayName) {
+        if (displayName == null) {
+            return null;
+        }
+
+        String normalized = displayName.trim().toUpperCase(Locale.US).replace(" ", "");
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        if ("LG".equals(normalized) || "L".equals(normalized) || "LOWERGROUND".equals(normalized)) {
+            return -1;
+        }
+        if ("G".equals(normalized) || "GF".equals(normalized)
+                || "GROUND".equals(normalized) || "GROUNDFLOOR".equals(normalized)) {
+            return 0;
+        }
+
+        if (normalized.startsWith("F") || normalized.startsWith("L")) {
+            normalized = normalized.substring(1);
+        }
+
+        Matcher matcher = FLOOR_NUMBER_PATTERN.matcher(normalized);
+        if (matcher.matches()) {
+            try {
+                return Integer.parseInt(normalized);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /**

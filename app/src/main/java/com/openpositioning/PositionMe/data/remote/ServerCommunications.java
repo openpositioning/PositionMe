@@ -91,9 +91,6 @@ public class ServerCommunications implements Observable {
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final String DEFAULT_CAMPAIGN = "nucleus_building";
-    private static final String downloadURL =
-            "https://openpositioning.org/api/live/trajectory/download/" + userKey
-                    + "?skip=0&limit=30&key=" + masterKey;
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
@@ -154,6 +151,19 @@ public class ServerCommunications implements Observable {
         return "https://openpositioning.org/api/live/trajectory/upload/"
                 + campaign + "/" + userKey + "/?key=" + masterKey;
     }
+
+    /**
+     * Builds the download URL for a specific trajectory window.
+     */
+    private static String buildDownloadURL(int skip, int limit) {
+        return "https://openpositioning.org/api/live/trajectory/download/" + userKey
+                + "?skip=" + Math.max(0, skip)
+                + "&limit=" + Math.max(1, limit)
+                + "&key=" + masterKey;
+    }
+
+    private static final int ID_RETRY_WINDOW_RADIUS = 75;
+    private static final int ID_RETRY_WINDOW_LIMIT = ID_RETRY_WINDOW_RADIUS * 2 + 1;
 
     /**
      * Public default constructor of {@link ServerCommunications}. The constructor saves context,
@@ -576,9 +586,13 @@ public class ServerCommunications implements Observable {
         // Initialise OkHttp client
         OkHttpClient client = new OkHttpClient();
 
+        // Fetch only the selected row to avoid out-of-window mismatches (e.g., position > 29).
+        String requestedDownloadURL = buildDownloadURL(position, 1);
+        Log.i("DOWNLOAD", "Requesting trajectory window skip=" + position + " limit=1 id=" + id);
+
         // Create GET request with required header
         okhttp3.Request request = new okhttp3.Request.Builder()
-                .url(downloadURL)
+            .url(requestedDownloadURL)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
@@ -595,34 +609,139 @@ public class ServerCommunications implements Observable {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
-                    // Extract the nth entry from the zip
+                    // Extract entries and pick a meaningful trajectory robustly.
+                    byte[] selectedBytes = null;
+                    String selectedEntryName = null;
+                    String selectionReason = null;
+                    final boolean hasIdHint = id != null && !id.isEmpty();
+                    byte[] idMatchedBytes = null;
+                    String idMatchedEntryName = null;
+                    byte[] indexMatchedBytes = null;
+                    String indexMatchedEntryName = null;
+                    byte[] firstMeaningfulBytes = null;
+                    String firstMeaningfulEntryName = null;
+                    int entryIndex = 0;
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+                    try {
+                        java.util.zip.ZipEntry zipEntry;
+                        while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                            byte[] buffer = new byte[1024];
+                            int bytesRead;
+                            while ((bytesRead = zipInputStream.read(buffer)) != -1) {
+                                byteArrayOutputStream.write(buffer, 0, bytesRead);
+                            }
 
-                    java.util.zip.ZipEntry zipEntry;
-                    int zipCount = 0;
-                    while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipCount == position) {
-                            // break if zip entry position matches the desired position
-                            break;
+                            byte[] entryBytes = byteArrayOutputStream.toByteArray();
+                            String entryName = zipEntry.getName();
+                            Traj.Trajectory parsedEntry;
+                            try {
+                                parsedEntry = Traj.Trajectory.parseFrom(entryBytes);
+                            } catch (Exception parseEx) {
+                                Log.w("DOWNLOAD", "Skipping non-protobuf zip entry index=" + entryIndex
+                                        + " name=" + entryName, parseEx);
+                                zipInputStream.closeEntry();
+                                entryIndex++;
+                                continue;
+                            }
+
+                            boolean meaningful = isTrajectoryMeaningful(parsedEntry);
+                            boolean indexMatch = entryIndex == position;
+                            boolean idMatch = false;
+                            if (hasIdHint) {
+                                String trajectoryId = parsedEntry.getTrajectoryId();
+                                idMatch = (trajectoryId != null && id.equals(trajectoryId))
+                                        || (entryName != null && entryName.contains(id));
+                            }
+
+                            if (idMatch && !meaningful) {
+                                Log.w("DOWNLOAD", "Ignoring id-matched but empty trajectory entry index="
+                                        + entryIndex + " name=" + entryName + " id=" + id);
+                            }
+
+                            if (idMatch && meaningful && idMatchedBytes == null) {
+                                idMatchedBytes = entryBytes;
+                                idMatchedEntryName = entryName;
+                            }
+
+                            if (indexMatch && meaningful && indexMatchedBytes == null) {
+                                indexMatchedBytes = entryBytes;
+                                indexMatchedEntryName = entryName;
+                            }
+
+                            // Fallback only when no ID hint is provided.
+                            if (firstMeaningfulBytes == null && meaningful) {
+                                firstMeaningfulBytes = entryBytes;
+                                firstMeaningfulEntryName = entryName;
+                            }
+
+                            zipInputStream.closeEntry();
+                            entryIndex++;
                         }
-                        zipCount++;
+                    } finally {
+                        zipInputStream.close();
+                        inputStream.close();
                     }
 
-                    // Initialise a byte array output stream
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    if (hasIdHint) {
+                        if (idMatchedBytes != null) {
+                            selectedBytes = idMatchedBytes;
+                            selectedEntryName = idMatchedEntryName;
+                            selectionReason = "id";
+                        } else {
+                            int retrySkip = Math.max(0, position - ID_RETRY_WINDOW_RADIUS);
+                            String retryUrl = buildDownloadURL(retrySkip, ID_RETRY_WINDOW_LIMIT);
+                            Log.w("DOWNLOAD", "No id match in primary window; retrying broader window skip="
+                                    + retrySkip + " limit=" + ID_RETRY_WINDOW_LIMIT + " id=" + id);
 
-                    // Read the zipped data and write it to the byte array output stream
-                    byte[] buffer = new byte[1024];
-                    int bytesRead;
-                    while ((bytesRead = zipInputStream.read(buffer)) != -1) {
-                        byteArrayOutputStream.write(buffer, 0, bytesRead);
+                            okhttp3.Request retryRequest = new okhttp3.Request.Builder()
+                                    .url(retryUrl)
+                                    .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                                    .get()
+                                    .build();
+
+                            try (Response retryResponse = client.newCall(retryRequest).execute()) {
+                                if (!retryResponse.isSuccessful() || retryResponse.body() == null) {
+                                    Log.e("DOWNLOAD", "Retry request failed for id=" + id
+                                            + " code=" + retryResponse.code());
+                                    return;
+                                }
+                                TrajectoryIdMatch retryMatch = findMeaningfulIdMatch(
+                                        retryResponse.body(), id);
+                                if (retryMatch != null) {
+                                    selectedBytes = retryMatch.bytes;
+                                    selectedEntryName = retryMatch.entryName;
+                                    selectionReason = "id-retry-window";
+                                } else {
+                                    Log.e("DOWNLOAD", "No meaningful id-matched trajectory found in zip for id="
+                                            + id + " position=" + position
+                                            + "; refusing to fall back to a different trajectory.");
+                                    return;
+                                }
+                            }
+                        }
+                    } else if (indexMatchedBytes != null) {
+                        selectedBytes = indexMatchedBytes;
+                        selectedEntryName = indexMatchedEntryName;
+                        selectionReason = "index";
+                    } else if (firstMeaningfulBytes != null) {
+                        selectedBytes = firstMeaningfulBytes;
+                        selectedEntryName = firstMeaningfulEntryName;
+                        selectionReason = "first-meaningful";
                     }
 
+                    if (selectedBytes == null) {
+                        Log.e("DOWNLOAD", "No valid trajectory found in zip for position=" + position
+                                + " id=" + id);
+                        return;
+                    }
 
-                    // Convert the byte array to protobuf
-                    byte[] byteArray = byteArrayOutputStream.toByteArray();
-                    Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
+                    Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(selectedBytes);
+                    Log.i("DOWNLOAD", "Selected zip entry for replay name=" + selectedEntryName
+                            + " position=" + position + " id=" + id
+                            + " meaningful=" + isTrajectoryMeaningful(receivedTrajectory)
+                            + " reason=" + selectionReason);
 
                     // Inspect the size of the received trajectory
                     logDataSize(receivedTrajectory);
@@ -645,21 +764,91 @@ public class ServerCommunications implements Observable {
                         System.err.println("Received trajectory stored in: " + file.getAbsolutePath());
                     } catch (IOException ee) {
                         System.err.println("Trajectory download failed");
-                    } finally {
-                        // Close all streams and entries to release resources
-                        zipInputStream.closeEntry();
-                        byteArrayOutputStream.close();
-                        zipInputStream.close();
-                        inputStream.close();
                     }
 
                     // Save the download record
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
                     loadDownloadRecords();
+                    
+                    // Notify UI to transition to Replay
+                    notifyObservers(1);
                 }
             }
         });
 
+    }
+
+    private boolean isTrajectoryMeaningful(Traj.Trajectory trajectory) {
+        if (trajectory == null) {
+            return false;
+        }
+        return trajectory.getImuDataCount() > 0
+                || trajectory.getPdrDataCount() > 0
+                || trajectory.getGnssDataCount() > 0
+                || trajectory.getCorrectedPositionsCount() > 0;
+    }
+
+    private static class TrajectoryIdMatch {
+        final byte[] bytes;
+        final String entryName;
+
+        TrajectoryIdMatch(byte[] bytes, String entryName) {
+            this.bytes = bytes;
+            this.entryName = entryName;
+        }
+    }
+
+    private TrajectoryIdMatch findMeaningfulIdMatch(ResponseBody responseBody, String id)
+            throws IOException {
+        InputStream inputStream = responseBody.byteStream();
+        ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+        int entryIndex = 0;
+        try {
+            java.util.zip.ZipEntry zipEntry;
+            while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = zipInputStream.read(buffer)) != -1) {
+                    byteArrayOutputStream.write(buffer, 0, bytesRead);
+                }
+
+                byte[] entryBytes = byteArrayOutputStream.toByteArray();
+                String entryName = zipEntry.getName();
+
+                Traj.Trajectory parsedEntry;
+                try {
+                    parsedEntry = Traj.Trajectory.parseFrom(entryBytes);
+                } catch (Exception parseEx) {
+                    Log.w("DOWNLOAD", "Retry scan skipping non-protobuf zip entry index="
+                            + entryIndex + " name=" + entryName, parseEx);
+                    zipInputStream.closeEntry();
+                    entryIndex++;
+                    continue;
+                }
+
+                String trajectoryId = parsedEntry.getTrajectoryId();
+                boolean idMatch = (trajectoryId != null && id.equals(trajectoryId))
+                        || (entryName != null && entryName.contains(id));
+                boolean meaningful = isTrajectoryMeaningful(parsedEntry);
+
+                if (idMatch && meaningful) {
+                    return new TrajectoryIdMatch(entryBytes, entryName);
+                }
+
+                if (idMatch) {
+                    Log.w("DOWNLOAD", "Retry scan found id match but trajectory is empty index="
+                            + entryIndex + " name=" + entryName + " id=" + id);
+                }
+
+                zipInputStream.closeEntry();
+                entryIndex++;
+            }
+            return null;
+        } finally {
+            zipInputStream.close();
+            inputStream.close();
+        }
     }
 
     /**
@@ -729,12 +918,22 @@ public class ServerCommunications implements Observable {
         Log.i(tag, "Proximity Data size: " + trajectory.getProximityDataCount());
         Log.i(tag, "PDR Data size: " + trajectory.getPdrDataCount());
         Log.i(tag, "GNSS Data size: " + trajectory.getGnssDataCount());
+        Log.i(tag, "Corrected positions size: " + trajectory.getCorrectedPositionsCount());
         Log.i(tag, "WiFi fingerprints size: " + trajectory.getWifiFingerprintsCount());
         Log.i(tag, "APS Data size: " + trajectory.getApsDataCount());
         Log.i(tag, "WiFi RTT Data size: " + trajectory.getWifiRttDataCount());
         Log.i(tag, "BLE fingerprints size: " + trajectory.getBleFingerprintsCount());
         Log.i(tag, "BLE Data size: " + trajectory.getBleDataCount());
         Log.i(tag, "Test points size: " + trajectory.getTestPointsCount());
+
+        if (trajectory.hasInitialPosition()) {
+            Traj.GNSSPosition initial = trajectory.getInitialPosition();
+            Log.i(tag, "Initial position present: true lat=" + initial.getLatitude()
+                    + " lon=" + initial.getLongitude()
+                    + " ts=" + initial.getRelativeTimestamp());
+        } else {
+            Log.w(tag, "Initial position present: false");
+        }
     }
 
     /**

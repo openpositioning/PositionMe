@@ -1,7 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.graphics.Color;
+import android.os.Handler;
 import android.os.Bundle;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -51,9 +53,11 @@ import java.util.Map;
 public class StartLocationFragment extends Fragment {
 
     private static final String TAG = "StartLocationFragment";
+    private static final long INITIAL_ESTIMATE_POLL_MS = 500L;
 
     // UI elements
     private Button button;
+    private Button loadingButton;
     private TextView instructionText;
     private View buildingInfoCard;
     private TextView buildingNameText;
@@ -73,6 +77,22 @@ public class StartLocationFragment extends Fragment {
     private final List<Polygon> buildingPolygons = new ArrayList<>();
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingMap = new HashMap<>();
     private Polygon selectedPolygon;
+    private boolean userAdjustedStartPosition;
+    private boolean initialEstimateApplied;
+    private boolean floorplanRequestInFlight;
+    private boolean floorplanDataReady;
+
+    private final Handler initialEstimateHandler = new Handler(Looper.getMainLooper());
+    private final Runnable initialEstimatePoller = new Runnable() {
+        @Override
+        public void run() {
+            if (!isAdded()) {
+                return;
+            }
+            updateSetButtonAvailability();
+            initialEstimateHandler.postDelayed(this, INITIAL_ESTIMATE_POLL_MS);
+        }
+    };
 
     // Vector shapes drawn as floor plan preview (cleared when switching buildings)
     private final List<Polygon> previewPolygons = new ArrayList<>();
@@ -161,6 +181,7 @@ public class StartLocationFragment extends Fragment {
             public void onMarkerDragEnd(Marker marker) {
                 startPosition[0] = (float) marker.getPosition().latitude;
                 startPosition[1] = (float) marker.getPosition().longitude;
+                userAdjustedStartPosition = true;
             }
 
             @Override
@@ -183,6 +204,9 @@ public class StartLocationFragment extends Fragment {
      */
     private void requestBuildingData() {
         FloorplanApiClient apiClient = new FloorplanApiClient();
+        floorplanRequestInFlight = true;
+        floorplanDataReady = false;
+        updateSetButtonAvailability();
 
         // Collect observed WiFi AP MAC addresses from latest scan
         List<String> observedMacs = new ArrayList<>();
@@ -201,13 +225,19 @@ public class StartLocationFragment extends Fragment {
                 new FloorplanApiClient.FloorplanCallback() {
                     @Override
                     public void onSuccess(List<FloorplanApiClient.BuildingInfo> buildings) {
-                        if (!isAdded() || mMap == null) return;
-
+                        floorplanRequestInFlight = false;
+                        floorplanDataReady = true;
                         sensorFusion.setFloorplanBuildings(buildings);
                         floorplanBuildingMap.clear();
                         for (FloorplanApiClient.BuildingInfo building : buildings) {
                             floorplanBuildingMap.put(building.getName(), building);
                         }
+
+                        if (!isAdded() || mMap == null) {
+                            return;
+                        }
+
+                        updateSetButtonAvailability();
 
                         if (buildings.isEmpty()) {
                             Log.d(TAG, "No buildings returned by API");
@@ -222,9 +252,12 @@ public class StartLocationFragment extends Fragment {
 
                     @Override
                     public void onFailure(String error) {
-                        if (!isAdded()) return;
+                        floorplanRequestInFlight = false;
+                        floorplanDataReady = true;
                         sensorFusion.setFloorplanBuildings(new ArrayList<>());
                         floorplanBuildingMap.clear();
+                        if (!isAdded()) return;
+                        updateSetButtonAvailability();
                         Log.e(TAG, "Floorplan API failed: " + error);
                     }
                 });
@@ -306,6 +339,7 @@ public class StartLocationFragment extends Fragment {
         }
         startPosition[0] = (float) center.latitude;
         startPosition[1] = (float) center.longitude;
+        userAdjustedStartPosition = true;
 
         // Zoom to the building
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 20f));
@@ -315,6 +349,7 @@ public class StartLocationFragment extends Fragment {
 
         // Update UI with building name
         updateBuildingInfoDisplay(buildingName);
+        updateSetButtonAvailability();
 
         Log.d(TAG, "Building selected: " + buildingName);
     }
@@ -454,11 +489,23 @@ public class StartLocationFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         this.button = view.findViewById(R.id.startLocationDone);
+        this.loadingButton = view.findViewById(R.id.startLocationLoading);
         this.instructionText = view.findViewById(R.id.correctionInfoView);
         this.buildingInfoCard = view.findViewById(R.id.buildingInfoCard);
         this.buildingNameText = view.findViewById(R.id.buildingNameText);
 
+        updateSetButtonAvailability();
+        if (requireActivity() instanceof RecordingActivity) {
+            initialEstimateHandler.post(initialEstimatePoller);
+        }
+
         this.button.setOnClickListener(v -> {
+            if (requireActivity() instanceof RecordingActivity
+                    && !(hasInitialEstimate() && hasRequiredFloorplanDataForRecording())) {
+                updateSetButtonAvailability();
+                return;
+            }
+
             float chosenLat = startPosition[0];
             float chosenLon = startPosition[1];
 
@@ -482,5 +529,79 @@ public class StartLocationFragment extends Fragment {
                         .onStartLocationChosen(chosenLat, chosenLon);
             }
         });
+    }
+
+    @Override
+    public void onDestroyView() {
+        initialEstimateHandler.removeCallbacks(initialEstimatePoller);
+        super.onDestroyView();
+    }
+
+    private boolean hasInitialEstimate() {
+        return sensorFusion.getFusedLatLng() != null;
+    }
+
+    private void updateSetButtonAvailability() {
+        if (button == null || !isAdded()) {
+            return;
+        }
+
+        boolean isReplayFlow = requireActivity() instanceof ReplayActivity;
+        boolean hasEstimate = hasInitialEstimate();
+        boolean hasFloorplan = hasRequiredFloorplanDataForRecording();
+        boolean ready = isReplayFlow || (hasEstimate && hasFloorplan);
+
+        button.setEnabled(ready);
+        button.setAlpha(ready ? 1.0f : 0.5f);
+        if (loadingButton != null) {
+            loadingButton.setVisibility(ready ? View.GONE : View.VISIBLE);
+        }
+        button.setVisibility(ready ? View.VISIBLE : View.GONE);
+
+        if (!isReplayFlow && instructionText != null) {
+            if (!hasEstimate) {
+                instructionText.setText(R.string.initialEstimateWaiting);
+            } else if (!hasFloorplan) {
+                instructionText.setText(R.string.floorplanLoadingWaiting);
+            } else {
+                instructionText.setText(R.string.buildingSelectionInstructions);
+            }
+        }
+
+        applyInitialEstimateToMarkerIfNeeded(ready, isReplayFlow);
+    }
+
+    private boolean hasRequiredFloorplanDataForRecording() {
+        if (requireActivity() instanceof ReplayActivity) {
+            return true;
+        }
+
+        if (selectedBuildingId != null && !selectedBuildingId.isEmpty()) {
+            FloorplanApiClient.BuildingInfo selectedBuilding =
+                    sensorFusion.getFloorplanBuilding(selectedBuildingId);
+            return selectedBuilding != null
+                    && selectedBuilding.getFloorShapesList() != null
+                    && !selectedBuilding.getFloorShapesList().isEmpty();
+        }
+
+        return floorplanDataReady && !floorplanRequestInFlight;
+    }
+
+    private void applyInitialEstimateToMarkerIfNeeded(boolean ready, boolean isReplayFlow) {
+        if (!ready || isReplayFlow || initialEstimateApplied || userAdjustedStartPosition
+                || mMap == null || startMarker == null) {
+            return;
+        }
+
+        LatLng fusedPosition = sensorFusion.getFusedLatLng();
+        if (fusedPosition == null) {
+            return;
+        }
+
+        startPosition[0] = (float) fusedPosition.latitude;
+        startPosition[1] = (float) fusedPosition.longitude;
+        startMarker.setPosition(fusedPosition);
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedPosition, zoom));
+        initialEstimateApplied = true;
     }
 }

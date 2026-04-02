@@ -141,7 +141,7 @@ public class PdrProcessing {
      */
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
-            return new float[]{this.positionX, this.positionY};  // Return current position without update
+            return new float[]{this.positionX, this.positionY};
                                                                 // - TODO - temporary solution of the empty list issue
         }
 
@@ -268,7 +268,7 @@ public class PdrProcessing {
      * @return  float array of size 2, with the X and Y coordinates respectively.
      */
     public float[] getPDRMovement() {
-        float [] pdrPosition= new float[] {positionX,positionY};
+        float [] pdrPosition= new float[] {positionX, positionY};
         return pdrPosition;
 
     }

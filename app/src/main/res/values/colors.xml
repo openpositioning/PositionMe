@@ -14,6 +14,14 @@
     <color name="primaryBlue">#FF001080</color>
     <color name="red">#FE0000</color>
 
+    <!-- Glass panel colours (light mode) -->
+    <color name="glass_card_bg">#55FFFFFF</color>
+    <color name="glass_btn_bg">#BBFFFFFF</color>
+    <color name="glass_card_stroke">#33000000</color>
+    <color name="glass_text">#1A1A1A</color>
+    <color name="glass_fab_bg">#CC2C2C2C</color>
+    <color name="glass_fab_icon">#FFFFFF</color>
+
     <!-- Light Theme Colors -->
     <color name="md_theme_light_primary">#6750A4</color>
     <color name="md_theme_light_onPrimary">#FFFFFF</color>

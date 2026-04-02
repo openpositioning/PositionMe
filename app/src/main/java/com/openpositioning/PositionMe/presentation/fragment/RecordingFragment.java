@@ -83,6 +83,7 @@ public class RecordingFragment extends Fragment {
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
+    private LatLng lastWifiObservation;
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -264,41 +265,64 @@ public class RecordingFragment extends Fragment {
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
-
-            // Pass the location + orientation to the map
+        // Current location: use fused estimate when available, otherwise keep PDR dead-reckoning fallback.
+        LatLng fusedLocation = sensorFusion.getFusedLatLng();
+        if (fusedLocation != null) {
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+                trajectoryMapFragment.updateUserLocation(
+                        fusedLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
+            }
+        } else {
+            float[] latLngArray = sensorFusion.getGNSSLatitude(true);
+            if (latLngArray != null) {
+                LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
+                LatLng newLocation = UtilFunctions.calculateNewPos(
+                        oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
+                        new float[]{pdrValues[0] - previousPosX, pdrValues[1] - previousPosY}
+                );
+
+                if (trajectoryMapFragment != null) {
+                    trajectoryMapFragment.updateUserLocation(newLocation,
+                            (float) Math.toDegrees(sensorFusion.passOrientation()));
+                }
             }
         }
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
+            LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
+            // Always forward GNSS observations so GNSS circles are shown regardless of toggle.
+            trajectoryMapFragment.updateGNSS(gnssLocation);
+
             if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
                 if (currentLoc != null) {
                     double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
+            }
+        }
+
+        if (trajectoryMapFragment != null) {
+            LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+            if (wifiLocation != null && (lastWifiObservation == null
+                    || !lastWifiObservation.equals(wifiLocation))) {
+                trajectoryMapFragment.updateWiFiObservation(wifiLocation);
+                lastWifiObservation = wifiLocation;
+            }
+
+            float[] startLatLng = sensorFusion.getGNSSLatitude(true);
+            if (startLatLng != null && !(startLatLng[0] == 0f && startLatLng[1] == 0f)) {
+                LatLng pdrAbsolute = UtilFunctions.calculateNewPos(
+                        new LatLng(startLatLng[0], startLatLng[1]),
+                        new float[]{pdrValues[0], pdrValues[1]});
+                trajectoryMapFragment.updatePdrObservation(pdrAbsolute);
             }
         }
 

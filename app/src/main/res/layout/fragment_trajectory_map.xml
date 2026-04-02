@@ -12,14 +12,15 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Overlaid controls for map visualization -->
+    <!-- Overlaid controls for map visualization (collapsible) -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="10dp"
-        android:padding="18dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardElevation="4dp"
+        app:cardBackgroundColor="@color/glass_card_bg"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/glass_card_stroke"
+        app:strokeWidth="1dp"
         app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
@@ -28,41 +29,245 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:padding="8dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
+            <!-- Header row: always visible, contains the toggle arrow -->
+            <LinearLayout
+                android:id="@+id/leftPanelHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:baselineAligned="false"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="@drawable/switch_label_bg"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Options"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:textColor="@color/glass_text" />
+
+                <TextView
+                    android:id="@+id/leftPanelToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="▲"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/glass_text"
+                    android:layout_marginStart="8dp"
+                    android:padding="4dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Toggle controls panel" />
+
+            </LinearLayout>
+
+            <!-- Collapsible content -->
+            <LinearLayout
+                android:id="@+id/leftPanelContent"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginTop="4dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/gnssSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:background="@drawable/switch_label_bg"
+                    android:text="@string/gnssSwitch" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/autoFloor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:checked="true"
+                    android:background="@drawable/switch_label_bg"
+                    android:text="@string/auto_floor" />
+
+                <Spinner
+                    android:id="@+id/mapSwitchSpinner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/bg_map_switch_spinner"
+                    android:spinnerMode="dropdown"
+                    android:elevation="5dp"/>
+
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Legend card showing trajectory colors (collapsible) -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        app:cardBackgroundColor="@color/glass_card_bg"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/glass_card_stroke"
+        app:strokeWidth="1dp"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+        app:layout_anchor="@id/trajectoryMap"
+        app:layout_anchorGravity="top|end">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="6dp">
+
+            <!-- Header row: title + toggle arrow always visible -->
+            <LinearLayout
+                android:id="@+id/rightPanelHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:baselineAligned="false"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="@drawable/switch_label_bg"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Data Points"
+                    android:textStyle="bold"
+                    android:textSize="12sp"
+                    android:textColor="@color/glass_text" />
+
+                <TextView
+                    android:id="@+id/rightPanelToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="▲"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/glass_text"
+                    android:layout_marginStart="6dp"
+                    android:padding="2dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Toggle legend panel" />
+
+            </LinearLayout>
+
+            <!-- Collapsible legend content — each row is a toggle switch -->
+            <LinearLayout
+                android:id="@+id/rightPanelContent"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp"/>
+                android:orientation="vertical"
+                android:layout_marginTop="6dp">
 
-            <Spinner
-                android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                <!-- PDR toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="2dp"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/switch_label_bg"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp">
 
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@drawable/legend_circle_orange"
+                        android:layout_marginEnd="6dp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/pdrPointsSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:checked="true"
+                        android:text="PDR"
+                        android:textSize="11sp"
+                        android:textColor="@color/glass_text"
+                        android:background="@android:color/transparent" />
+                </LinearLayout>
+
+                <!-- GNSS toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="2dp"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/switch_label_bg"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp">
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@drawable/legend_circle_blue"
+                        android:layout_marginEnd="6dp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/gnssPointsSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:checked="true"
+                        android:text="GNSS"
+                        android:textSize="11sp"
+                        android:textColor="@color/glass_text"
+                        android:background="@android:color/transparent" />
+                </LinearLayout>
+
+                <!-- WiFi toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/switch_label_bg"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp">
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@drawable/legend_circle_green"
+                        android:layout_marginEnd="6dp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/wifiPointsSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:checked="true"
+                        android:text="WiFi"
+                        android:textSize="11sp"
+                        android:textColor="@color/glass_text"
+                        android:background="@android:color/transparent" />
+                </LinearLayout>
+
+            </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -77,8 +282,9 @@
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
             android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
+            app:backgroundTint="@color/glass_fab_bg"
+            app:tint="@color/glass_fab_icon"
+            app:elevation="0dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_down" />
@@ -94,7 +300,7 @@
             android:paddingTop="6dp"
             android:paddingBottom="6dp"
             android:text="G"
-            android:textColor="@color/md_theme_onSurface"
+            android:textColor="@color/glass_text"
             android:textSize="18sp"
             android:textStyle="bold"
             app:layout_constraintBottom_toTopOf="@id/floorDownButton"
@@ -109,10 +315,11 @@
             android:layout_marginBottom="28dp"
             android:contentDescription="@string/floor_up"
             android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/md_theme_primary"
+            app:backgroundTint="@color/glass_fab_bg"
+            app:tint="@color/glass_fab_icon"
+            app:elevation="0dp"
             app:layout_constraintBottom_toTopOf="@+id/floorLabel"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/md_theme_onPrimary" />
+            app:layout_constraintEnd_toEndOf="parent" />
 
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideline"

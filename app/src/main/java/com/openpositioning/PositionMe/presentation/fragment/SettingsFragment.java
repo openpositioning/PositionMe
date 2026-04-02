@@ -4,9 +4,11 @@ import android.os.Bundle;
 import android.text.InputType;
 
 import androidx.preference.EditTextPreference;
+import androidx.preference.ListPreference;
 import androidx.preference.PreferenceFragmentCompat;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.utils.ThemePreferences;
 
 /**
  * SettingsFragment that inflates and displays the preferences (settings).
@@ -25,6 +27,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private EditTextPreference epsilon;
     private EditTextPreference accelFilter;
     private EditTextPreference wifiInterval;
+        private ListPreference themeMode;
 
     /**
      * {@inheritDoc}
@@ -52,6 +55,14 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         wifiInterval = findPreference("wifi_interval");
         wifiInterval.setOnBindEditTextListener(editText -> editText.setInputType(
                 InputType.TYPE_CLASS_NUMBER));
+
+        themeMode = findPreference(ThemePreferences.KEY_THEME_MODE);
+        if (themeMode != null) {
+            themeMode.setOnPreferenceChangeListener((preference, newValue) -> {
+                ThemePreferences.applyThemeMode(String.valueOf(newValue));
+                return true;
+            });
+        }
 
     }
 }
