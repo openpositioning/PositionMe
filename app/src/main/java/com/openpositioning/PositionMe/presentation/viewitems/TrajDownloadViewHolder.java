@@ -22,54 +22,54 @@ import java.lang.ref.WeakReference;
  */
 public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 
-    private final TextView trajId;
-    private final TextView trajDate;
-    final MaterialButton downloadButton;
-    private final WeakReference<DownloadClickListener> listenerReference;
+  private final TextView trajId;
+  private final TextView trajDate;
+  final MaterialButton downloadButton;
+  private final WeakReference<DownloadClickListener> listenerReference;
 
-    /**
-     * {@inheritDoc}
-     * Assign TextView fields corresponding to Trajectory metadata.
-     *
-     * @param listener DownloadClickListener to enable acting on clicks on items.
-     * @see FilesFragment generating the data and implementing the listener.
-     */
-    public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
-        super(itemView);
-        this.listenerReference = new WeakReference<>(listener);
-        this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
-        this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
-        this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
+  /**
+   * {@inheritDoc}
+   * Assign TextView fields corresponding to Trajectory metadata.
+   *
+   * @param listener DownloadClickListener to enable acting on clicks on items.
+   * @see FilesFragment generating the data and implementing the listener.
+   */
+  public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
+    super(itemView);
+    this.listenerReference = new WeakReference<>(listener);
+    this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
+    this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
+    this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
 
-        this.downloadButton.setOnClickListener(this);
+    this.downloadButton.setOnClickListener(this);
+  }
+
+  /**
+   * Public getter for trajId.
+   */
+  public TextView getTrajId() {
+    return trajId;
+  }
+
+  /**
+   * Public getter for trajDate.
+   */
+  public TextView getTrajDate() {
+    return trajDate;
+  }
+
+  /**
+   * Calls the onPositionClick function on the listenerReference object.
+   */
+  @Override
+  public void onClick(View view) {
+    listenerReference.get().onPositionClicked(getAdapterPosition());
+    DownloadClickListener listener = listenerReference.get();
+    if (listener != null) {
+      listener.onPositionClicked(getAdapterPosition());
+      System.out.println("Click detected at position: " + getAdapterPosition());
+    } else {
+      System.err.println("Listener reference is null.");
     }
-
-    /**
-     * Public getter for trajId.
-     */
-    public TextView getTrajId() {
-        return trajId;
-    }
-
-    /**
-     * Public getter for trajDate.
-     */
-    public TextView getTrajDate() {
-        return trajDate;
-    }
-
-    /**
-     * Calls the onPositionClick function on the listenerReference object.
-     */
-    @Override
-    public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
-        DownloadClickListener listener = listenerReference.get();
-        if (listener != null) {
-            listener.onPositionClicked(getAdapterPosition());
-            System.out.println("Click detected at position: " + getAdapterPosition());
-        } else {
-            System.err.println("Listener reference is null.");
-        }
-    }
+  }
 }

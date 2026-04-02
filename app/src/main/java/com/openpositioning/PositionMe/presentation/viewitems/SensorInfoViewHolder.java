@@ -18,21 +18,21 @@ import com.openpositioning.PositionMe.R;
  */
 public class SensorInfoViewHolder extends RecyclerView.ViewHolder {
 
-    // Text fields in the item view
-    TextView name, vendor, resolution, power, version;
+  // Text fields in the item view
+  TextView name, vendor, resolution, power, version;
 
-    /**
-     * {@inheritDoc}
-     * Assign TextView fields corresponding to SensorInfo attributes.
-     *
-     * @see com.openpositioning.PositionMe.sensors.SensorInfo the data class
-     */
-    public SensorInfoViewHolder(@NonNull View itemView) {
-        super(itemView);
-        name = itemView.findViewById(R.id.sensorNameItem);
-        vendor = itemView.findViewById(R.id.sensorVendorItem);
-        resolution = itemView.findViewById(R.id.sensorResolutionItem);
-        power = itemView.findViewById(R.id.sensorPowerItem);
-        version = itemView.findViewById(R.id.sensorVersionItem);
-    }
+  /**
+   * {@inheritDoc}
+   * Assign TextView fields corresponding to SensorInfo attributes.
+   *
+   * @see com.openpositioning.PositionMe.sensors.SensorInfo the data class
+   */
+  public SensorInfoViewHolder(@NonNull View itemView) {
+    super(itemView);
+    name = itemView.findViewById(R.id.sensorNameItem);
+    vendor = itemView.findViewById(R.id.sensorVendorItem);
+    resolution = itemView.findViewById(R.id.sensorResolutionItem);
+    power = itemView.findViewById(R.id.sensorPowerItem);
+    version = itemView.findViewById(R.id.sensorVersionItem);
+  }
 }

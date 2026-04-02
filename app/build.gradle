@@ -3,6 +3,28 @@ plugins {
     id 'com.google.gms.google-services'
     id 'androidx.navigation.safeargs'
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
+    id 'checkstyle'
+}
+
+// Checkstyle: enforce Google Java Style Guide
+checkstyle {
+    toolVersion = '10.12.5'
+    configFile = file("${project.rootDir}/config/checkstyle/google_checks.xml")
+    ignoreFailures = true // report warnings without breaking the build
+}
+
+task checkstyleMain(type: Checkstyle) {
+    description = 'Run Checkstyle on main Java sources'
+    group = 'verification'
+    source 'src/main/java'
+    include '**/*.java'
+    exclude '**/Traj.java' // auto-generated protobuf
+    classpath = files()
+    reports {
+        xml.required = true
+        html.required = true
+        html.outputLocation = file("${project.buildDir}/reports/checkstyle/main.html")
+    }
 }
 
 // (Optional) load local secrets file:

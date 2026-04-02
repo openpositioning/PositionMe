@@ -12,13 +12,13 @@ import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment
  * @author Mate Stodulka
  */
 public enum SensorTypes {
-    ACCELEROMETER,
-    GRAVITY,
-    MAGNETICFIELD,
-    GYRO,
-    LIGHT,
-    PRESSURE,
-    PROXIMITY,
-    GNSSLATLONG,
-    PDR;
+  ACCELEROMETER,
+  GRAVITY,
+  MAGNETICFIELD,
+  GYRO,
+  LIGHT,
+  PRESSURE,
+  PROXIMITY,
+  GNSSLATLONG,
+  PDR;
 }

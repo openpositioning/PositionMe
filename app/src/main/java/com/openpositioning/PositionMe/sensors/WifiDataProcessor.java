@@ -40,357 +40,357 @@ import java.util.TimerTask;
  */
 public class WifiDataProcessor implements Observable {
 
-    //Time over which a new scan will be initiated
-    private static final long scanInterval = 5000;
+  //Time over which a new scan will be initiated
+  private static final long scanInterval = 1500;
 
-    // Application context for handling permissions and WifiManager instances
-    private final Context context;
-    // Locations manager to enable access to Wifi data via the android system
-    private final WifiManager wifiManager;
+  // Application context for handling permissions and WifiManager instances
+  private final Context context;
+  // Locations manager to enable access to Wifi data via the android system
+  private final WifiManager wifiManager;
 
-    //List of nearby networks
-    private Wifi[] wifiData;
+  //List of nearby networks
+  private Wifi[] wifiData;
 
-    // RTT-eligible ScanResults from the most recent scan (for RttManager)
-    private volatile List<ScanResult> rttEligibleScanResults = new ArrayList<>();
+  // RTT-eligible ScanResults from the most recent scan (for RttManager)
+  private volatile List<ScanResult> rttEligibleScanResults = new ArrayList<>();
 
-    //List of observers to be notified when changes are detected
-    private ArrayList<Observer> observers;
+  //List of observers to be notified when changes are detected
+  private ArrayList<Observer> observers;
 
-    // Timer object
-    private Timer scanWifiDataTimer;
+  // Timer object
+  private Timer scanWifiDataTimer;
 
-    private boolean listening = false;
-    private boolean receiverRegistered = false;
+  private boolean listening = false;
+  private boolean receiverRegistered = false;
 
-    /**
-     * Public default constructor of the WifiDataProcessor class.
-     * The constructor saves the context, checks for permissions to use the location services,
-     * creates an instance of the shared preferences to access settings using the context,
-     * initialises the wifi manager, and creates a timer object and list of observers. It checks if
-     * wifi is enabled and enables wifi scans every 5seconds. It also informs the user to disable
-     * wifi throttling if the device implements it.
-     *
-     * @param context           Application Context to be used for permissions and device accesses.
-     *
-     * @see SensorFusion the intended parent class.
-     *
-     * @author Virginia Cangelosi
-     * @author Mate Stodulka
-     */
-    public WifiDataProcessor(Context context) {
-        this.context = context;
-        // Check for permissions
-        boolean permissionsGranted = checkWifiPermissions();
-        this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-        this.scanWifiDataTimer = null;
-        this.observers = new ArrayList<>();
+  /**
+   * Public default constructor of the WifiDataProcessor class.
+   * The constructor saves the context, checks for permissions to use the location services,
+   * creates an instance of the shared preferences to access settings using the context,
+   * initialises the wifi manager, and creates a timer object and list of observers. It checks if
+   * wifi is enabled and enables wifi scans every 5seconds. It also informs the user to disable
+   * wifi throttling if the device implements it.
+   *
+   * @param context           Application Context to be used for permissions and device accesses.
+   *
+   * @see SensorFusion the intended parent class.
+   *
+   * @author Virginia Cangelosi
+   * @author Mate Stodulka
+   */
+  public WifiDataProcessor(Context context) {
+    this.context = context;
+    // Check for permissions
+    boolean permissionsGranted = checkWifiPermissions();
+    this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+    this.scanWifiDataTimer = null;
+    this.observers = new ArrayList<>();
 
-        // Decreapted method after API 29
-        // Turn on wifi if it is currently disabled
-        // TODO - turn it to a notification toward user
+    // Decreapted method after API 29
+    // Turn on wifi if it is currently disabled
+    // TODO - turn it to a notification toward user
 //      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
 //      //      wifiManager.setWifiEnabled(true);
 //      //  }
 
-        // Start WiFi scanning when permissions are already available.
-        if (permissionsGranted) {
-            startListening();
-        }
-
-        //Inform the user if wifi throttling is enabled on their device
-        checkWifiThrottling();
+    // Start WiFi scanning when permissions are already available.
+    if (permissionsGranted) {
+      startListening();
     }
 
+    //Inform the user if wifi throttling is enabled on their device
+    checkWifiThrottling();
+  }
+
+  /**
+   * Broadcast receiver to receive updates from the wifi manager.
+   * Receives updates when a wifi scan is complete. Observers are notified when the broadcast is
+   * received to update the list of wifis
+   */
+  BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
     /**
-     * Broadcast receiver to receive updates from the wifi manager.
-     * Receives updates when a wifi scan is complete. Observers are notified when the broadcast is
-     * received to update the list of wifis
-     */
-    BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
-        /**
-         * Updates the list of nearby wifis when the broadcast is received.
-         * Ensures wifi scans are not enabled if permissions are not granted. The list of wifis is
-         * then passed to store the Mac Address and strength and observers of the WifiDataProcessor
-         * class are notified of the updated wifi list.
-         *
-         *
-         * @param context           Application Context to be used for permissions and device accesses.
-         * @param intent            ???.
-         */
-        @Override
-        public void onReceive(Context context, Intent intent) {
-
-            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                // Unregister this listener
-                stopListening();
-                return;
-            }
-
-            //Collect the list of nearby wifis
-            List<ScanResult> wifiScanList = wifiManager.getScanResults();
-            //Stop receiver as scan is complete
-            try {
-                context.unregisterReceiver(this);
-            } catch (IllegalArgumentException ignored) {
-                // Receiver may already be unregistered.
-            }
-            receiverRegistered = false;
-
-            // Collect RTT-eligible ScanResults for RttManager
-            List<ScanResult> rttEligible = new ArrayList<>();
-            for (ScanResult sr : wifiScanList) {
-                if (sr.is80211mcResponder()) {
-                    rttEligible.add(sr);
-                }
-            }
-            rttEligibleScanResults = rttEligible;
-
-            // Deduplicate by BSSID: keep only the strongest signal per MAC
-            java.util.Map<Long, Wifi> dedupMap = new java.util.LinkedHashMap<>();
-            for (int i = 0; i < wifiScanList.size(); i++) {
-                ScanResult sr = wifiScanList.get(i);
-                String wifiMacAddress = sr.BSSID;
-                long intMacAddress = convertBssidToLong(wifiMacAddress);
-
-                Wifi existing = dedupMap.get(intMacAddress);
-                // Keep the entry with the stronger signal (higher RSSI)
-                if (existing == null || sr.level > existing.getLevel()) {
-                    Wifi w = new Wifi();
-                    w.setBssid(intMacAddress);
-                    w.setBssidString(wifiMacAddress);
-                    w.setLevel(sr.level);
-                    w.setSsid(sr.SSID != null ? sr.SSID : "");
-                    w.setFrequency(sr.frequency);
-                    // Check if the AP supports WiFi RTT (802.11mc)
-                    w.setRttEnabled(sr.is80211mcResponder());
-                    dedupMap.put(intMacAddress, w);
-                }
-            }
-
-            wifiData = dedupMap.values().toArray(new Wifi[0]);
-
-            //Notify observers of change in wifiData variable
-            notifyObservers(0);
-        }
-    };
-
-    /**
-     * Converts mac address from string to integer.
-     * Removes semicolons from mac address and converts each hex byte to a hex integer.
+     * Updates the list of nearby wifis when the broadcast is received.
+     * Ensures wifi scans are not enabled if permissions are not granted. The list of wifis is
+     * then passed to store the Mac Address and strength and observers of the WifiDataProcessor
+     * class are notified of the updated wifi list.
      *
      *
-     * @param wifiMacAddress        String Mac Address received from WifiManager containing colons
-     *
-     * @return                      Long variable with decimal conversion of the mac address
-     */
-    private long convertBssidToLong(String wifiMacAddress){
-        long intMacAddress =0;
-        int colonCount =5;
-        //Loop through each character
-        for(int j =0; j<17; j++){
-            //Identify character
-            char macByte = wifiMacAddress.charAt(j);
-            //convert string hex mac address with colons to decimal long integer
-            if(macByte != ':'){
-                //For characters 0-9 subtract 48 from ASCII code and multiply by 16^position
-                if((int) macByte >= 48 && (int) macByte <= 57){
-                    intMacAddress = intMacAddress + (((int)macByte-48)*((long)Math.pow(16,16-j-colonCount)));
-                }
-
-                //For characters a-f subtract 87 (=97-10) from ASCII code and multiply by 16^index
-                else if ((int) macByte >= 97 && (int) macByte <= 102){
-                    intMacAddress = intMacAddress + (((int)macByte-87)*((long)Math.pow(16,16-j-colonCount)));
-                }
-            }
-            else
-                //coloncount is used to obtain the index of each character
-                colonCount --;
-        }
-
-        return intMacAddress;
-    }
-
-    /**
-     * Checks if the user authorised all permissions necessary for accessing wifi data.
-     * Explicit user permissions must be granted for android sdk version 23 and above. This
-     * function checks which permissions are granted, and returns their conjunction.
-     *
-     * @return  boolean true if all permissions are granted for wifi access, false otherwise.
-     */
-    private boolean checkWifiPermissions() {
-        int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_WIFI_STATE);
-        int wifiChangePermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.CHANGE_WIFI_STATE);
-        int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_COARSE_LOCATION);
-        int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_FINE_LOCATION);
-
-        // Return missing permissions
-        return wifiAccessPermission == PackageManager.PERMISSION_GRANTED &&
-                wifiChangePermission == PackageManager.PERMISSION_GRANTED &&
-                coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
-                fineLocationPermission == PackageManager.PERMISSION_GRANTED;
-    }
-
-    /**
-     * Scan for nearby networks.
-     * The method checks for permissions again, and then requests a scan of nearby wifis. A
-     * broadcast receiver is registered to be called when the scan is complete.
-     */
-    private void startWifiScan() {
-        //Check settings for wifi permissions
-        if (checkWifiPermissions()) {
-            // Register broadcast receiver for WiFi scans only once per scan cycle.
-            if (!receiverRegistered) {
-                context.registerReceiver(wifiScanReceiver,
-                        new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
-                receiverRegistered = true;
-            }
-            wifiManager.startScan();
-        }
-    }
-
-    /**
-     * Initiate scans for nearby networks every 5 seconds.
-     * The method declares a new timer instance to schedule a scan for nearby wifis every 5 seconds.
-     */
-    public synchronized void startListening() {
-        if (listening) {
-            return;
-        }
-        listening = true;
-
-        this.scanWifiDataTimer = new Timer();
-        this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
-    }
-
-    /**
-     * Cancel wifi scans.
-     * The method unregisters the broadcast receiver associated with the wifi scans and cancels the
-     * timer so that new scans are not initiated.
-     */
-    public synchronized void stopListening() {
-        if (!listening) {
-            return;
-        }
-        listening = false;
-
-        if (receiverRegistered) {
-            try {
-                context.unregisterReceiver(wifiScanReceiver);
-            } catch (IllegalArgumentException ignored) {
-                // Receiver was already unregistered.
-            }
-            receiverRegistered = false;
-        }
-
-        if (this.scanWifiDataTimer != null) {
-            this.scanWifiDataTimer.cancel();
-            this.scanWifiDataTimer = null;
-        }
-    }
-
-    /**
-     * Inform user if throttling is resent on their device.
-     * If the device supports wifi throttling check if it is enabled and instruct the user to
-     * disable it.
-     */
-    public void checkWifiThrottling(){
-        if(checkWifiPermissions()) {
-            //If the device does not support wifi throttling an exception is thrown
-            try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
-                    //Inform user to disable wifi throttling
-                    Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
-                }
-            } catch (Settings.SettingNotFoundException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    /**
-     * Implement default method from Observable Interface to add new observers to the class.
-     *
-     * @param o     Classes which implement the Observer interface to receive updates from the class.
+     * @param context           Application Context to be used for permissions and device accesses.
+     * @param intent            ???.
      */
     @Override
-    public void registerObserver(Observer o) {
-        observers.add(o);
+    public void onReceive(Context context, Intent intent) {
+
+      if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        // Unregister this listener
+        stopListening();
+        return;
+      }
+
+      //Collect the list of nearby wifis
+      List<ScanResult> wifiScanList = wifiManager.getScanResults();
+      //Stop receiver as scan is complete
+      try {
+        context.unregisterReceiver(this);
+      } catch (IllegalArgumentException ignored) {
+        // Receiver may already be unregistered.
+      }
+      receiverRegistered = false;
+
+      // Collect RTT-eligible ScanResults for RttManager
+      List<ScanResult> rttEligible = new ArrayList<>();
+      for (ScanResult sr : wifiScanList) {
+        if (sr.is80211mcResponder()) {
+          rttEligible.add(sr);
+        }
+      }
+      rttEligibleScanResults = rttEligible;
+
+      // Deduplicate by BSSID: keep only the strongest signal per MAC
+      java.util.Map<Long, Wifi> dedupMap = new java.util.LinkedHashMap<>();
+      for (int i = 0; i < wifiScanList.size(); i++) {
+        ScanResult sr = wifiScanList.get(i);
+        String wifiMacAddress = sr.BSSID;
+        long intMacAddress = convertBssidToLong(wifiMacAddress);
+
+        Wifi existing = dedupMap.get(intMacAddress);
+        // Keep the entry with the stronger signal (higher RSSI)
+        if (existing == null || sr.level > existing.getLevel()) {
+          Wifi w = new Wifi();
+          w.setBssid(intMacAddress);
+          w.setBssidString(wifiMacAddress);
+          w.setLevel(sr.level);
+          w.setSsid(sr.SSID != null ? sr.SSID : "");
+          w.setFrequency(sr.frequency);
+          // Check if the AP supports WiFi RTT (802.11mc)
+          w.setRttEnabled(sr.is80211mcResponder());
+          dedupMap.put(intMacAddress, w);
+        }
+      }
+
+      wifiData = dedupMap.values().toArray(new Wifi[0]);
+
+      //Notify observers of change in wifiData variable
+      notifyObservers(0);
+    }
+  };
+
+  /**
+   * Converts mac address from string to integer.
+   * Removes semicolons from mac address and converts each hex byte to a hex integer.
+   *
+   *
+   * @param wifiMacAddress        String Mac Address received from WifiManager containing colons
+   *
+   * @return                      Long variable with decimal conversion of the mac address
+   */
+  private long convertBssidToLong(String wifiMacAddress){
+    long intMacAddress =0;
+    int colonCount =5;
+    //Loop through each character
+    for(int j =0; j<17; j++){
+      //Identify character
+      char macByte = wifiMacAddress.charAt(j);
+      //convert string hex mac address with colons to decimal long integer
+      if(macByte != ':'){
+        //For characters 0-9 subtract 48 from ASCII code and multiply by 16^position
+        if((int) macByte >= 48 && (int) macByte <= 57){
+          intMacAddress = intMacAddress + (((int)macByte-48)*((long)Math.pow(16,16-j-colonCount)));
+        }
+
+        //For characters a-f subtract 87 (=97-10) from ASCII code and multiply by 16^index
+        else if ((int) macByte >= 97 && (int) macByte <= 102){
+          intMacAddress = intMacAddress + (((int)macByte-87)*((long)Math.pow(16,16-j-colonCount)));
+        }
+      }
+      else
+        //coloncount is used to obtain the index of each character
+        colonCount --;
     }
 
-    /**
-     * Implement default method from Observable Interface to add notify observers to the class.
-     * Changes to the wifiData variable are passed to observers of the class.
-     * @param idx     Unused.
-     */
+    return intMacAddress;
+  }
+
+  /**
+   * Checks if the user authorised all permissions necessary for accessing wifi data.
+   * Explicit user permissions must be granted for android sdk version 23 and above. This
+   * function checks which permissions are granted, and returns their conjunction.
+   *
+   * @return  boolean true if all permissions are granted for wifi access, false otherwise.
+   */
+  private boolean checkWifiPermissions() {
+    int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context,
+        Manifest.permission.ACCESS_WIFI_STATE);
+    int wifiChangePermission = ActivityCompat.checkSelfPermission(this.context,
+        Manifest.permission.CHANGE_WIFI_STATE);
+    int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+        Manifest.permission.ACCESS_COARSE_LOCATION);
+    int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+        Manifest.permission.ACCESS_FINE_LOCATION);
+
+    // Return missing permissions
+    return wifiAccessPermission == PackageManager.PERMISSION_GRANTED &&
+        wifiChangePermission == PackageManager.PERMISSION_GRANTED &&
+        coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
+        fineLocationPermission == PackageManager.PERMISSION_GRANTED;
+  }
+
+  /**
+   * Scan for nearby networks.
+   * The method checks for permissions again, and then requests a scan of nearby wifis. A
+   * broadcast receiver is registered to be called when the scan is complete.
+   */
+  private void startWifiScan() {
+    //Check settings for wifi permissions
+    if (checkWifiPermissions()) {
+      // Register broadcast receiver for WiFi scans only once per scan cycle.
+      if (!receiverRegistered) {
+        context.registerReceiver(wifiScanReceiver,
+            new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+        receiverRegistered = true;
+      }
+      wifiManager.startScan();
+    }
+  }
+
+  /**
+   * Initiate scans for nearby networks every 5 seconds.
+   * The method declares a new timer instance to schedule a scan for nearby wifis every 5 seconds.
+   */
+  public synchronized void startListening() {
+    if (listening) {
+      return;
+    }
+    listening = true;
+
+    this.scanWifiDataTimer = new Timer();
+    this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
+  }
+
+  /**
+   * Cancel wifi scans.
+   * The method unregisters the broadcast receiver associated with the wifi scans and cancels the
+   * timer so that new scans are not initiated.
+   */
+  public synchronized void stopListening() {
+    if (!listening) {
+      return;
+    }
+    listening = false;
+
+    if (receiverRegistered) {
+      try {
+        context.unregisterReceiver(wifiScanReceiver);
+      } catch (IllegalArgumentException ignored) {
+        // Receiver was already unregistered.
+      }
+      receiverRegistered = false;
+    }
+
+    if (this.scanWifiDataTimer != null) {
+      this.scanWifiDataTimer.cancel();
+      this.scanWifiDataTimer = null;
+    }
+  }
+
+  /**
+   * Inform user if throttling is resent on their device.
+   * If the device supports wifi throttling check if it is enabled and instruct the user to
+   * disable it.
+   */
+  public void checkWifiThrottling(){
+    if(checkWifiPermissions()) {
+      //If the device does not support wifi throttling an exception is thrown
+      try {
+        if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
+          //Inform user to disable wifi throttling
+          Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+        }
+      } catch (Settings.SettingNotFoundException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  /**
+   * Implement default method from Observable Interface to add new observers to the class.
+   *
+   * @param o     Classes which implement the Observer interface to receive updates from the class.
+   */
+  @Override
+  public void registerObserver(Observer o) {
+    observers.add(o);
+  }
+
+  /**
+   * Implement default method from Observable Interface to add notify observers to the class.
+   * Changes to the wifiData variable are passed to observers of the class.
+   * @param idx     Unused.
+   */
+  @Override
+  public void notifyObservers(int idx) {
+    for(Observer o : observers) {
+      o.update(wifiData);
+    }
+  }
+
+  /**
+   * Class to schedule wifi scans.
+   *
+   * Implements default method in {@link TimerTask} class which it implements. It begins to start
+   * calling wifi scans every 5 seconds.
+   */
+  private class scheduledWifiScan extends TimerTask {
+
     @Override
-    public void notifyObservers(int idx) {
-        for(Observer o : observers) {
-            o.update(wifiData);
-        }
+    public void run() {
+      startWifiScan();
     }
+  }
 
-    /**
-     * Class to schedule wifi scans.
-     *
-     * Implements default method in {@link TimerTask} class which it implements. It begins to start
-     * calling wifi scans every 5 seconds.
-     */
-    private class scheduledWifiScan extends TimerTask {
+  /**
+   * Returns the list of RTT-eligible (802.11mc) ScanResults from the most recent WiFi scan.
+   * Used by {@link RttManager} to perform WiFi RTT ranging.
+   *
+   * @return list of ScanResult objects that support 802.11mc, or empty list if none
+   */
+  public List<ScanResult> getRttEligibleScanResults() {
+    return rttEligibleScanResults;
+  }
 
-        @Override
-        public void run() {
-            startWifiScan();
-        }
+  /**
+   * Obtains required information about wifi in which the device is currently connected.
+   *
+   * A connectivity manager is used to obtain information about the current network. If the device
+   * is connected to a network its ssid, mac address and frequency is stored to a Wifi object so
+   * that it can be accessed by the caller of the method
+   *
+   * @return wifi object containing the currently connected wifi's ssid, mac address and frequency
+   */
+  public Wifi getCurrentWifiData(){
+    //Set up a connectivity manager to get information about the wifi
+    ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService
+        (Context.CONNECTIVITY_SERVICE);
+    //Set up a network info object to store information about the current network
+    NetworkInfo networkInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+
+    //Only obtain wifi data if the device is connected
+    //Wifi in which the device is currently connected to
+    Wifi currentWifi = new Wifi();
+    if(networkInfo.isConnected()) {
+      //Store the ssid, mac address and frequency of the current wifi
+      currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
+      String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
+      long intMacAddress = convertBssidToLong(wifiMacAddress);
+      currentWifi.setBssid(intMacAddress);
+      currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
     }
-
-    /**
-     * Returns the list of RTT-eligible (802.11mc) ScanResults from the most recent WiFi scan.
-     * Used by {@link RttManager} to perform WiFi RTT ranging.
-     *
-     * @return list of ScanResult objects that support 802.11mc, or empty list if none
-     */
-    public List<ScanResult> getRttEligibleScanResults() {
-        return rttEligibleScanResults;
+    else{
+      //Store standard information if not connected
+      currentWifi.setSsid("Not connected");
+      currentWifi.setBssid(0);
+      currentWifi.setFrequency(0);
     }
-
-    /**
-     * Obtains required information about wifi in which the device is currently connected.
-     *
-     * A connectivity manager is used to obtain information about the current network. If the device
-     * is connected to a network its ssid, mac address and frequency is stored to a Wifi object so
-     * that it can be accessed by the caller of the method
-     *
-     * @return wifi object containing the currently connected wifi's ssid, mac address and frequency
-     */
-    public Wifi getCurrentWifiData(){
-        //Set up a connectivity manager to get information about the wifi
-        ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService
-                (Context.CONNECTIVITY_SERVICE);
-        //Set up a network info object to store information about the current network
-        NetworkInfo networkInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
-
-        //Only obtain wifi data if the device is connected
-        //Wifi in which the device is currently connected to
-        Wifi currentWifi = new Wifi();
-        if(networkInfo.isConnected()) {
-            //Store the ssid, mac address and frequency of the current wifi
-            currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
-            String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
-            long intMacAddress = convertBssidToLong(wifiMacAddress);
-            currentWifi.setBssid(intMacAddress);
-            currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
-        }
-        else{
-            //Store standard information if not connected
-            currentWifi.setSsid("Not connected");
-            currentWifi.setBssid(0);
-            currentWifi.setFrequency(0);
-        }
-        return currentWifi;
-    }
+    return currentWifi;
+  }
 }

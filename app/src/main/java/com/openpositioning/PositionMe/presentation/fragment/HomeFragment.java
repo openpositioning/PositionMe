@@ -47,196 +47,196 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
  */
 public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
-    private static final String TAG = "HomeFragment";
+  private static final String TAG = "HomeFragment";
 
-    // Interactive UI elements to navigate to other fragments
-    private MaterialButton goToInfo;
-    private Button start;
-    private Button measurements;
-    private Button files;
-    private Button indoorButton;
-    private TextView gnssStatusTextView;
+  // Interactive UI elements to navigate to other fragments
+  private MaterialButton goToInfo;
+  private Button start;
+  private Button measurements;
+  private Button files;
+  private Button indoorButton;
+  private TextView gnssStatusTextView;
 
-    // For the map
-    private GoogleMap mMap;
-    private SupportMapFragment mapFragment;
+  // For the map
+  private GoogleMap mMap;
+  private SupportMapFragment mapFragment;
 
-    public HomeFragment() {
-        // Required empty public constructor
-    }
+  public HomeFragment() {
+    // Required empty public constructor
+  }
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
+  @Override
+  public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+  }
 
-    /**
-     * {@inheritDoc}
-     * Ensure the action bar is shown at the top of the screen. Set the title visible to Home.
-     */
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+  /**
+   * {@inheritDoc}
+   * Ensure the action bar is shown at the top of the screen. Set the title visible to Home.
+   */
+  @Override
+  public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        ((AppCompatActivity) getActivity()).getSupportActionBar().show();
-        View rootView = inflater.inflate(R.layout.fragment_home, container, false);
-        getActivity().setTitle("Home");
-        return rootView;
+    ((AppCompatActivity) getActivity()).getSupportActionBar().show();
+    View rootView = inflater.inflate(R.layout.fragment_home, container, false);
+    getActivity().setTitle("Home");
+    return rootView;
+  }
+
+  /**
+   * Initialise UI elements and set onClick actions for the buttons.
+   */
+  @Override
+  public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    super.onViewCreated(view, savedInstanceState);
+
+    // Sensor Info button
+    goToInfo = view.findViewById(R.id.sensorInfoButton);
+    goToInfo.setOnClickListener(v -> {
+      NavDirections action = HomeFragmentDirections.actionHomeFragmentToInfoFragment();
+      Navigation.findNavController(v).navigate(action);
+    });
+
+    // Start/Stop Recording button
+    start = view.findViewById(R.id.startStopButton);
+    start.setEnabled(!PreferenceManager.getDefaultSharedPreferences(getContext())
+        .getBoolean("permanentDeny", false));
+    start.setOnClickListener(v -> {
+      Intent intent = new Intent(requireContext(), RecordingActivity.class);
+      startActivity(intent);
+      ((AppCompatActivity) getActivity()).getSupportActionBar().hide();
+    });
+
+    // Measurements button
+    measurements = view.findViewById(R.id.measurementButton);
+    measurements.setOnClickListener(v -> {
+      NavDirections action = HomeFragmentDirections.actionHomeFragmentToMeasurementsFragment();
+      Navigation.findNavController(v).navigate(action);
+    });
+
+    // Files button
+    files = view.findViewById(R.id.filesButton);
+    files.setOnClickListener(v -> {
+      NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
+      Navigation.findNavController(v).navigate(action);
+    });
+
+    // Indoor Positioning button
+    indoorButton = view.findViewById(R.id.indoorButton);
+    indoorButton.setOnClickListener(v -> {
+      Toast.makeText(requireContext(), R.string.indoor_mode_hint, Toast.LENGTH_SHORT).show();
+    });
+
+    // TextView to display GNSS disabled message
+    gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
+
+    // Locate the MapFragment nested in this fragment
+    mapFragment = (SupportMapFragment)
+        getChildFragmentManager().findFragmentById(R.id.mapFragmentContainer);
+    if (mapFragment != null) {
+      Log.e(TAG, "Map fragment found, calling getMapAsync");
+      // Asynchronously initialize the map
+      mapFragment.getMapAsync(this);
+    } else {
+      Log.e(TAG, "Map fragment is NULL - cannot initialize Google Map");
+    }
+  }
+
+  /**
+   * Callback triggered when the Google Map is ready to be used.
+   */
+  @Override
+  public void onMapReady(@NonNull GoogleMap googleMap) {
+    mMap = googleMap;
+    Log.e(TAG, "onMapReady called, GoogleMap instance: " + googleMap);
+    Log.e(TAG, "Map type: " + googleMap.getMapType());
+    try {
+      // Check API key from AndroidManifest meta-data
+      android.content.pm.ApplicationInfo appInfo = requireContext().getPackageManager()
+          .getApplicationInfo(requireContext().getPackageName(),
+              android.content.pm.PackageManager.GET_META_DATA);
+      if (appInfo.metaData != null) {
+        String apiKey = appInfo.metaData.getString("com.google.android.geo.API_KEY");
+        Log.e(TAG, "API_KEY from manifest: " + (apiKey != null ? apiKey.substring(0, 10) + "..." : "NULL"));
+      } else {
+        Log.e(TAG, "metaData is NULL - no API_KEY found in manifest");
+      }
+    } catch (Exception e) {
+      Log.e(TAG, "Failed to read API_KEY from manifest", e);
+    }
+    checkAndUpdatePermissions();
+  }
+
+  @Override
+  public void onResume() {
+    super.onResume();
+    checkAndUpdatePermissions();
+  }
+
+  /**
+   * Checks if GNSS/Location is enabled on the device.
+   */
+  private boolean isGnssEnabled() {
+    LocationManager locationManager =
+        (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
+    // Checks both GPS and network provider. Adjust as needed.
+    boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+    boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+    return (gpsEnabled || networkEnabled);
+  }
+
+  /**
+   * Move the map to the University of Edinburgh and display a message.
+   */
+  private void showEdinburghAndMessage(String message) {
+    gnssStatusTextView.setText(message);
+    gnssStatusTextView.setVisibility(View.VISIBLE);
+
+    LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
+    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
+    mMap.addMarker(new MarkerOptions()
+        .position(edinburghLatLng)
+        .title("University of Edinburgh"));
+  }
+
+  private void checkAndUpdatePermissions() {
+
+    if (mMap == null) {
+      Log.e(TAG, "checkAndUpdatePermissions: mMap is NULL, map not ready yet");
+      return;
     }
 
-    /**
-     * Initialise UI elements and set onClick actions for the buttons.
-     */
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
+    // Check if GNSS/Location is enabled
+    boolean gnssEnabled = isGnssEnabled();
+    Log.e(TAG, "checkAndUpdatePermissions: gnssEnabled=" + gnssEnabled);
 
-        // Sensor Info button
-        goToInfo = view.findViewById(R.id.sensorInfoButton);
-        goToInfo.setOnClickListener(v -> {
-            NavDirections action = HomeFragmentDirections.actionHomeFragmentToInfoFragment();
-            Navigation.findNavController(v).navigate(action);
-        });
+    if (gnssEnabled) {
+      // Hide the "GNSS Disabled" message
+      gnssStatusTextView.setVisibility(View.GONE);
 
-        // Start/Stop Recording button
-        start = view.findViewById(R.id.startStopButton);
-        start.setEnabled(!PreferenceManager.getDefaultSharedPreferences(getContext())
-                .getBoolean("permanentDeny", false));
-        start.setOnClickListener(v -> {
-            Intent intent = new Intent(requireContext(), RecordingActivity.class);
-            startActivity(intent);
-            ((AppCompatActivity) getActivity()).getSupportActionBar().hide();
-        });
+      // Check runtime permissions for location
+      boolean fineGranted = ActivityCompat.checkSelfPermission(
+          requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+          == PackageManager.PERMISSION_GRANTED;
+      boolean coarseGranted = ActivityCompat.checkSelfPermission(
+          requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
+          == PackageManager.PERMISSION_GRANTED;
+      Log.e(TAG, "checkAndUpdatePermissions: fineLocation=" + fineGranted
+          + ", coarseLocation=" + coarseGranted);
 
-        // Measurements button
-        measurements = view.findViewById(R.id.measurementButton);
-        measurements.setOnClickListener(v -> {
-            NavDirections action = HomeFragmentDirections.actionHomeFragmentToMeasurementsFragment();
-            Navigation.findNavController(v).navigate(action);
-        });
-
-        // Files button
-        files = view.findViewById(R.id.filesButton);
-        files.setOnClickListener(v -> {
-            NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
-            Navigation.findNavController(v).navigate(action);
-        });
-
-        // Indoor Positioning button
-        indoorButton = view.findViewById(R.id.indoorButton);
-        indoorButton.setOnClickListener(v -> {
-            Toast.makeText(requireContext(), R.string.indoor_mode_hint, Toast.LENGTH_SHORT).show();
-        });
-
-        // TextView to display GNSS disabled message
-        gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
-
-        // Locate the MapFragment nested in this fragment
-        mapFragment = (SupportMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.mapFragmentContainer);
-        if (mapFragment != null) {
-            Log.e(TAG, "Map fragment found, calling getMapAsync");
-            // Asynchronously initialize the map
-            mapFragment.getMapAsync(this);
-        } else {
-            Log.e(TAG, "Map fragment is NULL - cannot initialize Google Map");
-        }
+      if (fineGranted || coarseGranted) {
+        // Enable the MyLocation layer of Google Map
+        mMap.setMyLocationEnabled(true);
+        Log.e(TAG, "checkAndUpdatePermissions: MyLocation layer enabled");
+      } else {
+        Log.e(TAG, "checkAndUpdatePermissions: location permission NOT granted");
+        // If no permission, simply show a default location or prompt for permissions
+        showEdinburghAndMessage("Permission not granted. Please enable in settings.");
+      }
+    } else {
+      Log.e(TAG, "checkAndUpdatePermissions: GNSS is disabled");
+      // If GNSS is disabled, show University of Edinburgh + message
+      showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
     }
-
-    /**
-     * Callback triggered when the Google Map is ready to be used.
-     */
-    @Override
-    public void onMapReady(@NonNull GoogleMap googleMap) {
-        mMap = googleMap;
-        Log.e(TAG, "onMapReady called, GoogleMap instance: " + googleMap);
-        Log.e(TAG, "Map type: " + googleMap.getMapType());
-        try {
-            // Check API key from AndroidManifest meta-data
-            android.content.pm.ApplicationInfo appInfo = requireContext().getPackageManager()
-                    .getApplicationInfo(requireContext().getPackageName(),
-                            android.content.pm.PackageManager.GET_META_DATA);
-            if (appInfo.metaData != null) {
-                String apiKey = appInfo.metaData.getString("com.google.android.geo.API_KEY");
-                Log.e(TAG, "API_KEY from manifest: " + (apiKey != null ? apiKey.substring(0, 10) + "..." : "NULL"));
-            } else {
-                Log.e(TAG, "metaData is NULL - no API_KEY found in manifest");
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to read API_KEY from manifest", e);
-        }
-        checkAndUpdatePermissions();
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        checkAndUpdatePermissions();
-    }
-
-    /**
-     * Checks if GNSS/Location is enabled on the device.
-     */
-    private boolean isGnssEnabled() {
-        LocationManager locationManager =
-                (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
-        // Checks both GPS and network provider. Adjust as needed.
-        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-        return (gpsEnabled || networkEnabled);
-    }
-
-    /**
-     * Move the map to the University of Edinburgh and display a message.
-     */
-    private void showEdinburghAndMessage(String message) {
-        gnssStatusTextView.setText(message);
-        gnssStatusTextView.setVisibility(View.VISIBLE);
-
-        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
-        mMap.addMarker(new MarkerOptions()
-                .position(edinburghLatLng)
-                .title("University of Edinburgh"));
-    }
-
-    private void checkAndUpdatePermissions() {
-
-        if (mMap == null) {
-            Log.e(TAG, "checkAndUpdatePermissions: mMap is NULL, map not ready yet");
-            return;
-        }
-
-        // Check if GNSS/Location is enabled
-        boolean gnssEnabled = isGnssEnabled();
-        Log.e(TAG, "checkAndUpdatePermissions: gnssEnabled=" + gnssEnabled);
-
-        if (gnssEnabled) {
-            // Hide the "GNSS Disabled" message
-            gnssStatusTextView.setVisibility(View.GONE);
-
-            // Check runtime permissions for location
-            boolean fineGranted = ActivityCompat.checkSelfPermission(
-                    requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            boolean coarseGranted = ActivityCompat.checkSelfPermission(
-                    requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            Log.e(TAG, "checkAndUpdatePermissions: fineLocation=" + fineGranted
-                    + ", coarseLocation=" + coarseGranted);
-
-            if (fineGranted || coarseGranted) {
-                // Enable the MyLocation layer of Google Map
-                mMap.setMyLocationEnabled(true);
-                Log.e(TAG, "checkAndUpdatePermissions: MyLocation layer enabled");
-            } else {
-                Log.e(TAG, "checkAndUpdatePermissions: location permission NOT granted");
-                // If no permission, simply show a default location or prompt for permissions
-                showEdinburghAndMessage("Permission not granted. Please enable in settings.");
-            }
-        } else {
-            Log.e(TAG, "checkAndUpdatePermissions: GNSS is disabled");
-            // If GNSS is disabled, show University of Edinburgh + message
-            showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
-        }
-    }
+  }
 }

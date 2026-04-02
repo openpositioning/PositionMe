@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -14,21 +15,23 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
 import android.widget.TextView;
-import com.google.android.material.switchmaterial.SwitchMaterial;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.*;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.*;
+import com.openpositioning.PositionMe.utils.WifiFingerprinter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,667 +60,1007 @@ import java.util.List;
 
 public class TrajectoryMapFragment extends Fragment {
 
-    private GoogleMap gMap; // Google Maps instance
-    private LatLng currentLocation; // Stores the user's current location
-    private Marker orientationMarker; // Marker representing user's heading
-    private Marker gnssMarker; // GNSS position marker
-    // Keep test point markers so they can be cleared when recording ends
-    private final List<Marker> testPointMarkers = new ArrayList<>();
+  private GoogleMap gMap; // Google Maps instance
+  private LatLng currentLocation; // Stores the user's current location
+  private Marker orientationMarker; // Marker representing user's heading
+  private Marker gnssMarker; // GNSS position marker
+  private Marker wifiMarker; // WiFi position marker
+  private boolean isWifiOn = false;
+  private boolean isSmoothOn = true;
+  // EMA data filter: smooths the raw position to reduce jitter
+  private static final double EMA_ALPHA = 0.35; // 0=full smooth, 1=no smooth
+  private LatLng smoothedLocation = null;
+  // Raw trajectory points for spline smoothing
+  private final List<LatLng> rawTrajectoryPoints = new ArrayList<>();
+  private static final int SPLINE_SUBDIVISIONS = 5; // interpolation points per segment
+  private boolean isPdrDotsOn = false;
+  private WifiFingerprinter wifiFingerprinter;
 
-    private Polyline polyline; // Polyline representing user's movement path
-    private boolean isRed = true; // Tracks whether the polyline color is red
-    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+  // Colour-coded observation dots (last N)
+  private static final int MAX_OBS_DOTS = 15;
+  private final java.util.LinkedList<Circle> pdrDots = new java.util.LinkedList<>();
+  private final java.util.LinkedList<Circle> wifiDots = new java.util.LinkedList<>();
+  private final java.util.LinkedList<Circle> gnssDots = new java.util.LinkedList<>();
+  // Particle cloud visualization
+  private boolean isParticleOn = false;
+  private final java.util.List<Circle> particleCircles = new java.util.ArrayList<>();
 
-    private Polyline gnssPolyline; // Polyline for GNSS path
-    private LatLng lastGnssLocation = null; // Stores the last GNSS location
+  // Keep test point markers so they can be cleared when recording ends
+  private final List<Marker> testPointMarkers = new ArrayList<>();
 
-    private LatLng pendingCameraPosition = null; // Stores pending camera movement
-    private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
+  private Polyline polyline; // Polyline representing user's movement path
+  private boolean isRed = true; // Tracks whether the polyline color is red
+  private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
-    private IndoorMapManager indoorMapManager; // Manages indoor mapping
-    private SensorFusion sensorFusion;
+  private Polyline gnssPolyline; // Polyline for GNSS path
+  private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
-    // Auto-floor state
-    private static final String TAG = "TrajectoryMapFragment";
-    private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000;
-    private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000;
-    private Handler autoFloorHandler;
-    private Runnable autoFloorTask;
-    private int lastCandidateFloor = Integer.MIN_VALUE;
-    private long lastCandidateTime = 0;
+  private LatLng pendingCameraPosition = null; // Stores pending camera movement
+  private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
-    // UI
-    private Spinner switchMapSpinner;
+  private IndoorMapManager indoorMapManager; // Manages indoor mapping
+  private SensorFusion sensorFusion;
 
-    private SwitchMaterial gnssSwitch;
-    private SwitchMaterial autoFloorSwitch;
+  // Auto-floor state
+  private static final String TAG = "TrajectoryMapFragment";
+  private static final long AUTO_FLOOR_DEBOUNCE_MS = 2000;
+  private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000;
+  private Handler autoFloorHandler;
+  private Runnable autoFloorTask;
+  private int lastCandidateFloor = Integer.MIN_VALUE;
+  private long lastCandidateTime = 0;
+  // WiFi-anchored floor: last absolute floor index confirmed by WiFi + elevation at that time
+  private int   wifiAnchorFloorIndex = -1;
+  private float wifiAnchorElevation  = 0f;
+  // True after the first WiFi floor has been applied — enables transition zone constraint
+  private boolean initialFloorSet = false;
 
-    private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
-    private TextView floorLabel;
-    private Button switchColorButton;
-    private Polygon buildingPolygon;
+  // UI
+  private Spinner switchMapSpinner;
+
+  private SwitchMaterial gnssSwitch;
+  private SwitchMaterial autoFloorSwitch;
+
+  private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
+  private TextView floorLabel;
+  private Button switchColorButton;
+  private final List<Polygon> buildingPolygons = new ArrayList<>();
 
 
-    public TrajectoryMapFragment() {
-        // Required empty public constructor
-    }
+  public TrajectoryMapFragment() {
+    // Required empty public constructor
+  }
 
-    @Nullable
-    @Override
-    public View onCreateView(@NonNull LayoutInflater inflater,
+  @Nullable
+  @Override
+  public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // Inflate the separate layout containing map + map-related UI
-        return inflater.inflate(R.layout.fragment_trajectory_map, container, false);
-    }
+    // Inflate the separate layout containing map + map-related UI
+    return inflater.inflate(R.layout.fragment_trajectory_map, container, false);
+  }
 
-    @Override
-    public void onViewCreated(@NonNull View view,
+  /**
+   * Initializes the map, UI switches, buttons, and auto-floor detection.
+   *
+   * @param view the fragment root view.
+   * @param savedInstanceState saved instance state bundle, or {@code null}.
+   */
+  @Override
+  public void onViewCreated(@NonNull View view,
                               @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
+    super.onViewCreated(view, savedInstanceState);
 
-        // Grab references to UI controls
-        switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
-        gnssSwitch      = view.findViewById(R.id.gnssSwitch);
-        autoFloorSwitch = view.findViewById(R.id.autoFloor);
-        floorUpButton   = view.findViewById(R.id.floorUpButton);
-        floorDownButton = view.findViewById(R.id.floorDownButton);
-        floorLabel      = view.findViewById(R.id.floorLabel);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
+    // Grab references to UI controls
+    switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
+    gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+    autoFloorSwitch = view.findViewById(R.id.autoFloor);
+    floorUpButton   = view.findViewById(R.id.floorUpButton);
+    floorDownButton = view.findViewById(R.id.floorDownButton);
+    floorLabel      = view.findViewById(R.id.floorLabel);
+    switchColorButton = view.findViewById(R.id.lineColorButton);
 
-        // Setup floor up/down UI hidden initially until we know there's an indoor map
-        setFloorControlsVisibility(View.GONE);
+    // Setup floor up/down UI hidden initially until we know there's an indoor map
+    setFloorControlsVisibility(View.GONE);
 
-        // Initialize the map asynchronously
-        SupportMapFragment mapFragment = (SupportMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
-        if (mapFragment != null) {
-            mapFragment.getMapAsync(new OnMapReadyCallback() {
-                @Override
-                public void onMapReady(@NonNull GoogleMap googleMap) {
-                    // Assign the provided googleMap to your field variable
-                    gMap = googleMap;
-                    // Initialize map settings with the now non-null gMap
-                    initMapSettings(gMap);
+    // Initialize the map asynchronously
+    SupportMapFragment mapFragment = (SupportMapFragment)
+        getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
+    if (mapFragment != null) {
+      mapFragment.getMapAsync(new OnMapReadyCallback() {
+        @Override
+        public void onMapReady(@NonNull GoogleMap googleMap) {
+          // Assign the provided googleMap to your field variable
+          gMap = googleMap;
+          // Initialize map settings with the now non-null gMap
+          initMapSettings(gMap);
 
-                    // If we had a pending camera move, apply it now
-                    if (hasPendingCameraMove && pendingCameraPosition != null) {
-                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
-                        hasPendingCameraMove = false;
-                        pendingCameraPosition = null;
-                    }
+          // If we had a pending camera move, apply it now
+          if (hasPendingCameraMove && pendingCameraPosition != null) {
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
+            hasPendingCameraMove = false;
+            pendingCameraPosition = null;
+          }
 
-                    drawBuildingPolygon();
+          drawBuildingPolygon();
 
-                    Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
+          // Pause camera follow when user drags/zooms map, resume after 5s
+          cameraResumeHandler = new Handler(Looper.getMainLooper());
+          gMap.setOnCameraMoveStartedListener(reason -> {
+            if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+              cameraFollowing = false;
+              cameraResumeHandler.removeCallbacksAndMessages(null);
+              cameraResumeHandler.postDelayed(() -> cameraFollowing = true,
+                  CAMERA_RESUME_DELAY_MS);
+            }
+          });
 
-
-                }
-            });
+          Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
         }
-
-        // Map type spinner setup
-        initMapTypeSpinner();
-
-        // GNSS Switch
-        gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            isGnssOn = isChecked;
-            if (!isChecked && gnssMarker != null) {
-                gnssMarker.remove();
-                gnssMarker = null;
-            }
-        });
-
-        // Color switch
-        switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
-                } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
-                }
-            }
-        });
-
-        // Auto-floor toggle: start/stop periodic floor evaluation
-        sensorFusion = SensorFusion.getInstance();
-        autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-            if (isChecked) {
-                startAutoFloor();
-            } else {
-                stopAutoFloor();
-            }
-        });
-
-        floorUpButton.setOnClickListener(v -> {
-            // If user manually changes floor, turn off auto floor
-            autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.increaseFloor();
-                updateFloorLabel();
-            }
-        });
-
-        floorDownButton.setOnClickListener(v -> {
-            autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.decreaseFloor();
-                updateFloorLabel();
-            }
-        });
+      });
     }
 
-    /**
-     * Initialize the map settings with the provided GoogleMap instance.
-     * <p>
-     *     The method sets basic map settings, initializes the indoor map manager,
-     *     and creates an empty polyline for user movement tracking.
-     *     The method also initializes the GNSS polyline for tracking GNSS path.
-     *     The method sets the map type to Hybrid and initializes the map with these settings.
-     *
-     * @param map
-     */
+    // Map type spinner setup
+    initMapTypeSpinner();
 
-    private void initMapSettings(GoogleMap map) {
-        // Basic map settings
-        map.getUiSettings().setCompassEnabled(true);
-        map.getUiSettings().setTiltGesturesEnabled(true);
-        map.getUiSettings().setRotateGesturesEnabled(true);
-        map.getUiSettings().setScrollGesturesEnabled(true);
-        map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+    // GNSS Switch
+    gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+      isGnssOn = isChecked;
+      if (!isChecked && gnssMarker != null) {
+        gnssMarker.remove();
+        gnssMarker = null;
+      }
+    });
 
-        // Initialize indoor manager
-        indoorMapManager = new IndoorMapManager(map);
+    // WiFi Switch
+    SwitchMaterial wifiSwitch = view.findViewById(R.id.wifiSwitch);
+    wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+      isWifiOn = isChecked;
+      if (!isChecked && wifiMarker != null) {
+        wifiMarker.remove();
+        wifiMarker = null;
+      }
+    });
 
-        // Initialize an empty polyline
-        polyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
-                .width(5f)
-                .add() // start empty
-        );
+    // Smooth display switch
+    SwitchMaterial smoothSwitch = view.findViewById(R.id.smoothSwitch);
+    smoothSwitch.setChecked(isSmoothOn);
+    smoothSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+      isSmoothOn = isChecked;
+    });
 
-        // GNSS path in blue
-        gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
-                .width(5f)
-                .add() // start empty
-        );
-    }
+    // Observation dots switch (PDR/WiFi/GNSS coloured dots)
+    SwitchMaterial obsDotsSwitch = view.findViewById(R.id.obsDotsSwitch);
+    obsDotsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+      isPdrDotsOn = isChecked;
+      if (!isChecked) {
+        for (Circle c : pdrDots) c.remove();   pdrDots.clear();
+        for (Circle c : wifiDots) c.remove();   wifiDots.clear();
+        for (Circle c : gnssDots) c.remove();   gnssDots.clear();
+      }
+    });
 
+    // Particle cloud switch
+    SwitchMaterial particleSwitch = view.findViewById(R.id.particleSwitch);
+    particleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+      isParticleOn = isChecked;
+      if (!isChecked) {
+        for (Circle c : particleCircles) c.remove();
+        particleCircles.clear();
+      }
+    });
 
-    /**
-     * Initialize the map type spinner with the available map types.
-     * <p>
-     *     The spinner allows the user to switch between different map types
-     *     (e.g. Hybrid, Normal, Satellite) to customize their map view.
-     *     The spinner is populated with the available map types and listens
-     *     for user selection to update the map accordingly.
-     *     The map type is updated directly on the GoogleMap instance.
-     *     <p>
-     *         Note: The spinner is initialized with the default map type (Hybrid).
-     *         The map type is updated on user selection.
-     *     </p>
-     * </p>
-     *     @see com.google.android.gms.maps.GoogleMap The GoogleMap instance to update map type.
-     */
-    private void initMapTypeSpinner() {
-        if (switchMapSpinner == null) return;
-        String[] maps = new String[]{
-                getString(R.string.hybrid),
-                getString(R.string.normal),
-                getString(R.string.satellite)
-        };
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                requireContext(),
-                android.R.layout.simple_spinner_dropdown_item,
-                maps
-        );
-        switchMapSpinner.setAdapter(adapter);
-
-        switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view,
-                                       int position, long id) {
-                if (gMap == null) return;
-                switch (position){
-                    case 0:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-                        break;
-                    case 1:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-                        break;
-                    case 2:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
-                        break;
-                }
-            }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
-        });
-    }
-
-    /**
-     * Update the user's current location on the map, create or move orientation marker,
-     * and append to polyline if the user actually moved.
-     *
-     * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
-     */
-    public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
-        if (gMap == null) return;
-
-        // Keep track of current location
-        LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
-
-        // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
-                    .flat(true)
-                    .title("Current Position")
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(requireContext(),
-                                    R.drawable.ic_baseline_navigation_24)))
-            );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+    // Color switch
+    switchColorButton.setOnClickListener(v -> {
+      if (polyline != null) {
+        if (isRed) {
+          switchColorButton.setBackgroundColor(Color.BLACK);
+          polyline.setColor(Color.BLACK);
+          isRed = false;
         } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+          switchColorButton.setBackgroundColor(Color.RED);
+          polyline.setColor(Color.RED);
+          isRed = true;
         }
+      }
+    });
 
-        // Extend polyline if movement occurred
-        /*if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
-            polyline.setPoints(points);
-        }*/
-        // Extend polyline
-        if (polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-
-            // First position fix: add the first polyline point
-            if (oldLocation == null) {
-                points.add(newLocation);
-                polyline.setPoints(points);
-            } else if (!oldLocation.equals(newLocation)) {
-                // Subsequent movement: append a new polyline point
-                points.add(newLocation);
-                polyline.setPoints(points);
-            }
-        }
-
-
-        // Update indoor map overlay
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
-        }
-    }
-
-
-
-    /**
-     * Set the initial camera position for the map.
-     * <p>
-     *     The method sets the initial camera position for the map when it is first loaded.
-     *     If the map is already ready, the camera is moved immediately.
-     *     If the map is not ready, the camera position is stored until the map is ready.
-     *     The method also tracks if there is a pending camera move.
-     * </p>
-     * @param startLocation The initial camera position to set.
-     */
-    public void setInitialCameraPosition(@NonNull LatLng startLocation) {
-        // If the map is already ready, move camera immediately
-        if (gMap != null) {
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
-        } else {
-            // Otherwise, store it until onMapReady
-            pendingCameraPosition = startLocation;
-            hasPendingCameraMove = true;
-        }
-    }
-
-
-    /**
-     * Get the current user location on the map.
-     * @return The current user location as a LatLng object.
-     */
-    public LatLng getCurrentLocation() {
-        return currentLocation;
-    }
-
-    /**
-     * Add a numbered test point marker on the map.
-     * Called by RecordingFragment when user presses the "Test Point" button.
-     */
-    public void addTestPointMarker(int index, long timestampMs, @NonNull LatLng position) {
-        if (gMap == null) return;
-
-        Marker m = gMap.addMarker(new MarkerOptions()
-                .position(position)
-                .title("TP " + index)
-                .snippet("t=" + timestampMs));
-
-        if (m != null) {
-            m.showInfoWindow(); // Show TP index immediately
-            testPointMarkers.add(m);
-        }
-    }
-
-
-    /**
-     * Called when we want to set or update the GNSS marker position
-     */
-    public void updateGNSS(@NonNull LatLng gnssLocation) {
-        if (gMap == null) return;
-        if (!isGnssOn) return;
-
-        if (gnssMarker == null) {
-            // Create the GNSS marker for the first time
-            gnssMarker = gMap.addMarker(new MarkerOptions()
-                    .position(gnssLocation)
-                    .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory
-                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-            lastGnssLocation = gnssLocation;
-        } else {
-            // Move existing GNSS marker
-            gnssMarker.setPosition(gnssLocation);
-
-            // Add a segment to the blue GNSS line, if this is a new location
-            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
-                List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-                gnssPoints.add(gnssLocation);
-                gnssPolyline.setPoints(gnssPoints);
-            }
-            lastGnssLocation = gnssLocation;
-        }
-    }
-
-
-    /**
-     * Remove GNSS marker if user toggles it off
-     */
-    public void clearGNSS() {
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-    }
-
-    /**
-     * Whether user is currently showing GNSS or not
-     */
-    public boolean isGnssEnabled() {
-        return isGnssOn;
-    }
-
-    private void setFloorControlsVisibility(int visibility) {
-        floorUpButton.setVisibility(visibility);
-        floorDownButton.setVisibility(visibility);
-        floorLabel.setVisibility(visibility);
-        autoFloorSwitch.setVisibility(visibility);
-        if (visibility == View.VISIBLE) {
-            updateFloorLabel();
-        }
-    }
-
-    /**
-     * Updates the floor label text to reflect the current floor display name.
-     */
-    private void updateFloorLabel() {
-        if (floorLabel != null && indoorMapManager != null) {
-            floorLabel.setText(indoorMapManager.getCurrentFloorDisplayName());
-        }
-    }
-
-    public void clearMapAndReset() {
+    // Auto-floor toggle: start/stop periodic floor evaluation
+    sensorFusion = SensorFusion.getInstance();
+    autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
+      if (isChecked) {
+        startAutoFloor();
+      } else {
         stopAutoFloor();
-        if (autoFloorSwitch != null) {
-            autoFloorSwitch.setChecked(false);
-        }
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
-        }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
-        }
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
-        }
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-        lastGnssLocation = null;
-        currentLocation  = null;
+      }
+    });
+    // Default to auto-floor ON
+    autoFloorSwitch.setChecked(true);
 
-        // Clear test point markers
-        for (Marker m : testPointMarkers) {
-            m.remove();
-        }
-        testPointMarkers.clear();
-
-
-        // Re-create empty polylines with your chosen colors
-        if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.RED)
-                    .width(5f)
-                    .add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
-                    .width(5f)
-                    .add());
-        }
-    }
-
-    /**
-     * Draw the building polygon on the map
-     * <p>
-     *     The method draws a polygon representing the building on the map.
-     *     The polygon is drawn with specific vertices and colors to represent
-     *     different buildings or areas on the map.
-     *     The method removes the old polygon if it exists and adds the new polygon
-     *     to the map with the specified options.
-     *     The method logs the number of vertices in the polygon for debugging.
-     *     <p>
-     *
-     *    Note: The method uses hard-coded vertices for the building polygon.
-     *
-     *    </p>
-     *
-     *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
-     */
-    private void drawBuildingPolygon() {
-        if (gMap == null) {
-            Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
-            return;
-        }
-
-        // nuclear building polygon vertices
-        LatLng nucleus1 = new LatLng(55.92279538827796, -3.174612147506538);
-        LatLng nucleus2 = new LatLng(55.92278121423647, -3.174107900816096);
-        LatLng nucleus3 = new LatLng(55.92288405733954, -3.173843694667146);
-        LatLng nucleus4 = new LatLng(55.92331786793876, -3.173832892645086);
-        LatLng nucleus5 = new LatLng(55.923337194112555, -3.1746284301397387);
-
-
-        // nkml building polygon vertices
-        LatLng nkml1 = new LatLng(55.9230343434213, -3.1751847990731954);
-        LatLng nkml2 = new LatLng(55.923032840563366, -3.174777103346131);
-        LatLng nkml4 = new LatLng(55.92280139974615, -3.175195527934348);
-        LatLng nkml3 = new LatLng(55.922793885410734, -3.1747958788136867);
-
-        LatLng fjb1 = new LatLng(55.92269205199916, -3.1729563477188774);//left top
-        LatLng fjb2 = new LatLng(55.922822801570994, -3.172594249522305);
-        LatLng fjb3 = new LatLng(55.92223512226413, -3.171921917547244);
-        LatLng fjb4 = new LatLng(55.9221071265519, -3.1722813131202097);
-
-        LatLng faraday1 = new LatLng(55.92242866264128, -3.1719553662011815);
-        LatLng faraday2 = new LatLng(55.9224966752294, -3.1717846714743474);
-        LatLng faraday3 = new LatLng(55.922271383074154, -3.1715191463437162);
-        LatLng faraday4 = new LatLng(55.92220124468304, -3.171705013935158);
-
-
-
-        PolygonOptions buildingPolygonOptions = new PolygonOptions()
-                .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
-                .strokeColor(Color.RED)    // Red border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-        // Options for the new polygon
-        PolygonOptions buildingPolygonOptions2 = new PolygonOptions()
-                .add(nkml1, nkml2, nkml3, nkml4, nkml1)
-                .strokeColor(Color.BLUE)    // Blue border
-                .strokeWidth(10f)           // Border width
-               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-        PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
-                .add(fjb1, fjb2, fjb3, fjb4, fjb1)
-                .strokeColor(Color.GREEN)    // Green border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 0, 255, 0)) // Semi-transparent green fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-        PolygonOptions buildingPolygonOptions4 = new PolygonOptions()
-                .add(faraday1, faraday2, faraday3, faraday4, faraday1)
-                .strokeColor(Color.YELLOW)    // Yellow border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 255, 0)) // Semi-transparent yellow fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
-
-        // Remove the old polygon if it exists
-        if (buildingPolygon != null) {
-            buildingPolygon.remove();
-        }
-
-        // Add the polygon to the map
-        buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
-        gMap.addPolygon(buildingPolygonOptions2);
-        gMap.addPolygon(buildingPolygonOptions3);
-        gMap.addPolygon(buildingPolygonOptions4);
-        Log.d(TAG, "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
-    }
-
-    //region Auto-floor logic
-
-    /**
-     * Starts the periodic auto-floor evaluation task. Checks every second
-     * and applies floor changes only after the debounce window (3 seconds
-     * of consistent readings).
-     */
-    private void startAutoFloor() {
-        if (autoFloorHandler == null) {
-            autoFloorHandler = new Handler(Looper.getMainLooper());
-        }
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0;
-
-        // Immediately jump to the best-guess floor (skip debounce on first toggle)
-        applyImmediateFloor();
-
-        autoFloorTask = new Runnable() {
-            @Override
-            public void run() {
-                evaluateAutoFloor();
-                autoFloorHandler.postDelayed(this, AUTO_FLOOR_CHECK_INTERVAL_MS);
-            }
-        };
-        autoFloorHandler.post(autoFloorTask);
-        Log.d(TAG, "Auto-floor started");
-    }
-
-    /**
-     * Applies the best-guess floor immediately without debounce.
-     * Called once when auto-floor is first toggled on, so the user
-     * sees an instant correction after manually browsing wrong floors.
-     */
-    private void applyImmediateFloor() {
-        if (sensorFusion == null || indoorMapManager == null) return;
-        if (!indoorMapManager.getIsIndoorMapSet()) return;
-
-        int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
-        }
-
-        indoorMapManager.setCurrentFloor(candidateFloor, true);
+    floorUpButton.setOnClickListener(v -> {
+      // If user manually changes floor, turn off auto floor
+      autoFloorSwitch.setChecked(false);
+      if (indoorMapManager != null) {
+        indoorMapManager.increaseFloor();
         updateFloorLabel();
-        // Seed the debounce state so subsequent checks don't re-trigger immediately
-        lastCandidateFloor = candidateFloor;
-        lastCandidateTime = SystemClock.elapsedRealtime();
-    }
+      }
+    });
 
-    /**
-     * Stops the periodic auto-floor evaluation and resets debounce state.
-     */
-    private void stopAutoFloor() {
-        if (autoFloorHandler != null && autoFloorTask != null) {
-            autoFloorHandler.removeCallbacks(autoFloorTask);
+    floorDownButton.setOnClickListener(v -> {
+      autoFloorSwitch.setChecked(false);
+      if (indoorMapManager != null) {
+        indoorMapManager.decreaseFloor();
+        updateFloorLabel();
+      }
+    });
+  }
+
+  /**
+   * Initialize the map settings with the provided GoogleMap instance.
+   * <p>
+   *     The method sets basic map settings, initializes the indoor map manager,
+   *     and creates an empty polyline for user movement tracking.
+   *     The method also initializes the GNSS polyline for tracking GNSS path.
+   *     The method sets the map type to Hybrid and initializes the map with these settings.
+   *
+   * @param map
+   */
+
+  private void initMapSettings(GoogleMap map) {
+    // Basic map settings
+    map.getUiSettings().setCompassEnabled(true);
+    map.getUiSettings().setTiltGesturesEnabled(true);
+    map.getUiSettings().setRotateGesturesEnabled(true);
+    map.getUiSettings().setScrollGesturesEnabled(true);
+    map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+
+    // Initialize indoor manager
+    indoorMapManager = new IndoorMapManager(map);
+
+    // Initialize an empty polyline
+    polyline = map.addPolyline(new PolylineOptions()
+        .color(Color.RED)
+        .width(5f)
+        .add() // start empty
+    );
+
+    // GNSS path in blue
+    gnssPolyline = map.addPolyline(new PolylineOptions()
+        .color(Color.BLUE)
+        .width(5f)
+        .add() // start empty
+    );
+  }
+
+
+  /**
+   * Initialize the map type spinner with the available map types.
+   * <p>
+   *     The spinner allows the user to switch between different map types
+   *     (e.g. Hybrid, Normal, Satellite) to customize their map view.
+   *     The spinner is populated with the available map types and listens
+   *     for user selection to update the map accordingly.
+   *     The map type is updated directly on the GoogleMap instance.
+   *     <p>
+   *         Note: The spinner is initialized with the default map type (Hybrid).
+   *         The map type is updated on user selection.
+   *     </p>
+   * </p>
+   *     @see com.google.android.gms.maps.GoogleMap The GoogleMap instance to update map type.
+   */
+  private void initMapTypeSpinner() {
+    if (switchMapSpinner == null) return;
+    String[] maps = new String[]{
+        getString(R.string.normal),
+        getString(R.string.hybrid),
+        getString(R.string.satellite)
+    };
+    ArrayAdapter<String> adapter = new ArrayAdapter<>(
+        requireContext(),
+        android.R.layout.simple_spinner_dropdown_item,
+        maps
+    );
+    switchMapSpinner.setAdapter(adapter);
+
+    switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+      @Override
+      public void onItemSelected(AdapterView<?> parent, View view,
+                                       int position, long id) {
+        if (gMap == null) return;
+        switch (position){
+          case 0:
+            gMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+            break;
+          case 1:
+            gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+            break;
+          case 2:
+            gMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+            break;
         }
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0;
-        Log.d(TAG, "Auto-floor stopped");
+      }
+      @Override
+      public void onNothingSelected(AdapterView<?> parent) {}
+    });
+  }
+
+  /**
+   * Update the user's current location on the map, create or move orientation marker,
+   * and append to polyline if the user actually moved.
+   *
+   * @param newLocation The new location to plot.
+   * @param orientation The user’s heading (e.g. from sensor fusion).
+   */
+  private ValueAnimator markerAnimator;
+  private boolean trajectoryEnabled = false;
+  private boolean cameraFollowing = true;
+  private Handler cameraResumeHandler;
+  private static final long CAMERA_RESUME_DELAY_MS = 5000;
+
+  /** Enables trajectory drawing (call after calibration completes). */
+  public void enableTrajectory() { trajectoryEnabled = true; }
+
+  /**
+   * Updates the user trajectory and marker, applying EMA smoothing when enabled.
+   *
+   * @param newLocation the latest fused position.
+   * @param orientation current heading in degrees.
+   */
+  public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+    if (gMap == null) return;
+
+    // Apply EMA data filter when smooth is enabled
+    LatLng displayLocation;
+    if (isSmoothOn) {
+      if (smoothedLocation == null) {
+        smoothedLocation = newLocation;
+      } else {
+        double lat = EMA_ALPHA * newLocation.latitude + (1 - EMA_ALPHA) * smoothedLocation.latitude;
+        double lng = EMA_ALPHA * newLocation.longitude + (1 - EMA_ALPHA) * smoothedLocation.longitude;
+        smoothedLocation = new LatLng(lat, lng);
+      }
+      displayLocation = smoothedLocation;
+    } else {
+      smoothedLocation = newLocation;
+      displayLocation = newLocation;
     }
 
-    /**
-     * Evaluates the current floor using WiFi positioning (priority) or
-     * barometric elevation (fallback). Applies a 3-second debounce window
-     * to prevent jittery floor switching.
-     */
-    private void evaluateAutoFloor() {
-        if (sensorFusion == null || indoorMapManager == null) return;
-        if (!indoorMapManager.getIsIndoorMapSet()) return;
+    LatLng oldLocation = this.currentLocation;
+    this.currentLocation = displayLocation;
 
-        int candidateFloor;
+    // First fix: create marker + polyline start
+    if (orientationMarker == null) {
+      orientationMarker = gMap.addMarker(new MarkerOptions()
+          .position(displayLocation)
+          .flat(true)
+          .title("Current Position")
+          .icon(BitmapDescriptorFactory.fromBitmap(
+              UtilFunctions.getBitmapFromVector(requireContext(),
+                  R.drawable.ic_baseline_navigation_24)))
+      );
+      if (cameraFollowing) {
+        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
+      }
 
-        // Priority 1: WiFi-based floor (only if WiFi positioning has returned data)
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
+      if (trajectoryEnabled && polyline != null) {
+        rawTrajectoryPoints.add(displayLocation);
+        updatePolylineSmooth();
+      }
+    } else {
+      orientationMarker.setRotation(orientation);
+
+      // Animate marker movement for visual smoothness
+      LatLng startPos = orientationMarker.getPosition();
+      if (markerAnimator != null) markerAnimator.cancel();
+      markerAnimator = ValueAnimator.ofFloat(0f, 1f);
+      markerAnimator.setDuration(180);
+      markerAnimator.addUpdateListener(anim -> {
+        float t = (float) anim.getAnimatedValue();
+        double lat = startPos.latitude + (displayLocation.latitude - startPos.latitude) * t;
+        double lng = startPos.longitude + (displayLocation.longitude - startPos.longitude) * t;
+        LatLng interpolated = new LatLng(lat, lng);
+        if (orientationMarker != null) {
+          orientationMarker.setPosition(interpolated);
+        }
+        if (cameraFollowing) {
+          gMap.moveCamera(CameraUpdateFactory.newLatLng(interpolated));
+        }
+      });
+      markerAnimator.start();
+
+      // Append to polyline only after calibration
+      if (trajectoryEnabled && polyline != null && oldLocation != null && !oldLocation.equals(displayLocation)) {
+        rawTrajectoryPoints.add(displayLocation);
+        updatePolylineSmooth();
+      }
+    }
+
+    // Update indoor map overlay
+    if (indoorMapManager != null) {
+      indoorMapManager.setCurrentLocation(newLocation);
+      setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+    }
+  }
+
+
+
+  /**
+   * Set the initial camera position for the map.
+   * <p>
+   *     The method sets the initial camera position for the map when it is first loaded.
+   *     If the map is already ready, the camera is moved immediately.
+   *     If the map is not ready, the camera position is stored until the map is ready.
+   *     The method also tracks if there is a pending camera move.
+   * </p>
+   * @param startLocation The initial camera position to set.
+   */
+  /**
+   * Updates the polyline using Catmull-Rom spline interpolation when smooth
+   * is enabled, or raw points when disabled.
+   */
+  /** Maximum number of recent points to run spline interpolation on per update. */
+  private static final int SPLINE_WINDOW = 50;
+
+  private void updatePolylineSmooth() {
+    if (polyline == null) return;
+    int size = rawTrajectoryPoints.size();
+    if (!isSmoothOn || size < 3) {
+      polyline.setPoints(new ArrayList<>(rawTrajectoryPoints));
+      return;
+    }
+    // Only re-interpolate the most recent SPLINE_WINDOW points to avoid O(n) every frame.
+    // Earlier points are already baked into the polyline from previous updates.
+    if (size <= SPLINE_WINDOW) {
+      polyline.setPoints(catmullRomSpline(rawTrajectoryPoints, SPLINE_SUBDIVISIONS));
+    } else {
+      // Bake the older portion as raw points, smooth only the tail
+      List<LatLng> baked = new ArrayList<>(rawTrajectoryPoints.subList(0, size - SPLINE_WINDOW));
+      List<LatLng> tail = rawTrajectoryPoints.subList(size - SPLINE_WINDOW, size);
+      baked.addAll(catmullRomSpline(tail, SPLINE_SUBDIVISIONS));
+      polyline.setPoints(baked);
+    }
+  }
+
+  /**
+   * Catmull-Rom spline interpolation over a list of control points.
+   * Produces a smooth curve that passes through every original point,
+   * with rounded corners instead of sharp angles.
+   */
+  private static List<LatLng> catmullRomSpline(List<LatLng> pts, int subdivisions) {
+    int n = pts.size();
+    List<LatLng> result = new ArrayList<>((n - 1) * subdivisions + 1);
+
+    for (int i = 0; i < n - 1; i++) {
+      LatLng p0 = pts.get(Math.max(i - 1, 0));
+      LatLng p1 = pts.get(i);
+      LatLng p2 = pts.get(i + 1);
+      LatLng p3 = pts.get(Math.min(i + 2, n - 1));
+
+      for (int s = 0; s < subdivisions; s++) {
+        double t = (double) s / subdivisions;
+        double t2 = t * t;
+        double t3 = t2 * t;
+
+        double lat = 0.5 * ((2 * p1.latitude)
+            + (-p0.latitude + p2.latitude) * t
+            + (2 * p0.latitude - 5 * p1.latitude + 4 * p2.latitude - p3.latitude) * t2
+            + (-p0.latitude + 3 * p1.latitude - 3 * p2.latitude + p3.latitude) * t3);
+        double lng = 0.5 * ((2 * p1.longitude)
+            + (-p0.longitude + p2.longitude) * t
+            + (2 * p0.longitude - 5 * p1.longitude + 4 * p2.longitude - p3.longitude) * t2
+            + (-p0.longitude + 3 * p1.longitude - 3 * p2.longitude + p3.longitude) * t3);
+
+        result.add(new LatLng(lat, lng));
+      }
+    }
+    result.add(pts.get(n - 1)); // add last point
+    return result;
+  }
+
+  /**
+   * Sets the initial camera position, queuing the move if the map is not yet ready.
+   *
+   * @param startLocation the starting coordinates to centre the camera on.
+   */
+  public void setInitialCameraPosition(@NonNull LatLng startLocation) {
+    // If the map is already ready, move camera immediately
+    if (gMap != null) {
+      gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
+    } else {
+      // Otherwise, store it until onMapReady
+      pendingCameraPosition = startLocation;
+      hasPendingCameraMove = true;
+    }
+  }
+
+
+  /**
+   * Get the current user location on the map.
+   * @return The current user location as a LatLng object.
+   */
+  public LatLng getCurrentLocation() {
+    return currentLocation;
+  }
+
+  /**
+   * Add a numbered test point marker on the map.
+   * Called by RecordingFragment when user presses the "Test Point" button.
+   */
+  public void addTestPointMarker(int index, long timestampMs, @NonNull LatLng position) {
+    if (gMap == null) return;
+
+    Marker m = gMap.addMarker(new MarkerOptions()
+        .position(position)
+        .title("TP " + index)
+        .snippet("t=" + timestampMs));
+
+    if (m != null) {
+      m.showInfoWindow(); // Show TP index immediately
+      testPointMarkers.add(m);
+    }
+  }
+
+
+  /**
+   * Called when we want to set or update the GNSS marker position
+   */
+  public void updateGNSS(@NonNull LatLng gnssLocation) {
+    if (gMap == null) return;
+    if (!isGnssOn) return;
+
+    if (gnssMarker == null) {
+      // Create the GNSS marker for the first time
+      gnssMarker = gMap.addMarker(new MarkerOptions()
+          .position(gnssLocation)
+          .title("GNSS Position")
+          .icon(BitmapDescriptorFactory
+              .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+      lastGnssLocation = gnssLocation;
+    } else {
+      // Move existing GNSS marker
+      gnssMarker.setPosition(gnssLocation);
+
+      // Add a segment to the blue GNSS line, if this is a new location
+      if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
+        List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
+        gnssPoints.add(gnssLocation);
+        gnssPolyline.setPoints(gnssPoints);
+      }
+      lastGnssLocation = gnssLocation;
+    }
+  }
+
+
+  /** Adds a PDR observation dot (yellow). */
+  public void addPdrDot(@NonNull LatLng pos) {
+    addObsDot(pos, Color.argb(200, 230, 180, 0), pdrDots);
+  }
+
+  /** Adds a WiFi observation dot (green). */
+  public void addWifiDot(@NonNull LatLng pos) {
+    addObsDot(pos, Color.argb(180, 0, 180, 0), wifiDots);
+  }
+
+  /** Adds a GNSS observation dot (blue). */
+  public void addGnssDot(@NonNull LatLng pos) {
+    addObsDot(pos, Color.argb(180, 33, 100, 243), gnssDots);
+  }
+
+  private void addObsDot(LatLng pos, int color, java.util.LinkedList<Circle> list) {
+    if (gMap == null || !isPdrDotsOn) return;
+    Circle c = gMap.addCircle(new CircleOptions()
+        .center(pos)
+        .radius(0.5) // 0.5 metre radius
+        .strokeWidth(0)
+        .fillColor(color));
+    list.add(c);
+    // Remove oldest if over limit
+    while (list.size() > MAX_OBS_DOTS) {
+      list.removeFirst().remove();
+    }
+  }
+
+  /**
+   * Draws particle cloud on the map. Each particle is a small semi-transparent red circle.
+   * Clears previous particles before drawing new ones.
+   *
+   * @param particles list of [lat, lng, weight] triples from ParticleFilter.getParticleSnapshot()
+   */
+  private static final int PARTICLE_SAMPLE_SIZE = 80;
+  private long lastParticleDrawTime = 0;
+  private static final long PARTICLE_DRAW_INTERVAL_MS = 1000;
+
+  /**
+   * Draws a sampled subset of particles on the map. Only redraws every 1 second
+   * and samples 80 particles to keep performance smooth.
+   */
+  public void drawParticles(List<double[]> particles) {
+    if (gMap == null || !isParticleOn) return;
+
+    // Throttle: only redraw every 1 second
+    long now = System.currentTimeMillis();
+    if (now - lastParticleDrawTime < PARTICLE_DRAW_INTERVAL_MS) return;
+    lastParticleDrawTime = now;
+
+    // Clear old particles
+    for (Circle c : particleCircles) c.remove();
+    particleCircles.clear();
+
+    if (particles == null || particles.isEmpty()) return;
+
+    // Sample a subset for performance
+    java.util.List<double[]> sampled;
+    if (particles.size() <= PARTICLE_SAMPLE_SIZE) {
+      sampled = particles;
+    } else {
+      sampled = new java.util.ArrayList<>(particles);
+      java.util.Collections.shuffle(sampled);
+      sampled = sampled.subList(0, PARTICLE_SAMPLE_SIZE);
+    }
+
+    // Find max weight for opacity scaling
+    double maxWeight = 0;
+    for (double[] p : sampled) {
+      if (p[2] > maxWeight) maxWeight = p[2];
+    }
+    if (maxWeight <= 0) maxWeight = 1;
+
+    for (double[] p : sampled) {
+      int alpha = (int) (40 + 160 * (p[2] / maxWeight));
+      Circle c = gMap.addCircle(new CircleOptions()
+          .center(new LatLng(p[0], p[1]))
+          .radius(0.3)
+          .strokeWidth(0)
+          .fillColor(Color.argb(alpha, 220, 50, 50)));
+      particleCircles.add(c);
+    }
+  }
+
+  /**
+   * Sets or updates the WiFi position marker (green) on the map.
+   */
+  public void updateWifiMarker(@NonNull LatLng wifiLocation) {
+    if (gMap == null || !isWifiOn) return;
+    if (wifiMarker == null) {
+      wifiMarker = gMap.addMarker(new MarkerOptions()
+          .position(wifiLocation)
+          .title("WiFi Position")
+          .icon(BitmapDescriptorFactory
+              .defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+    } else {
+      wifiMarker.setPosition(wifiLocation);
+    }
+  }
+
+  /**
+   * Remove GNSS marker if user toggles it off
+   */
+  public void clearGNSS() {
+    if (gnssMarker != null) {
+      gnssMarker.remove();
+      gnssMarker = null;
+    }
+  }
+
+  /**
+   * Whether user is currently showing GNSS or not
+   */
+  public boolean isGnssEnabled() {
+    return isGnssOn;
+  }
+
+  private void setFloorControlsVisibility(int visibility) {
+    floorUpButton.setVisibility(visibility);
+    floorDownButton.setVisibility(visibility);
+    floorLabel.setVisibility(visibility);
+    autoFloorSwitch.setVisibility(visibility);
+    if (visibility == View.VISIBLE) {
+      updateFloorLabel();
+    }
+  }
+
+  /**
+   * Updates the floor label text to reflect the current floor display name.
+   */
+  private void updateFloorLabel() {
+    if (floorLabel != null && indoorMapManager != null) {
+      floorLabel.setText(indoorMapManager.getCurrentFloorDisplayName());
+    }
+  }
+
+  /** Clears all markers, polylines, and indoor overlays, and resets map state. */
+  public void clearMapAndReset() {
+    stopAutoFloor();
+    if (autoFloorSwitch != null) {
+      autoFloorSwitch.setChecked(false);
+    }
+    if (polyline != null) {
+      polyline.remove();
+      polyline = null;
+    }
+    if (gnssPolyline != null) {
+      gnssPolyline.remove();
+      gnssPolyline = null;
+    }
+    if (orientationMarker != null) {
+      orientationMarker.remove();
+      orientationMarker = null;
+    }
+    if (gnssMarker != null) {
+      gnssMarker.remove();
+      gnssMarker = null;
+    }
+    lastGnssLocation = null;
+    currentLocation  = null;
+    smoothedLocation = null;
+    rawTrajectoryPoints.clear();
+
+    // Clear test point markers
+    for (Marker m : testPointMarkers) {
+      m.remove();
+    }
+    testPointMarkers.clear();
+
+
+    // Re-create empty polylines with your chosen colors
+    if (gMap != null) {
+      polyline = gMap.addPolyline(new PolylineOptions()
+          .color(Color.RED)
+          .width(5f)
+          .add());
+      gnssPolyline = gMap.addPolyline(new PolylineOptions()
+          .color(Color.BLUE)
+          .width(5f)
+          .add());
+    }
+  }
+
+  /**
+   * Draw the building polygon on the map
+   * <p>
+   *     The method draws a polygon representing the building on the map.
+   *     The polygon is drawn with specific vertices and colors to represent
+   *     different buildings or areas on the map.
+   *     The method removes the old polygon if it exists and adds the new polygon
+   *     to the map with the specified options.
+   *     The method logs the number of vertices in the polygon for debugging.
+   *     <p>
+   *
+   *    Note: The method uses hard-coded vertices for the building polygon.
+   *
+   *    </p>
+   *
+   *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
+   */
+  private void drawBuildingPolygon() {
+    if (gMap == null) {
+      Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
+      return;
+    }
+
+    // nuclear building polygon vertices
+    LatLng nucleus1 = new LatLng(55.92279538827796, -3.174612147506538);
+    LatLng nucleus2 = new LatLng(55.92278121423647, -3.174107900816096);
+    LatLng nucleus3 = new LatLng(55.92288405733954, -3.173843694667146);
+    LatLng nucleus4 = new LatLng(55.92331786793876, -3.173832892645086);
+    LatLng nucleus5 = new LatLng(55.923337194112555, -3.1746284301397387);
+
+
+    // nkml building polygon vertices
+    LatLng nkml1 = new LatLng(55.9230343434213, -3.1751847990731954);
+    LatLng nkml2 = new LatLng(55.923032840563366, -3.174777103346131);
+    LatLng nkml4 = new LatLng(55.92280139974615, -3.175195527934348);
+    LatLng nkml3 = new LatLng(55.922793885410734, -3.1747958788136867);
+
+    LatLng fjb1 = new LatLng(55.92269205199916, -3.1729563477188774);//left top
+    LatLng fjb2 = new LatLng(55.922822801570994, -3.172594249522305);
+    LatLng fjb3 = new LatLng(55.92223512226413, -3.171921917547244);
+    LatLng fjb4 = new LatLng(55.9221071265519, -3.1722813131202097);
+
+    LatLng faraday1 = new LatLng(55.92242866264128, -3.1719553662011815);
+    LatLng faraday2 = new LatLng(55.9224966752294, -3.1717846714743474);
+    LatLng faraday3 = new LatLng(55.922271383074154, -3.1715191463437162);
+    LatLng faraday4 = new LatLng(55.92220124468304, -3.171705013935158);
+
+
+
+    PolygonOptions buildingPolygonOptions = new PolygonOptions()
+        .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
+        .strokeColor(Color.RED)    // Red border
+        .strokeWidth(10f)           // Border width
+        //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
+        .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+    // Options for the new polygon
+    PolygonOptions buildingPolygonOptions2 = new PolygonOptions()
+        .add(nkml1, nkml2, nkml3, nkml4, nkml1)
+        .strokeColor(Color.BLUE)    // Blue border
+        .strokeWidth(10f)           // Border width
+               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
+        .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+    PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
+        .add(fjb1, fjb2, fjb3, fjb4, fjb1)
+        .strokeColor(Color.GREEN)    // Green border
+        .strokeWidth(10f)           // Border width
+        //.fillColor(Color.argb(50, 0, 255, 0)) // Semi-transparent green fill
+        .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+    PolygonOptions buildingPolygonOptions4 = new PolygonOptions()
+        .add(faraday1, faraday2, faraday3, faraday4, faraday1)
+        .strokeColor(Color.YELLOW)    // Yellow border
+        .strokeWidth(10f)           // Border width
+        //.fillColor(Color.argb(50, 255, 255, 0)) // Semi-transparent yellow fill
+        .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+
+    // Remove old polygons if they exist
+    for (Polygon p : buildingPolygons) p.remove();
+    buildingPolygons.clear();
+
+    // Add all building polygons to the map and track references
+    buildingPolygons.add(gMap.addPolygon(buildingPolygonOptions));
+    buildingPolygons.add(gMap.addPolygon(buildingPolygonOptions2));
+    buildingPolygons.add(gMap.addPolygon(buildingPolygonOptions3));
+    buildingPolygons.add(gMap.addPolygon(buildingPolygonOptions4));
+    Log.d(TAG, "Building polygons added: " + buildingPolygons.size());
+  }
+
+  //region Auto-floor logic
+
+  /**
+   * Starts the periodic auto-floor evaluation task. Checks every second
+   * and applies floor changes only after the debounce window (3 seconds
+   * of consistent readings).
+   */
+  private void startAutoFloor() {
+    if (autoFloorHandler == null) {
+      autoFloorHandler = new Handler(Looper.getMainLooper());
+    }
+    lastCandidateFloor = Integer.MIN_VALUE;
+    lastCandidateTime = 0;
+    wifiAnchorFloorIndex = -1; // reset — wait for WiFi to establish anchor
+    initialFloorSet = false;
+
+    autoFloorTask = new Runnable() {
+      @Override
+      public void run() {
+        evaluateAutoFloor();
+        autoFloorHandler.postDelayed(this, AUTO_FLOOR_CHECK_INTERVAL_MS);
+      }
+    };
+    autoFloorHandler.post(autoFloorTask);
+    Log.d(TAG, "Auto-floor started (waiting for WiFi anchor)");
+  }
+
+  /**
+   * Stops the periodic auto-floor evaluation and resets debounce state.
+   */
+  private void stopAutoFloor() {
+    if (autoFloorHandler != null && autoFloorTask != null) {
+      autoFloorHandler.removeCallbacks(autoFloorTask);
+    }
+    lastCandidateFloor = Integer.MIN_VALUE;
+    lastCandidateTime = 0;
+    Log.d(TAG, "Auto-floor stopped");
+  }
+
+  /**
+   * Evaluates the current floor using WiFi positioning (priority) or
+   * barometric elevation (fallback). Applies a 3-second debounce window
+   * to prevent jittery floor switching.
+   */
+  private void evaluateAutoFloor() {
+    if (sensorFusion == null || indoorMapManager == null) return;
+    if (!indoorMapManager.getIsIndoorMapSet()) return;
+
+    // Step 1: Use WiFi ONLY for first anchor — after that, rely on barometer only.
+    // This prevents WiFi floor jumps near staircases from corrupting the floor estimate.
+    if (wifiAnchorFloorIndex < 0) {
+      LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+      if (wifiPos != null) {
+        int wifiFloor = sensorFusion.getWifiFloor();
+        int wifiIndex = wifiFloor + indoorMapManager.getAutoFloorBias();
+        wifiAnchorFloorIndex = wifiIndex;
+        wifiAnchorElevation = sensorFusion.getElevation();
+        Log.d("AutoFloor", "WiFi anchor set (one-time): floor=" + wifiFloor
+            + " index=" + wifiIndex + " elev=" + wifiAnchorElevation);
+      }
+    }
+
+    // Step 2: No anchor yet → can't determine absolute floor
+    if (wifiAnchorFloorIndex < 0) {
+      Log.d("AutoFloor", "No WiFi anchor yet, skipping");
+      return;
+    }
+
+    // Step 3: Candidate = WiFi anchor + barometric delta
+    // This way barometric changes ALWAYS take effect for floor transitions
+    float elevation = sensorFusion.getElevation();
+    float floorHeight = indoorMapManager.getFloorHeight();
+    if (floorHeight <= 0) return;
+    // Floor delta with asymmetric dead zone: anchor floor holds from -2.1m to +2.6m,
+    // then each subsequent floor is floorHeight (4.2m) wide, shifted up by 0.5m
+    float elevDiff = elevation - wifiAnchorElevation;
+    int floorDelta;
+    if (elevDiff >= -3.0f && elevDiff < 3.5f) {
+      floorDelta = 0;  // stay on anchor floor
+    } else if (elevDiff >= 3.5f) {
+      floorDelta = 1 + (int) ((elevDiff - 3.5f) / floorHeight);
+    } else {
+      // below -3.0m
+      floorDelta = -1 - (int) ((-3.0f - elevDiff) / floorHeight);
+    }
+    int candidateIndex = wifiAnchorFloorIndex + floorDelta;
+    String source = "anchor=" + wifiAnchorFloorIndex + " elev=" + String.format("%.2f", elevation)
+        + " anchorElev=" + String.format("%.2f", wifiAnchorElevation)
+        + " delta=" + floorDelta;
+
+    Log.d("AutoFloor", source + " candidateIndex=" + candidateIndex
+        + " currentIndex=" + indoorMapManager.getCurrentFloor()
+        + " display=" + indoorMapManager.getCurrentFloorDisplayName());
+
+    // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
+    long now = SystemClock.elapsedRealtime();
+    if (candidateIndex != lastCandidateFloor) {
+      lastCandidateFloor = candidateIndex;
+      lastCandidateTime = now;
+      return;
+    }
+
+    if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
+      if (candidateIndex != indoorMapManager.getCurrentFloor()) {
+        if (!initialFloorSet) {
+          // First floor assignment — trust WiFi, no transition zone needed
+          Log.d("AutoFloor", "Initial floor set — trusted (WiFi)");
+          initialFloorSet = true;
         } else {
-            // Fallback: barometric elevation estimate
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
-        }
-
-        // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
-        long now = SystemClock.elapsedRealtime();
-        if (candidateFloor != lastCandidateFloor) {
-            lastCandidateFloor = candidateFloor;
-            lastCandidateTime = now;
+          // After initial floor is set, require being near transition zone
+          boolean nearZone = (currentLocation != null
+              && indoorMapManager.isNearTransitionZone(currentLocation));
+          if (!nearZone) {
+            Log.d("AutoFloor", "Floor change blocked — not near stairs/lift zone");
             return;
+          }
+          String zoneType = indoorMapManager.getNearestTransitionZoneType(currentLocation);
+          Log.d("AutoFloor", "Floor change allowed — near " + zoneType + " zone");
         }
-
-        if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            indoorMapManager.setCurrentFloor(candidateFloor, true);
-            updateFloorLabel();
-            // Reset timer so we don't keep re-applying the same floor
-            lastCandidateTime = now;
-        }
+      }
+      indoorMapManager.setCurrentFloor(candidateIndex, false);
+      updateFloorLabel();
+      lastCandidateTime = now;
     }
+  }
 
-    //endregion
+  //endregion
+
+  /** Returns the IndoorMapManager for the particle filter to query wall segments. */
+  public IndoorMapManager getIndoorMapManager() {
+    return indoorMapManager;
+  }
+
+  /** Cleans up handlers, animators, and map objects to prevent background leaks. */
+  @Override
+  public void onDestroyView() {
+    super.onDestroyView();
+    // Stop auto-floor handler
+    if (autoFloorHandler != null) {
+      autoFloorHandler.removeCallbacksAndMessages(null);
+    }
+    // Stop camera resume handler
+    if (cameraResumeHandler != null) {
+      cameraResumeHandler.removeCallbacksAndMessages(null);
+    }
+    // Cancel marker animation
+    if (markerAnimator != null) {
+      markerAnimator.cancel();
+      markerAnimator = null;
+    }
+    // Remove map overlay objects
+    for (Circle c : pdrDots) c.remove();        pdrDots.clear();
+    for (Circle c : wifiDots) c.remove();       wifiDots.clear();
+    for (Circle c : gnssDots) c.remove();       gnssDots.clear();
+    for (Circle c : particleCircles) c.remove(); particleCircles.clear();
+    for (Polygon p : buildingPolygons) p.remove(); buildingPolygons.clear();
+  }
 }

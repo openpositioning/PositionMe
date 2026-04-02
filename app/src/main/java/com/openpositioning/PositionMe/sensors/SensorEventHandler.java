@@ -22,186 +22,243 @@ import java.util.List;
  */
 public class SensorEventHandler {
 
-    private static final float ALPHA = 0.8f;
-    private static final long LARGE_GAP_THRESHOLD_MS = 500;
+  private static final float ALPHA = 0.8f;
+  private static final long LARGE_GAP_THRESHOLD_MS = 500;
 
-    private final SensorState state;
-    private final PdrProcessing pdrProcessing;
-    private final PathView pathView;
-    private final TrajectoryRecorder recorder;
+  // Heading stabilization constants
+  private static final float HEADING_LPF_ALPHA = 0.85f; // slight smoothing, fast turn response
+  private static final float MAG_CORRECTION_ALPHA = 0.005f; // slow magnetometer drift correction
 
-    // Timestamp tracking
-    private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
-    private final HashMap<Integer, Integer> eventCounts = new HashMap<>();
-    private long lastStepTime = 0;
-    private long bootTime;
+  private final SensorState state;
+  private final PdrProcessing pdrProcessing;
+  private final PathView pathView;
+  private final TrajectoryRecorder recorder;
 
-    // Acceleration magnitude buffer between steps
-    private final List<Double> accelMagnitude = new ArrayList<>();
+  // Timestamp tracking
+  private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
+  private final HashMap<Integer, Integer> eventCounts = new HashMap<>();
+  private long lastStepTime = 0;
+  private long bootTime;
 
-    /**
-     * Creates a new SensorEventHandler.
-     *
-     * @param state         shared sensor state holder
-     * @param pdrProcessing PDR processor for step-length and position calculation
-     * @param pathView      path drawing view for trajectory visualisation
-     * @param recorder      trajectory recorder for checking recording state and writing PDR data
-     * @param bootTime      initial boot time offset
-     */
-    public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
+  // Heading stabilization state
+  private float smoothedHeading = Float.NaN;  // low-pass filtered heading
+
+  // Step counter state (fallback for slow walking when STEP_DETECTOR is too insensitive)
+  private int lastStepCount = -1;
+  private static final long STEP_COUNTER_FALLBACK_MS = 500; // use counter if detector silent > 500ms
+
+  // Acceleration magnitude buffer between steps
+  private final List<Double> accelMagnitude = new ArrayList<>();
+
+  /**
+   * Creates a new SensorEventHandler.
+   *
+   * @param state         shared sensor state holder
+   * @param pdrProcessing PDR processor for step-length and position calculation
+   * @param pathView      path drawing view for trajectory visualisation
+   * @param recorder      trajectory recorder for checking recording state and writing PDR data
+   * @param bootTime      initial boot time offset
+   */
+  public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
                               PathView pathView, TrajectoryRecorder recorder,
                               long bootTime) {
-        this.state = state;
-        this.pdrProcessing = pdrProcessing;
-        this.pathView = pathView;
-        this.recorder = recorder;
-        this.bootTime = bootTime;
+    this.state = state;
+    this.pdrProcessing = pdrProcessing;
+    this.pathView = pathView;
+    this.recorder = recorder;
+    this.bootTime = bootTime;
+  }
+
+  /**
+   * Main dispatch method. Processes a sensor event and updates the shared {@link SensorState}.
+   *
+   * @param sensorEvent the sensor event to process
+   */
+  public void handleSensorEvent(SensorEvent sensorEvent) {
+    long currentTime = System.currentTimeMillis();
+    int sensorType = sensorEvent.sensor.getType();
+
+    Long lastTimestamp = lastEventTimestamps.get(sensorType);
+    if (lastTimestamp != null) {
+      long timeGap = currentTime - lastTimestamp;
     }
 
-    /**
-     * Main dispatch method. Processes a sensor event and updates the shared {@link SensorState}.
-     *
-     * @param sensorEvent the sensor event to process
-     */
-    public void handleSensorEvent(SensorEvent sensorEvent) {
-        long currentTime = System.currentTimeMillis();
-        int sensorType = sensorEvent.sensor.getType();
+    lastEventTimestamps.put(sensorType, currentTime);
+    eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
 
-        Long lastTimestamp = lastEventTimestamps.get(sensorType);
-        if (lastTimestamp != null) {
-            long timeGap = currentTime - lastTimestamp;
+    switch (sensorType) {
+      case Sensor.TYPE_ACCELEROMETER:
+        state.acceleration[0] = sensorEvent.values[0];
+        state.acceleration[1] = sensorEvent.values[1];
+        state.acceleration[2] = sensorEvent.values[2];
+        break;
+
+      case Sensor.TYPE_PRESSURE:
+        state.pressure = (1 - ALPHA) * state.pressure + ALPHA * sensorEvent.values[0];
+        if (recorder.isRecording()) {
+          state.elevation = pdrProcessing.updateElevation(
+              SensorManager.getAltitude(
+                  SensorManager.PRESSURE_STANDARD_ATMOSPHERE, state.pressure)
+          );
         }
+        break;
 
-        lastEventTimestamps.put(sensorType, currentTime);
-        eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
+      // NOTE: intentional fall-through from GYROSCOPE to LINEAR_ACCELERATION
+      // (existing behavior preserved during refactoring)
+      case Sensor.TYPE_GYROSCOPE:
+        state.angularVelocity[0] = sensorEvent.values[0];
+        state.angularVelocity[1] = sensorEvent.values[1];
+        state.angularVelocity[2] = sensorEvent.values[2];
 
-        switch (sensorType) {
-            case Sensor.TYPE_ACCELEROMETER:
-                state.acceleration[0] = sensorEvent.values[0];
-                state.acceleration[1] = sensorEvent.values[1];
-                state.acceleration[2] = sensorEvent.values[2];
-                break;
+      case Sensor.TYPE_LINEAR_ACCELERATION:
+        state.filteredAcc[0] = sensorEvent.values[0];
+        state.filteredAcc[1] = sensorEvent.values[1];
+        state.filteredAcc[2] = sensorEvent.values[2];
 
-            case Sensor.TYPE_PRESSURE:
-                state.pressure = (1 - ALPHA) * state.pressure + ALPHA * sensorEvent.values[0];
-                if (recorder.isRecording()) {
-                    state.elevation = pdrProcessing.updateElevation(
-                            SensorManager.getAltitude(
-                                    SensorManager.PRESSURE_STANDARD_ATMOSPHERE, state.pressure)
-                    );
-                }
-                break;
+        double accelMagFiltered = Math.sqrt(
+            Math.pow(state.filteredAcc[0], 2) +
+                Math.pow(state.filteredAcc[1], 2) +
+                Math.pow(state.filteredAcc[2], 2)
+        );
+        this.accelMagnitude.add(accelMagFiltered);
 
-            // NOTE: intentional fall-through from GYROSCOPE to LINEAR_ACCELERATION
-            // (existing behavior preserved during refactoring)
-            case Sensor.TYPE_GYROSCOPE:
-                state.angularVelocity[0] = sensorEvent.values[0];
-                state.angularVelocity[1] = sensorEvent.values[1];
-                state.angularVelocity[2] = sensorEvent.values[2];
+        state.elevator = pdrProcessing.estimateElevator(
+            state.gravity, state.filteredAcc);
+        break;
 
-            case Sensor.TYPE_LINEAR_ACCELERATION:
-                state.filteredAcc[0] = sensorEvent.values[0];
-                state.filteredAcc[1] = sensorEvent.values[1];
-                state.filteredAcc[2] = sensorEvent.values[2];
+      case Sensor.TYPE_GRAVITY:
+        state.gravity[0] = sensorEvent.values[0];
+        state.gravity[1] = sensorEvent.values[1];
+        state.gravity[2] = sensorEvent.values[2];
 
-                double accelMagFiltered = Math.sqrt(
-                        Math.pow(state.filteredAcc[0], 2) +
-                                Math.pow(state.filteredAcc[1], 2) +
-                                Math.pow(state.filteredAcc[2], 2)
-                );
-                this.accelMagnitude.add(accelMagFiltered);
+        state.elevator = pdrProcessing.estimateElevator(
+            state.gravity, state.filteredAcc);
+        break;
 
-                state.elevator = pdrProcessing.estimateElevator(
-                        state.gravity, state.filteredAcc);
-                break;
+      case Sensor.TYPE_LIGHT:
+        state.light = sensorEvent.values[0];
+        break;
 
-            case Sensor.TYPE_GRAVITY:
-                state.gravity[0] = sensorEvent.values[0];
-                state.gravity[1] = sensorEvent.values[1];
-                state.gravity[2] = sensorEvent.values[2];
+      case Sensor.TYPE_PROXIMITY:
+        state.proximity = sensorEvent.values[0];
+        break;
 
-                state.elevator = pdrProcessing.estimateElevator(
-                        state.gravity, state.filteredAcc);
-                break;
+      case Sensor.TYPE_MAGNETIC_FIELD:
+        state.magneticField[0] = sensorEvent.values[0];
+        state.magneticField[1] = sensorEvent.values[1];
+        state.magneticField[2] = sensorEvent.values[2];
+        break;
 
-            case Sensor.TYPE_LIGHT:
-                state.light = sensorEvent.values[0];
-                break;
+      case Sensor.TYPE_ROTATION_VECTOR:
+        state.rotation = sensorEvent.values.clone();
+        float[] rotationVectorDCM = new float[9];
+        SensorManager.getRotationMatrixFromVector(rotationVectorDCM, state.rotation);
+        SensorManager.getOrientation(rotationVectorDCM, state.orientation);
+        break;
 
-            case Sensor.TYPE_PROXIMITY:
-                state.proximity = sensorEvent.values[0];
-                break;
+      case Sensor.TYPE_GAME_ROTATION_VECTOR: {
+        float[] gameDCM = new float[9];
+        float[] gameOrientation = new float[3];
+        SensorManager.getRotationMatrixFromVector(gameDCM, sensorEvent.values);
+        SensorManager.getOrientation(gameDCM, gameOrientation);
+        state.gameHeading = gameOrientation[0];
 
-            case Sensor.TYPE_MAGNETIC_FIELD:
-                state.magneticField[0] = sensorEvent.values[0];
-                state.magneticField[1] = sensorEvent.values[1];
-                state.magneticField[2] = sensorEvent.values[2];
-                break;
-
-            case Sensor.TYPE_ROTATION_VECTOR:
-                state.rotation = sensorEvent.values.clone();
-                float[] rotationVectorDCM = new float[9];
-                SensorManager.getRotationMatrixFromVector(rotationVectorDCM, state.rotation);
-                SensorManager.getOrientation(rotationVectorDCM, state.orientation);
-                break;
-
-            case Sensor.TYPE_STEP_DETECTOR:
-                long stepTime = SystemClock.uptimeMillis() - bootTime;
-
-                if (currentTime - lastStepTime < 20) {
-                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event:"
-                            + (currentTime - lastStepTime) + " ms");
-                    break;
-                } else {
-                    lastStepTime = currentTime;
-
-                    if (accelMagnitude.isEmpty()) {
-                        Log.e("SensorFusion",
-                                "stepDetection triggered, but accelMagnitude is empty! " +
-                                        "This can cause updatePdr(...) to fail or return bad results.");
-                    } else {
-                        Log.d("SensorFusion",
-                                "stepDetection triggered, accelMagnitude size = "
-                                        + accelMagnitude.size());
-                    }
-
-                    float[] newCords = this.pdrProcessing.updatePdr(
-                            stepTime,
-                            this.accelMagnitude,
-                            state.orientation[0]
-                    );
-
-                    this.accelMagnitude.clear();
-
-                    if (recorder.isRecording()) {
-                        this.pathView.drawTrajectory(newCords);
-                        state.stepCounter++;
-                        recorder.addPdrData(
-                                SystemClock.uptimeMillis() - bootTime,
-                                newCords[0], newCords[1]);
-                    }
-                    break;
-                }
+        if (Float.isNaN(state.headingOffset)) {
+          // First calibration: set offset from magnetometer
+          state.headingOffset = state.orientation[0] - state.gameHeading;
         }
-    }
+        // Note: continuous mag correction disabled indoors — indoor magnetic
+        // fields are too distorted and pull the offset in the wrong direction.
+        // The game rotation vector (gyro) is stable enough for indoor sessions.
+        break;
+      }
 
-    /**
-     * Utility function to log the event frequency of each sensor.
-     * Call this periodically for debugging purposes.
-     */
-    public void logSensorFrequencies() {
-        for (int sensorType : eventCounts.keySet()) {
-            Log.d("SensorFusion", "Sensor " + sensorType
-                    + " | Event Count: " + eventCounts.get(sensorType));
+      case Sensor.TYPE_STEP_DETECTOR:
+        // Primary step source: responsive, fires immediately per step
+        handleStepEvent(currentTime);
+        break;
+
+      case Sensor.TYPE_STEP_COUNTER:
+        // Fallback for slow walking: only triggers if STEP_DETECTOR has been
+        // silent for > 800ms, preventing double-counting during normal walking
+        int totalSteps = (int) sensorEvent.values[0];
+        if (lastStepCount < 0) {
+          lastStepCount = totalSteps;
+          break;
         }
+        int newSteps = totalSteps - lastStepCount;
+        lastStepCount = totalSteps;
+        if (newSteps > 0 && (currentTime - lastStepTime) > STEP_COUNTER_FALLBACK_MS) {
+          // Detector has been silent — use counter to fill the gap
+          for (int s = 0; s < newSteps && s < 3; s++) {
+            handleStepEvent(currentTime);
+          }
+        }
+        break;
+    }
+  }
+
+  /**
+   * Shared step handling logic used by both STEP_DETECTOR and STEP_COUNTER.
+   * Includes 200ms debounce to prevent double-counting the same physical step.
+   */
+  private void handleStepEvent(long currentTime) {
+    if (currentTime - lastStepTime < 200) {
+      return; // debounce
+    }
+    lastStepTime = currentTime;
+
+    long stepTime = SystemClock.uptimeMillis() - bootTime;
+
+    if (accelMagnitude.isEmpty()) {
+      Log.w("SensorFusion", "Step triggered but accelMagnitude empty");
     }
 
-    /**
-     * Resets the boot time offset. Called when a new recording starts.
-     *
-     * @param newBootTime the new boot time offset from {@link SystemClock#uptimeMillis()}
-     */
-    void resetBootTime(long newBootTime) {
-        this.bootTime = newBootTime;
+    float headingForPdr = Float.isNaN(state.headingOffset)
+        ? state.orientation[0]
+        : state.gameHeading + state.headingOffset;
+
+    float[] newCords = this.pdrProcessing.updatePdr(
+        stepTime, this.accelMagnitude, headingForPdr);
+
+    this.accelMagnitude.clear();
+
+    Log.d("StepDebug", "handleStepEvent: isRecording=" + recorder.isRecording()
+        + " coords=" + newCords[0] + "," + newCords[1]);
+    if (recorder.isRecording()) {
+      this.pathView.drawTrajectory(newCords);
+      state.stepCounter++;
+      recorder.addPdrData(SystemClock.uptimeMillis() - bootTime,
+          newCords[0], newCords[1]);
     }
+  }
+
+  /**
+   * Utility function to log the event frequency of each sensor.
+   * Call this periodically for debugging purposes.
+   */
+  public void logSensorFrequencies() {
+    for (int sensorType : eventCounts.keySet()) {
+      Log.d("SensorFusion", "Sensor " + sensorType
+          + " | Event Count: " + eventCounts.get(sensorType));
+    }
+  }
+
+  /**
+   * Resets the boot time offset. Called when a new recording starts.
+   *
+   * @param newBootTime the new boot time offset from {@link SystemClock#uptimeMillis()}
+   */
+  void resetBootTime(long newBootTime) {
+    this.bootTime = newBootTime;
+    // Reset heading stabilization state for new recording
+    smoothedHeading = Float.NaN;
+  }
+
+  /** Wraps an angle difference to [-π, π]. */
+  private static float wrapAngle(float rad) {
+    while (rad > Math.PI) rad -= 2 * Math.PI;
+    while (rad < -Math.PI) rad += 2 * Math.PI;
+    return rad;
+  }
 }

@@ -31,60 +31,60 @@ import java.util.List;
  */
 public class InfoFragment extends Fragment {
 
-    // Singleton SensorFusion instance to access the sensors used
-    private SensorFusion sensorFusion;
-    // UI element recyclerview to display sensor information
-    private RecyclerView sensorInfoView;
+  // Singleton SensorFusion instance to access the sensors used
+  private SensorFusion sensorFusion;
+  // UI element recyclerview to display sensor information
+  private RecyclerView sensorInfoView;
 
-    /**
-     * Public default constructor, empty.
-     */
-    public InfoFragment() {
-        // Required empty public constructor
-    }
+  /**
+   * Public default constructor, empty.
+   */
+  public InfoFragment() {
+    // Required empty public constructor
+  }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+  }
 
-    /**
-     * {@inheritDoc}
-     * Set title in the action bar to Sensor Information.
-     */
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+  /**
+   * {@inheritDoc}
+   * Set title in the action bar to Sensor Information.
+   */
+  @Override
+  public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        View rootView = inflater.inflate(R.layout.fragment_info, container, false);
-        getActivity().setTitle("Sensor Information");
-        return rootView;
-    }
+    // Inflate the layout for this fragment
+    View rootView = inflater.inflate(R.layout.fragment_info, container, false);
+    getActivity().setTitle("Sensor Information");
+    return rootView;
+  }
 
-    /**
-     * {@inheritDoc}
-     * Initialise the RecyclerView by creating and registering a Layout Manager, getting the
-     * {@link SensorFusion} instance and obtaining the Sensor Info data, and passing it to the
-     * {@link SensorInfoListAdapter}.
-     *
-     * @see SensorInfoListAdapter List adapter for the Sensor Info Recycler View.
-     * @see SensorInfoViewHolder View holder for the Sensor Infor RV.
-     * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view
-     */
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        // Find recyclerView
-        sensorInfoView = (RecyclerView) getView().findViewById(R.id.sensorInfoList);
-        // Register layout manager
-        sensorInfoView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        // Get singleton sensor fusion instance, load sensor info data
-        sensorFusion = SensorFusion.getInstance();
-        List<SensorInfo> sensorInfoList = sensorFusion.getSensorInfos();
-        // Set adapter for the recycler view.
-        sensorInfoView.setAdapter(new SensorInfoListAdapter(getActivity(), sensorInfoList));
-    }
+  /**
+   * {@inheritDoc}
+   * Initialise the RecyclerView by creating and registering a Layout Manager, getting the
+   * {@link SensorFusion} instance and obtaining the Sensor Info data, and passing it to the
+   * {@link SensorInfoListAdapter}.
+   *
+   * @see SensorInfoListAdapter List adapter for the Sensor Info Recycler View.
+   * @see SensorInfoViewHolder View holder for the Sensor Infor RV.
+   * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view
+   */
+  @Override
+  public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    super.onViewCreated(view, savedInstanceState);
+    // Find recyclerView
+    sensorInfoView = (RecyclerView) getView().findViewById(R.id.sensorInfoList);
+    // Register layout manager
+    sensorInfoView.setLayoutManager(new LinearLayoutManager(getActivity()));
+    // Get singleton sensor fusion instance, load sensor info data
+    sensorFusion = SensorFusion.getInstance();
+    List<SensorInfo> sensorInfoList = sensorFusion.getSensorInfos();
+    // Set adapter for the recycler view.
+    sensorInfoView.setAdapter(new SensorInfoListAdapter(getActivity(), sensorInfoList));
+  }
 }

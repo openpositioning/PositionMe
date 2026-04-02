@@ -13,46 +13,46 @@ import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment
  * @author Mate Stodulka
  */
 public class Wifi {
-    private String ssid;
-    private long bssid;
-    private String bssidString;
-    private int level;
-    private long frequency;
-    private boolean rttEnabled;
+  private String ssid;
+  private long bssid;
+  private String bssidString;
+  private int level;
+  private long frequency;
+  private boolean rttEnabled;
 
-    /**
-     * Empty public default constructor of the Wifi object.
-     */
-    public Wifi(){}
+  /**
+   * Empty public default constructor of the Wifi object.
+   */
+  public Wifi(){}
 
-    /**
-     * Getters for each property
-     */
-    public String getSsid() { return ssid; }
-    public long getBssid() { return bssid; }
-    public String getBssidString() { return bssidString; }
-    public int getLevel() { return level; }
-    public long getFrequency() { return frequency; }
-    public boolean isRttEnabled() { return rttEnabled; }
+  /**
+   * Getters for each property
+   */
+  public String getSsid() { return ssid; }
+  public long getBssid() { return bssid; }
+  public String getBssidString() { return bssidString; }
+  public int getLevel() { return level; }
+  public long getFrequency() { return frequency; }
+  public boolean isRttEnabled() { return rttEnabled; }
 
-    /**
-     * Setters for each property
-     */
-    public void setSsid(String ssid) { this.ssid = ssid; }
-    public void setBssid(long bssid) { this.bssid = bssid; }
-    public void setBssidString(String bssidString) { this.bssidString = bssidString; }
-    public void setLevel(int level) { this.level = level; }
-    public void setFrequency(long frequency) { this.frequency = frequency; }
-    public void setRttEnabled(boolean rttEnabled) { this.rttEnabled = rttEnabled; }
+  /**
+   * Setters for each property
+   */
+  public void setSsid(String ssid) { this.ssid = ssid; }
+  public void setBssid(long bssid) { this.bssid = bssid; }
+  public void setBssidString(String bssidString) { this.bssidString = bssidString; }
+  public void setLevel(int level) { this.level = level; }
+  public void setFrequency(long frequency) { this.frequency = frequency; }
+  public void setRttEnabled(boolean rttEnabled) { this.rttEnabled = rttEnabled; }
 
-    /**
-     * Generates a string containing mac address and rssi of Wifi.
-     *
-     * Concatenates mac address and rssi to display in the
-     * {@link MeasurementsFragment} fragment
-     */
-    @Override
-    public String toString() {
-        return  "bssid: " + bssid +", level: " + level;
-    }
+  /**
+   * Generates a string containing mac address and rssi of Wifi.
+   *
+   * Concatenates mac address and rssi to display in the
+   * {@link MeasurementsFragment} fragment
+   */
+  @Override
+  public String toString() {
+    return  "bssid: " + bssid +", level: " + level;
+  }
 }

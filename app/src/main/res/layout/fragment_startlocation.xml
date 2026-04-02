@@ -44,6 +44,18 @@
                     android:textAlignment="center"/>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Map type spinner -->
+            <Spinner
+                android:id="@+id/startMapSpinner"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:background="@android:color/white"
+                android:spinnerMode="dropdown"
+                android:elevation="5dp"
+                app:layout_constraintTop_toBottomOf="@id/cardView"
+                app:layout_constraintStart_toStartOf="parent" />
+
             <!-- Building name indicator shown after selection -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/buildingInfoCard"
@@ -66,6 +78,65 @@
                     android:drawablePadding="8dp"
                     android:textAlignment="center"/>
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Floor controls (same style as Recording page) -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/knnFloorUp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="16dp"
+                android:layout_marginBottom="28dp"
+                android:contentDescription="Floor Up"
+                android:src="@android:drawable/arrow_up_float"
+                app:backgroundTint="@color/md_theme_primary"
+                app:tint="@color/md_theme_onPrimary"
+                app:layout_constraintBottom_toTopOf="@id/knnFloorLabel"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <TextView
+                android:id="@+id/knnFloorLabel"
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/floor_label_bg"
+                android:gravity="center"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:text="GF"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toTopOf="@id/knnFloorDown"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/knnFloorDown"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="16dp"
+                android:contentDescription="Floor Down"
+                android:src="@android:drawable/arrow_down_float"
+                app:backgroundTint="@color/md_theme_primary"
+                app:tint="@color/md_theme_onPrimary"
+                app:layout_constraintBottom_toTopOf="@id/knnFpCount"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <TextView
+                android:id="@+id/knnFpCount"
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/floor_label_bg"
+                android:gravity="center"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:text="FP: 0"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="14sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toTopOf="@id/startLocationDone" />
 
             <Button
                 android:id="@+id/startLocationDone"

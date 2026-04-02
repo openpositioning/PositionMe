@@ -10,7 +10,10 @@
         android:id="@+id/currentPositionCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="8dp"
+        android:layout_marginTop="40dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
         app:cardBackgroundColor="@color/md_theme_surfaceContainer"
         app:cardCornerRadius="16dp"
         app:cardElevation="4dp"
@@ -24,50 +27,60 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="12dp"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="8dp"
             android:gravity="center_vertical">
 
-            <!-- Red Dot -->
             <ImageView
                 android:id="@+id/redDot"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
                 android:contentDescription="@string/red_dot_description_text"
                 android:src="@drawable/ic_baseline_red_dot_24"
-                android:layout_marginEnd="8dp" />
+                android:layout_marginEnd="4dp" />
 
-            <!-- Distance Traveled -->
             <TextView
                 android:id="@+id/currentDistanceTraveled"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/meter"
                 android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold" />
+                android:textSize="13sp"
+                android:singleLine="true" />
 
-            <!-- Elevation -->
             <TextView
                 android:id="@+id/currentElevation"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/elevation"
                 android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp" />
+                android:textSize="13sp"
+                android:singleLine="true"
+                android:layout_marginStart="8dp" />
 
+            <TextView
+                android:id="@+id/posSource"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="—"
+                android:textColor="@color/md_theme_tertiary"
+                android:textSize="12sp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:gravity="end"
+                android:layout_marginStart="6dp" />
 
-            <!-- GNSS Error -->
             <TextView
                 android:id="@+id/gnssError"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnss_error"
+                android:text=""
                 android:textColor="@color/md_theme_error"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:layout_marginStart="16dp" />
+                android:textSize="12sp"
+                android:singleLine="true"
+                android:visibility="gone"
+                android:layout_marginStart="6dp" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -81,7 +94,38 @@
         app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
         app:layout_constraintBottom_toTopOf="@id/controlLayout" />
 
-    <!-- 🔹 Test Point Button (Floating on top of the map) -->
+    <!-- Calibration countdown overlay -->
+    <TextView
+        android:id="@+id/calibrationCountdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Calibrating... 9s\nPlease stand still"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        android:background="#CC333333"
+        android:padding="20dp"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/trajectoryMapFragmentContainer"
+        app:layout_constraintBottom_toBottomOf="@id/trajectoryMapFragmentContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Info button -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btn_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="8dp"
+        android:contentDescription="Help"
+        android:src="@android:drawable/ic_dialog_info"
+        app:fabSize="mini"
+        app:layout_constraintBottom_toTopOf="@id/btn_test_point"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Test Point Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btn_test_point"
         android:layout_width="wrap_content"
