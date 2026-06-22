@@ -30,6 +30,7 @@ import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.utils.BuildingPolygon;
+import com.openpositioning.PositionMe.utils.TrajectoryCsvExporter;
 
 import com.google.android.gms.maps.model.LatLng;
 
@@ -230,6 +231,7 @@ public class ServerCommunications implements Observable {
             stream.write(binaryTrajectory);
             stream.close();
             System.out.println("Recorded binary trajectory for debugging stored in: " + path);
+            exportTrajectoryCsv(trajectory, file.getName().replaceFirst("\\.txt$", ".csv"));
         } catch (IOException ee) {
             // Catch and print if writing to the file fails
             System.err.println("Storing of recorded binary trajectory failed: " + ee.getMessage());
@@ -498,11 +500,13 @@ public class ServerCommunications implements Observable {
      * The method creates or updates the JSON file with the provided details.
      *
      * @param startTimestamp the start timestamp of the trajectory
-     * @param fileName the name of the file
+     * @param fileName the name of the replay JSON file
+     * @param csvFileName the name of the exported CSV file, or null if export failed
      * @param id the ID of the trajectory
      * @param dateSubmitted the date the trajectory was submitted
      */
-    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
+    private void saveDownloadRecord(long startTimestamp, String fileName, String csvFileName,
+                                    String id, String dateSubmitted) {
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
         JSONObject jsonObject;
@@ -539,6 +543,11 @@ public class ServerCommunications implements Observable {
             // Create the new record details
             JSONObject recordDetails = new JSONObject();
             recordDetails.put("file_name", fileName);
+            if (csvFileName != null && !csvFileName.isEmpty()) {
+                recordDetails.put("csv_file_name", csvFileName);
+                recordDetails.put("csv_public_path",
+                        Environment.DIRECTORY_DOWNLOADS + "/PositionMe/" + csvFileName);
+            }
             recordDetails.put("startTimeStamp", startTimestamp);
             recordDetails.put("date_submitted", dateSubmitted);
             recordDetails.put("id", id);
@@ -630,6 +639,7 @@ public class ServerCommunications implements Observable {
                     // Print a message in the console
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
                     String fileName = "trajectory_" + dateSubmitted + ".txt";
+                    String csvFileName = "trajectory_" + dateSubmitted + ".csv";
 
                     // Place the file in your app-specific "Downloads" folder
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -653,8 +663,11 @@ public class ServerCommunications implements Observable {
                         inputStream.close();
                     }
 
+                    String exportedCsvFileName = exportTrajectoryCsv(receivedTrajectory, csvFileName);
+
                     // Save the download record
-                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
+                    saveDownloadRecord(startTimestamp, fileName, exportedCsvFileName,
+                            id, dateSubmitted);
                     loadDownloadRecords();
                 }
             }
@@ -735,6 +748,30 @@ public class ServerCommunications implements Observable {
         Log.i(tag, "BLE fingerprints size: " + trajectory.getBleFingerprintsCount());
         Log.i(tag, "BLE Data size: " + trajectory.getBleDataCount());
         Log.i(tag, "Test points size: " + trajectory.getTestPointsCount());
+    }
+
+    /**
+     * Exports trajectory data as CSV and places a public copy under Downloads/PositionMe.
+     *
+     * @param trajectory trajectory protobuf data to export
+     * @param csvFileName output CSV file name
+     * @return csvFileName when export succeeds, otherwise null
+     */
+    private String exportTrajectoryCsv(Traj.Trajectory trajectory, String csvFileName) {
+        try {
+            String publicCsvPath = TrajectoryCsvExporter.exportToDownloads(
+                    context, trajectory, csvFileName);
+            Log.i("CSV_EXPORT", "Trajectory CSV exported to: " + publicCsvPath);
+            String toastMessage = "CSV saved to " + publicCsvPath;
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show());
+            return csvFileName;
+        } catch (IOException csvError) {
+            Log.e("CSV_EXPORT", "Failed to export trajectory CSV", csvError);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, "CSV export failed", Toast.LENGTH_LONG).show());
+            return null;
+        }
     }
 
     /**

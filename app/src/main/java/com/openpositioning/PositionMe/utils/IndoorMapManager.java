@@ -43,11 +43,13 @@ public class IndoorMapManager {
     private float floorHeight;
 
     // Vector shapes currently drawn on the map (cleared on floor switch or exit)
+    private Polygon floorPlanBackground;
     private final List<Polygon> drawnPolygons = new ArrayList<>();
     private final List<Polyline> drawnPolylines = new ArrayList<>();
 
     // Per-floor vector shape data for the current building
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
+    private List<LatLng> currentBuildingOutline;
 
     // Average floor heights per building (meters), used for barometric auto-floor
     public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
@@ -59,6 +61,11 @@ public class IndoorMapManager {
     private static final int ROOM_STROKE = Color.argb(180, 33, 150, 243);
     private static final int ROOM_FILL = Color.argb(40, 33, 150, 243);
     private static final int DEFAULT_STROKE = Color.argb(150, 100, 100, 100);
+    private static final int FLOORPLAN_BACKGROUND_FILL = Color.argb(245, 255, 255, 255);
+    private static final int FLOORPLAN_BACKGROUND_STROKE = Color.argb(220, 210, 210, 210);
+    private static final float FLOORPLAN_BACKGROUND_Z_INDEX = -3f;
+    private static final float FLOORPLAN_AREA_Z_INDEX = -2f;
+    private static final float FLOORPLAN_LINE_Z_INDEX = -1f;
 
     /**
      * Constructor to set the map instance.
@@ -226,10 +233,13 @@ public class IndoorMapManager {
                 }
 
                 // Load floor shapes from cached API data
+                currentFloorShapes = null;
+                currentBuildingOutline = null;
                 FloorplanApiClient.BuildingInfo building =
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
                     currentFloorShapes = building.getFloorShapesList();
+                    currentBuildingOutline = building.getOutlinePolygon();
                 }
 
                 if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
@@ -243,6 +253,7 @@ public class IndoorMapManager {
                 currentBuilding = BUILDING_NONE;
                 currentFloor = 0;
                 currentFloorShapes = null;
+                currentBuildingOutline = null;
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error with overlay: " + ex.toString());
@@ -262,6 +273,8 @@ public class IndoorMapManager {
                 || floorIndex >= currentFloorShapes.size()) return;
 
         FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(floorIndex);
+        drawFloorPlanBackground();
+
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
             String geoType = feature.getGeometryType();
             String indoorType = feature.getIndoorType();
@@ -273,7 +286,8 @@ public class IndoorMapManager {
                             .addAll(ring)
                             .strokeColor(getStrokeColor(indoorType))
                             .strokeWidth(5f)
-                            .fillColor(getFillColor(indoorType)));
+                            .fillColor(getFillColor(indoorType))
+                            .zIndex(FLOORPLAN_AREA_Z_INDEX));
                     drawnPolygons.add(p);
                 }
             } else if ("MultiLineString".equals(geoType)
@@ -283,7 +297,8 @@ public class IndoorMapManager {
                     Polyline pl = gMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getStrokeColor(indoorType))
-                            .width(6f));
+                            .width(6f)
+                            .zIndex(FLOORPLAN_LINE_Z_INDEX));
                     drawnPolylines.add(pl);
                 }
             }
@@ -291,9 +306,29 @@ public class IndoorMapManager {
     }
 
     /**
+     * Draws a white backing under the active indoor floor map so the vector
+     * geometry remains readable over satellite or hybrid map imagery.
+     */
+    private void drawFloorPlanBackground() {
+        if (currentBuildingOutline == null || currentBuildingOutline.size() < 3) return;
+
+        floorPlanBackground = gMap.addPolygon(new PolygonOptions()
+                .addAll(currentBuildingOutline)
+                .strokeColor(FLOORPLAN_BACKGROUND_STROKE)
+                .strokeWidth(2f)
+                .fillColor(FLOORPLAN_BACKGROUND_FILL)
+                .clickable(false)
+                .zIndex(FLOORPLAN_BACKGROUND_Z_INDEX));
+    }
+
+    /**
      * Removes all vector shapes currently drawn on the map.
      */
     private void clearDrawnShapes() {
+        if (floorPlanBackground != null) {
+            floorPlanBackground.remove();
+            floorPlanBackground = null;
+        }
         for (Polygon p : drawnPolygons) p.remove();
         for (Polyline p : drawnPolylines) p.remove();
         drawnPolygons.clear();

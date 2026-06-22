@@ -6,6 +6,7 @@ import android.hardware.SensorManager;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 
@@ -27,6 +28,7 @@ public class SensorEventHandler {
 
     private final SensorState state;
     private final PdrProcessing pdrProcessing;
+    private final PdrWifiFusionManager pdrWifiFusionManager;
     private final PathView pathView;
     private final TrajectoryRecorder recorder;
 
@@ -44,15 +46,18 @@ public class SensorEventHandler {
      *
      * @param state         shared sensor state holder
      * @param pdrProcessing PDR processor for step-length and position calculation
+     * @param pdrWifiFusionManager KF fusion manager for corrected PDR positions
      * @param pathView      path drawing view for trajectory visualisation
      * @param recorder      trajectory recorder for checking recording state and writing PDR data
      * @param bootTime      initial boot time offset
      */
     public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
+                              PdrWifiFusionManager pdrWifiFusionManager,
                               PathView pathView, TrajectoryRecorder recorder,
                               long bootTime) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
+        this.pdrWifiFusionManager = pdrWifiFusionManager;
         this.pathView = pathView;
         this.recorder = recorder;
         this.bootTime = bootTime;
@@ -92,12 +97,11 @@ public class SensorEventHandler {
                 }
                 break;
 
-            // NOTE: intentional fall-through from GYROSCOPE to LINEAR_ACCELERATION
-            // (existing behavior preserved during refactoring)
             case Sensor.TYPE_GYROSCOPE:
                 state.angularVelocity[0] = sensorEvent.values[0];
                 state.angularVelocity[1] = sensorEvent.values[1];
                 state.angularVelocity[2] = sensorEvent.values[2];
+                break;
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 state.filteredAcc[0] = sensorEvent.values[0];
@@ -176,9 +180,19 @@ public class SensorEventHandler {
                     if (recorder.isRecording()) {
                         this.pathView.drawTrajectory(newCords);
                         state.stepCounter++;
+                        long relativeTimestamp = SystemClock.uptimeMillis() - bootTime;
                         recorder.addPdrData(
-                                SystemClock.uptimeMillis() - bootTime,
-                                newCords[0], newCords[1]);
+                                relativeTimestamp, newCords[0], newCords[1]);
+                        if (pdrWifiFusionManager.isFusionEnabled()) {
+                            LatLng correctedPosition = pdrWifiFusionManager.getCorrectedLatLng(
+                                    newCords, state.startLocation);
+                            if (correctedPosition != null) {
+                                recorder.addCorrectedPosition(
+                                        relativeTimestamp,
+                                        correctedPosition.latitude,
+                                        correctedPosition.longitude);
+                            }
+                        }
                     }
                     break;
                 }

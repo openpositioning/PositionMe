@@ -86,6 +86,7 @@ public class SensorFusion implements SensorEventListener {
 
     // PDR and path
     private PdrProcessing pdrProcessing;
+    private PdrWifiFusionManager pdrWifiFusionManager;
     private PathView pathView;
 
     // Sensor registration latency setting
@@ -149,6 +150,7 @@ public class SensorFusion implements SensorEventListener {
         // Initialise utilities
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pdrProcessing = new PdrProcessing(context);
+        this.pdrWifiFusionManager = new PdrWifiFusionManager(settings);
         this.pathView = new PathView(context, null);
         WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
 
@@ -158,11 +160,12 @@ public class SensorFusion implements SensorEventListener {
                 accelerometerSensor, gyroscopeSensor, magnetometerSensor,
                 barometerSensor, lightSensor, proximitySensor, rotationSensor);
 
-        this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
+        this.wifiPositionManager = new WifiPositionManager(
+                wiFiPositioning, recorder, pdrWifiFusionManager, state, settings);
 
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pdrWifiFusionManager, pathView, recorder, bootTime);
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -327,6 +330,7 @@ public class SensorFusion implements SensorEventListener {
      */
     public void startRecording() {
         recorder.startRecording(pdrProcessing);
+        pdrWifiFusionManager.reset(state.startLocation);
         eventHandler.resetBootTime(recorder.getBootTime());
 
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
@@ -536,6 +540,25 @@ public class SensorFusion implements SensorEventListener {
         sensorValueMap.put(SensorTypes.GNSSLATLONG, getGNSSLatitude(false));
         sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
         return sensorValueMap;
+    }
+
+    /**
+     * Returns the current PDR movement corrected by accepted WiFi absolute fixes.
+     *
+     * <p>Raw PDR remains available through {@link #getSensorValueMap()} and is still what gets
+     * recorded to the trajectory protobuf.</p>
+     */
+    public float[] getCorrectedPdrMovement() {
+        return pdrWifiFusionManager.getCorrectedPdr(
+                pdrProcessing.getPDRMovement(), state.startLocation);
+    }
+
+    /**
+     * Returns the corrected PDR position as an absolute map coordinate.
+     */
+    public LatLng getCorrectedPdrLatLng() {
+        return pdrWifiFusionManager.getCorrectedLatLng(
+                pdrProcessing.getPDRMovement(), state.startLocation);
     }
 
     /**
