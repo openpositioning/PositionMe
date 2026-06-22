@@ -49,6 +49,62 @@
             app:defaultValue="75"
             android:max="150"
             android:min="50"/>
+
+        <SeekBarPreference
+            app:key="pdr_scale_percent"
+            app:title="@string/pdr_scale_title"
+            app:summary="@string/pdr_scale_summary"
+            app:showSeekBarValue="true"
+            app:defaultValue="150"
+            android:max="250"
+            android:min="50"/>
+
+        <SwitchPreferenceCompat
+            app:key="wifi_pdr_correction_enabled"
+            app:title="@string/wifi_pdr_correction_title"
+            app:summaryOff="@string/wifi_pdr_correction_summary_off"
+            app:summaryOn="@string/wifi_pdr_correction_summary_on"
+            app:defaultValue="false"/>
+
+        <SeekBarPreference
+            app:key="kf_initial_std_m"
+            app:title="@string/kf_initial_std_title"
+            app:summary="@string/kf_initial_std_summary"
+            app:dependency="wifi_pdr_correction_enabled"
+            app:showSeekBarValue="true"
+            app:defaultValue="3"
+            android:max="20"
+            android:min="1"/>
+
+        <SeekBarPreference
+            app:key="kf_wifi_std_m"
+            app:title="@string/kf_wifi_std_title"
+            app:summary="@string/kf_wifi_std_summary"
+            app:dependency="wifi_pdr_correction_enabled"
+            app:showSeekBarValue="true"
+            app:defaultValue="8"
+            android:max="30"
+            android:min="2"/>
+
+        <SeekBarPreference
+            app:key="kf_pdr_process_percent"
+            app:title="@string/kf_pdr_process_title"
+            app:summary="@string/kf_pdr_process_summary"
+            app:dependency="wifi_pdr_correction_enabled"
+            app:showSeekBarValue="true"
+            app:defaultValue="25"
+            android:max="100"
+            android:min="5"/>
+
+        <SeekBarPreference
+            app:key="kf_wifi_gate_m"
+            app:title="@string/kf_wifi_gate_title"
+            app:summary="@string/kf_wifi_gate_summary"
+            app:dependency="wifi_pdr_correction_enabled"
+            app:showSeekBarValue="true"
+            app:defaultValue="35"
+            android:max="80"
+            android:min="5"/>
     </PreferenceCategory>
 
 

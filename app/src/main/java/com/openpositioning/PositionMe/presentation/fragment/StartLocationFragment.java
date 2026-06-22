@@ -77,12 +77,18 @@ public class StartLocationFragment extends Fragment {
     // Vector shapes drawn as floor plan preview (cleared when switching buildings)
     private final List<Polygon> previewPolygons = new ArrayList<>();
     private final List<Polyline> previewPolylines = new ArrayList<>();
+    private Polygon previewBackgroundPolygon;
 
     // Building outline colours (ARGB)
     private static final int FILL_COLOR_DEFAULT = Color.argb(60, 33, 150, 243);
     private static final int STROKE_COLOR_DEFAULT = Color.argb(200, 33, 150, 243);
     private static final int FILL_COLOR_SELECTED = Color.argb(100, 33, 150, 243);
     private static final int STROKE_COLOR_SELECTED = Color.argb(255, 25, 118, 210);
+    private static final int FLOORPLAN_BACKGROUND_FILL = Color.argb(245, 255, 255, 255);
+    private static final int FLOORPLAN_BACKGROUND_STROKE = Color.argb(220, 210, 210, 210);
+    private static final float PREVIEW_BACKGROUND_Z_INDEX = 1f;
+    private static final float PREVIEW_AREA_Z_INDEX = 2f;
+    private static final float PREVIEW_LINE_Z_INDEX = 3f;
 
     /**
      * Public Constructor for the class.
@@ -328,6 +334,10 @@ public class StartLocationFragment extends Fragment {
      */
     private void showFloorPlanOverlay(String buildingName) {
         // Clear previous preview shapes
+        if (previewBackgroundPolygon != null) {
+            previewBackgroundPolygon.remove();
+            previewBackgroundPolygon = null;
+        }
         for (Polygon p : previewPolygons) p.remove();
         for (Polyline p : previewPolylines) p.remove();
         previewPolygons.clear();
@@ -335,6 +345,8 @@ public class StartLocationFragment extends Fragment {
 
         FloorplanApiClient.BuildingInfo building = floorplanBuildingMap.get(buildingName);
         if (building == null) return;
+
+        drawFloorPlanBackground(building);
 
         List<FloorplanApiClient.FloorShapes> floors = building.getFloorShapesList();
         if (floors == null || floors.isEmpty()) {
@@ -357,7 +369,8 @@ public class StartLocationFragment extends Fragment {
                             .addAll(ring)
                             .strokeColor(getPreviewStrokeColor(indoorType))
                             .strokeWidth(2f)
-                            .fillColor(getPreviewFillColor(indoorType)));
+                            .fillColor(getPreviewFillColor(indoorType))
+                            .zIndex(PREVIEW_AREA_Z_INDEX));
                     previewPolygons.add(p);
                 }
             } else if ("MultiLineString".equals(geoType)
@@ -367,11 +380,29 @@ public class StartLocationFragment extends Fragment {
                     Polyline pl = mMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getPreviewStrokeColor(indoorType))
-                            .width(3f));
+                            .width(3f)
+                            .zIndex(PREVIEW_LINE_Z_INDEX));
                     previewPolylines.add(pl);
                 }
             }
         }
+    }
+
+    /**
+     * Draws an opaque white backing under the selected building's floor plan so
+     * indoor vector shapes are readable over satellite or hybrid map imagery.
+     */
+    private void drawFloorPlanBackground(FloorplanApiClient.BuildingInfo building) {
+        List<LatLng> outlinePoints = building.getOutlinePolygon();
+        if (outlinePoints == null || outlinePoints.size() < 3) return;
+
+        previewBackgroundPolygon = mMap.addPolygon(new PolygonOptions()
+                .addAll(outlinePoints)
+                .strokeColor(FLOORPLAN_BACKGROUND_STROKE)
+                .strokeWidth(2f)
+                .fillColor(FLOORPLAN_BACKGROUND_FILL)
+                .clickable(false)
+                .zIndex(PREVIEW_BACKGROUND_Z_INDEX));
     }
 
     /**

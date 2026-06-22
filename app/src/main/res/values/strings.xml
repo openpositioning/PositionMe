@@ -89,6 +89,19 @@
     <string name="manual_steps_summary_on">The app will use the values provided below</string>
     <string name="height_title">User height (cm)</string>
     <string name="step_title">Step length (cm)</string>
+    <string name="pdr_scale_title">PDR scale (%)</string>
+    <string name="pdr_scale_summary">Multiplier applied to estimated stride length</string>
+    <string name="wifi_pdr_correction_title">Use KF WiFi/PDR fusion</string>
+    <string name="wifi_pdr_correction_summary_off">The live path uses PDR only</string>
+    <string name="wifi_pdr_correction_summary_on">WiFi fixes update the PDR path through a KF</string>
+    <string name="kf_initial_std_title">KF initial uncertainty (m)</string>
+    <string name="kf_initial_std_summary">Starting position uncertainty used by the filter</string>
+    <string name="kf_wifi_std_title">KF WiFi noise (m)</string>
+    <string name="kf_wifi_std_summary">Expected WiFi positioning error; higher trusts WiFi less</string>
+    <string name="kf_pdr_process_title">KF PDR noise (%)</string>
+    <string name="kf_pdr_process_summary">Motion uncertainty per PDR movement; higher lets WiFi correct more</string>
+    <string name="kf_wifi_gate_title">KF WiFi gate (m)</string>
+    <string name="kf_wifi_gate_summary">Reject WiFi fixes farther than this from the KF prediction</string>
     <!-- Constants Preferences -->
     <string name="constants_enable_title">Edit the constants used</string>
     <string name="constants_summary_off">The app will use the default constants</string>

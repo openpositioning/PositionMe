@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.sensors;
 
+import android.content.SharedPreferences;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -26,6 +27,9 @@ public class WifiPositionManager implements Observer {
 
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
+    private final PdrWifiFusionManager pdrWifiFusionManager;
+    private final SensorState state;
+    private final SharedPreferences settings;
     private List<Wifi> wifiList;
 
     /**
@@ -33,11 +37,20 @@ public class WifiPositionManager implements Observer {
      *
      * @param wiFiPositioning WiFi positioning API client
      * @param recorder        trajectory recorder for writing WiFi fingerprints
+     * @param pdrWifiFusionManager manager for applying WiFi drift corrections to PDR
+     * @param state           shared sensor state containing the selected start location
+     * @param settings        app settings used to enable/disable WiFi-PDR correction
      */
     public WifiPositionManager(WiFiPositioning wiFiPositioning,
-                               TrajectoryRecorder recorder) {
+                               TrajectoryRecorder recorder,
+                               PdrWifiFusionManager pdrWifiFusionManager,
+                               SensorState state,
+                               SharedPreferences settings) {
         this.wiFiPositioning = wiFiPositioning;
         this.recorder = recorder;
+        this.pdrWifiFusionManager = pdrWifiFusionManager;
+        this.state = state;
+        this.settings = settings;
     }
 
     /**
@@ -65,7 +78,19 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    if (settings.getBoolean("wifi_pdr_correction_enabled", false)) {
+                        pdrWifiFusionManager.applyWifiCorrection(wifiLocation, state.startLocation);
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e("WiFiPositioning", message);
+                }
+            });
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());
         }

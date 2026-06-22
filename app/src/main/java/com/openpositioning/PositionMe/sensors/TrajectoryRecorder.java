@@ -251,6 +251,19 @@ public class TrajectoryRecorder {
     }
 
     /**
+     * Adds a KF-corrected PDR position entry to the trajectory.
+     */
+    public void addCorrectedPosition(long relativeTimestamp, double lat, double lng) {
+        if (trajectory == null || !saveRecording) return;
+
+        trajectory.addCorrectedPositions(Traj.GNSSPosition.newBuilder()
+                .setRelativeTimestamp(relativeTimestamp)
+                .setLatitude(lat)
+                .setLongitude(lng)
+                .setAltitude(0.0));
+    }
+
+    /**
      * Adds a GNSS reading to the trajectory.
      */
     public void addGnssData(Location location) {

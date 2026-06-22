@@ -29,6 +29,7 @@ public class PdrProcessing {
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
     private static final float K = 0.364f;
+    private static final int DEFAULT_PDR_SCALE_PERCENT = 150;
     // Number of samples (seconds) to keep as memory for elevation calculation
     private static final int elevationSeconds = 4;
     // Number of samples (0.01 seconds)
@@ -254,11 +255,27 @@ public class PdrProcessing {
         float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
 
         // determine which constant to use based on settings
+        float weibergK = K;
         if (this.settings.getBoolean("overwrite_constants", false)) {
-            return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
+            weibergK = parseFloatSetting("weiberg_k", K);
         }
 
-        return bounce * K * 2;
+        return bounce * weibergK * getPdrScale();
+    }
+
+    /**
+     * Returns the user-tunable multiplier used to calibrate estimated stride length.
+     */
+    private float getPdrScale() {
+        return settings.getInt("pdr_scale_percent", DEFAULT_PDR_SCALE_PERCENT) / 100f;
+    }
+
+    private float parseFloatSetting(String key, float fallback) {
+        try {
+            return Float.parseFloat(settings.getString(key, String.valueOf(fallback)));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     /**
@@ -371,6 +388,8 @@ public class PdrProcessing {
         this.positionX = 0f;
         this.positionY = 0f;
         this.elevation = 0f;
+        this.sumStepLength = 0f;
+        this.stepCount = 0;
 
         if(this.settings.getBoolean("overwrite_constants", false)) {
             // Capacity - pressure is read with 1Hz - store values of past 10 seconds
